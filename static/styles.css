@@ -777,6 +777,516 @@ footer {
   display: none !important;
 }
 
+div[data-product-grid] {
+  display: grid;
+  gap: var(--space-4);
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  margin-top: var(--space-3);
+}
+
+div[data-product-grid] > p {
+  margin: 0;
+  color: var(--gray-600);
+  grid-column: 1 / -1;
+}
+
+div[data-product-grid] > article {
+  background: linear-gradient(150deg, rgba(255, 255, 255, 0.8), rgba(255, 255, 255, 0.52));
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  border-radius: var(--radius-lg);
+  padding: var(--space-4);
+  box-shadow: var(--shadow-soft);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  transition: transform var(--transition-slow), box-shadow var(--transition-slow), border-color var(--transition-slow);
+  position: relative;
+  overflow: hidden;
+  z-index: 0;
+  cursor: pointer;
+}
+
+div[data-product-grid] > article::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(135deg, rgba(29, 123, 255, 0.12), rgba(0, 212, 170, 0.12));
+  opacity: 0;
+  transition: opacity var(--transition-slow);
+  pointer-events: none;
+  z-index: -1;
+}
+
+div[data-product-grid] > article:hover,
+div[data-product-grid] > article:focus-visible {
+  transform: translateY(-6px);
+  box-shadow: var(--shadow-card);
+}
+
+div[data-product-grid] > article:hover::after,
+div[data-product-grid] > article:focus-visible::after {
+  opacity: 1;
+}
+
+div[data-product-grid] > article[data-selected="true"] {
+  border-color: rgba(29, 123, 255, 0.6);
+  box-shadow: var(--shadow-card);
+}
+
+div[data-product-grid] > article[data-selected="true"]::after {
+  opacity: 1;
+}
+
+div[data-product-grid][data-disabled="true"] > article {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: var(--shadow-soft);
+  pointer-events: none;
+}
+
+div[data-product-grid][data-disabled="true"] > article::after {
+  opacity: 0;
+}
+
+div[data-product-grid] > article > header {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+div[data-product-grid] > article > header > h3 {
+  margin: 0;
+  font-size: 1.2rem;
+  color: var(--gray-900);
+}
+
+div[data-product-grid] > article > header > p {
+  margin: 0;
+  color: var(--gray-500);
+  font-weight: 500;
+}
+
+div[data-product-grid] > article > p {
+  margin: 0;
+  color: var(--gray-700);
+}
+
+div[data-product-grid] > article dl {
+  margin: 0;
+  display: grid;
+  gap: var(--space-2);
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+}
+
+div[data-product-grid] > article dl > div {
+  background: rgba(29, 123, 255, 0.06);
+  border: 1px solid rgba(29, 123, 255, 0.12);
+  border-radius: var(--radius-sm);
+  padding: var(--space-2) var(--space-3);
+}
+
+div[data-product-grid] > article dt {
+  margin: 0;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--gray-500);
+}
+
+div[data-product-grid] > article dd {
+  margin: var(--space-1) 0 0;
+  font-weight: 600;
+  color: var(--gray-900);
+}
+
+div[data-product-grid] > article > footer {
+  margin-top: auto;
+  padding-top: var(--space-2);
+  border-top: 1px dashed rgba(148, 163, 184, 0.4);
+}
+
+div[data-product-grid] > article > footer > p {
+  margin: 0;
+  font-size: 0.9rem;
+  color: var(--gray-500);
+}
+
+div[data-admin-grid] {
+  display: grid;
+  gap: var(--space-4);
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+}
+
+section[data-admin-panel] {
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.82), rgba(255, 255, 255, 0.56));
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  border-radius: var(--radius-lg);
+  padding: var(--space-4);
+  box-shadow: var(--shadow-soft);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+section[data-admin-panel] > header {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+section[data-admin-panel] > header > h2 {
+  margin: 0;
+  font-size: 1.4rem;
+  color: var(--gray-900);
+}
+
+section[data-admin-panel] > header > p {
+  margin: 0;
+  color: var(--gray-600);
+}
+
+section[data-admin-panel] form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+section[data-admin-panel] fieldset {
+  margin: 0;
+  padding: 0;
+  border: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+section[data-admin-panel] fieldset > legend {
+  font-weight: 600;
+  color: var(--gray-700);
+}
+
+div[data-instance-grid] {
+  display: grid;
+  gap: var(--space-3);
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+div[data-instance-grid] > label {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  background: rgba(255, 255, 255, 0.78);
+  box-shadow: var(--shadow-soft);
+  cursor: pointer;
+  transition: transform var(--transition-slow), box-shadow var(--transition-slow), border-color var(--transition-slow);
+}
+
+div[data-instance-grid] > label::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(135deg, rgba(29, 123, 255, 0.12), rgba(0, 212, 170, 0.12));
+  opacity: 0;
+  transition: opacity var(--transition-slow);
+  pointer-events: none;
+}
+
+div[data-instance-grid] > label input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+div[data-instance-grid] > label span:first-of-type {
+  font-weight: 600;
+  color: var(--gray-900);
+}
+
+div[data-instance-grid] > label span:not(:first-of-type) {
+  font-size: 0.9rem;
+  color: var(--gray-600);
+}
+
+div[data-instance-grid] > label:hover,
+div[data-instance-grid] > label:focus-within {
+  transform: translateY(-4px);
+  box-shadow: var(--shadow-card);
+}
+
+div[data-instance-grid] > label:hover::after,
+div[data-instance-grid] > label:focus-within::after {
+  opacity: 1;
+}
+
+div[data-instance-grid] > label[data-selected="true"] {
+  border-color: rgba(29, 123, 255, 0.6);
+  box-shadow: var(--shadow-card);
+}
+
+div[data-instance-grid] > label[data-selected="true"]::after {
+  opacity: 1;
+}
+
+section[data-admin-panel] footer {
+  display: flex;
+  justify-content: flex-end;
+}
+
+section[data-instance-overview] {
+  margin-top: var(--space-5);
+  background: linear-gradient(155deg, rgba(255, 255, 255, 0.86), rgba(255, 255, 255, 0.6));
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  border-radius: var(--radius-lg);
+  padding: var(--space-5);
+  box-shadow: var(--shadow-soft);
+}
+
+section[data-instance-overview] dl {
+  margin: 0;
+  display: grid;
+  gap: var(--space-3);
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+section[data-instance-overview] dl > div {
+  background: rgba(29, 123, 255, 0.06);
+  border: 1px solid rgba(29, 123, 255, 0.12);
+  border-radius: var(--radius-sm);
+  padding: var(--space-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+section[data-instance-overview] dt {
+  margin: 0;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--gray-500);
+}
+
+section[data-instance-overview] dd {
+  margin: 0;
+  font-weight: 600;
+  color: var(--gray-900);
+}
+
+section[data-instance-actions] {
+  margin-top: var(--space-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+section[data-instance-actions] > h2 {
+  margin: 0;
+  font-size: 1.5rem;
+  color: var(--gray-900);
+}
+
+div[data-action-grid] {
+  display: grid;
+  gap: var(--space-3);
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+
+div[data-action-grid] form,
+div[data-action-grid] a {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+div[data-action-grid] a {
+  border-radius: var(--radius-sm);
+  padding: var(--space-3) var(--space-4);
+  font-weight: 600;
+  text-align: center;
+  text-decoration: none;
+  color: var(--white);
+  background: linear-gradient(135deg, var(--blue-500), var(--blue-600));
+  box-shadow: var(--shadow-soft);
+  transition: transform var(--transition-fast), box-shadow var(--transition-fast), filter var(--transition-fast);
+}
+
+div[data-action-grid] a:hover,
+div[data-action-grid] a:focus-visible {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-card);
+  filter: brightness(1.02);
+}
+
+form[data-add-traffic] {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  border-radius: var(--radius-lg);
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  background: rgba(255, 255, 255, 0.78);
+  box-shadow: var(--shadow-soft);
+}
+
+form[data-add-traffic] > label {
+  font-weight: 600;
+  color: var(--gray-700);
+}
+
+form[data-add-traffic] > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+form[data-add-traffic] input {
+  flex: 1 1 160px;
+}
+
+form[data-add-traffic] p {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--gray-500);
+}
+
+section[aria-labelledby="regions-heading"] {
+  margin-top: var(--space-6);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+section[aria-labelledby="regions-heading"] > header {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+section[aria-labelledby="regions-heading"] > header > h1 {
+  margin: 0;
+  font-size: 2rem;
+  color: var(--gray-900);
+}
+
+section[aria-labelledby="regions-heading"] > header > p {
+  margin: 0;
+  color: var(--gray-600);
+}
+
+section[aria-labelledby="regions-heading"] > div[role="list"] {
+  display: grid;
+  gap: var(--space-4);
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+}
+
+section[aria-labelledby="regions-heading"] > div[role="list"] > article {
+  background: linear-gradient(150deg, rgba(255, 255, 255, 0.8), rgba(255, 255, 255, 0.5));
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  border-radius: var(--radius-lg);
+  padding: var(--space-4);
+  box-shadow: var(--shadow-soft);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  transition: transform var(--transition-slow), box-shadow var(--transition-slow);
+  position: relative;
+  overflow: hidden;
+  z-index: 0;
+}
+
+section[aria-labelledby="regions-heading"] > div[role="list"] > article::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(135deg, rgba(29, 123, 255, 0.08), rgba(0, 212, 170, 0.08));
+  opacity: 0;
+  transition: opacity var(--transition-slow);
+  pointer-events: none;
+  z-index: -1;
+}
+
+section[aria-labelledby="regions-heading"] > div[role="list"] > article:hover,
+section[aria-labelledby="regions-heading"] > div[role="list"] > article:focus-within {
+  transform: translateY(-6px);
+  box-shadow: var(--shadow-card);
+}
+
+section[aria-labelledby="regions-heading"] > div[role="list"] > article:hover::after,
+section[aria-labelledby="regions-heading"] > div[role="list"] > article:focus-within::after {
+  opacity: 1;
+}
+
+section[aria-labelledby="regions-heading"] > div[role="list"] > article > header {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+section[aria-labelledby="regions-heading"] > div[role="list"] > article > header > h2 {
+  margin: 0;
+  font-size: 1.35rem;
+  color: var(--gray-900);
+}
+
+section[aria-labelledby="regions-heading"] > div[role="list"] > article > header > p {
+  margin: 0;
+  color: var(--gray-500);
+  font-weight: 500;
+}
+
+section[aria-labelledby="regions-heading"] > div[role="list"] > article > p {
+  margin: 0;
+  color: var(--gray-700);
+}
+
+section[aria-labelledby="regions-heading"] > div[role="list"] > article dl {
+  margin: 0;
+  display: grid;
+  gap: var(--space-2);
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+}
+
+section[aria-labelledby="regions-heading"] > div[role="list"] > article dl > div {
+  background: rgba(29, 123, 255, 0.06);
+  border: 1px solid rgba(29, 123, 255, 0.12);
+  border-radius: var(--radius-sm);
+  padding: var(--space-2) var(--space-3);
+}
+
+section[aria-labelledby="regions-heading"] > div[role="list"] > article dt {
+  margin: 0;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--gray-500);
+}
+
+section[aria-labelledby="regions-heading"] > div[role="list"] > article dd {
+  margin: var(--space-1) 0 0;
+  font-weight: 600;
+  color: var(--gray-900);
+}
+
+section[aria-labelledby="regions-heading"] > div[role="list"] > article > footer {
+  margin-top: auto;
+  padding-top: var(--space-2);
+  border-top: 1px dashed rgba(148, 163, 184, 0.4);
+}
+
+section[aria-labelledby="regions-heading"] > div[role="list"] > article > footer > p {
+  margin: 0;
+  font-size: 0.9rem;
+  color: var(--gray-500);
+}
+
 @keyframes fade-in-up {
   from {
     opacity: 0;

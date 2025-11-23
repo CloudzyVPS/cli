@@ -3,23 +3,60 @@
 {% block title %}Regions{% endblock %}
 
 {% block content %}
-<h1>Available Regions</h1>
-{% if regions %}
-<div class="row">
-    {% for region in regions %}
-    <div class="col-12 col-md-6 col-lg-4 mb-4">
-        <div class="card">
-            <div class="card-body">
-                <h5 class="card-title">{{ region.name }}</h5>
-                <p class="card-text">Abbr: {{ region.abbr }}</p>
-                <p class="card-text">Active: {{ 'Yes' if region.isActive else 'No' }}</p>
-                <p class="card-text">Premium: {{ 'Yes' if region.isPremium else 'No' }}</p>
-            </div>
-        </div>
+<section aria-labelledby="regions-heading">
+    <header>
+        <h1 id="regions-heading">Available Regions</h1>
+        <p>Review availability, abbreviations, and premium status for each data center.</p>
+    </header>
+    {% if regions %}
+    <div role="list">
+        {% for region in regions %}
+        <article role="listitem" data-region-id="{{ region.id }}">
+            <header>
+                <h2>{{ region.name }}</h2>
+                <p>ID: {{ region.id }} · {{ region.abbr }}</p>
+            </header>
+            {% if region.description %}
+            <p>{{ region.description }}</p>
+            {% endif %}
+            <dl>
+                <div>
+                    <dt>Status</dt>
+                    <dd>{{ 'Active' if region.isActive else 'Disabled' }}</dd>
+                </div>
+                <div>
+                    <dt>Premium Tier</dt>
+                    <dd>{{ 'Yes' if region.isPremium else 'No' }}</dd>
+                </div>
+                {% if region.config and region.config.ramThresholdInGB %}
+                <div>
+                    <dt>RAM Threshold</dt>
+                    <dd>{{ region.config.ramThresholdInGB }} GB</dd>
+                </div>
+                {% endif %}
+                {% if region.config and region.config.diskThresholdInGB %}
+                <div>
+                    <dt>Disk Threshold</dt>
+                    <dd>{{ region.config.diskThresholdInGB }} GB</dd>
+                </div>
+                {% endif %}
+            </dl>
+            {% if region.tags %}
+            <footer>
+                <p>Highlights:
+                    {% if region.tags is string %}
+                    {{ region.tags }}
+                    {% else %}
+                    {{ region.tags | join(', ') }}
+                    {% endif %}
+                </p>
+            </footer>
+            {% endif %}
+        </article>
+        {% endfor %}
     </div>
-    {% endfor %}
-</div>
-{% else %}
-<p>No regions found.</p>
-{% endif %}
+    {% else %}
+    <p>No regions found.</p>
+    {% endif %}
+</section>
 {% endblock %}

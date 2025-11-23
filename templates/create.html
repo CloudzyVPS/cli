@@ -53,16 +53,61 @@
     </div>
 
     <div id="fixed-plan-fields" class="form-section {% if plan_type == 'custom' %}hidden{% endif %}">
-        <label for="product_id">Product</label>
-        <select id="product_id" name="product_id">
-            <option value="">Select a product</option>
-            {% for product in products %}
-            <option value="{{ product.id }}" {% if selected_product_id == product.id %}selected{% endif %}>
-                {{ product.plan.specification.cpu | default('?') }} vCPU / {{ product.plan.specification.ram | default('?') }} RAM · {{ product.id }}
-            </option>
-            {% endfor %}
-        </select>
+        <input type="hidden" id="product_id" name="product_id" value="{{ selected_product_id }}">
+        <span class="form-label">Product catalog</span>
         <p class="help-text">Products include predefined CPU, RAM, and disk. You can optionally extend disk or bandwidth.</p>
+        <div data-product-grid role="list">
+            {% if products %}
+            {% for product in products %}
+            {% set spec = product.plan.specification if product.plan and product.plan.specification else {} %}
+            {% set price = product.priceItems[0] if product.priceItems else None %}
+            <article role="listitem" data-product-id="{{ product.id }}" tabindex="0"{% if selected_product_id == product.id %} data-selected="true"{% endif %}>
+                <header>
+                    <h3>{{ product.plan.name | default('Product ' ~ product.id) }}</h3>
+                    <p>
+                        {{ spec.cpu | default('?') }} vCPU ·
+                        {{ spec.ram | default('?') }} RAM ·
+                        {{ spec.disk | default('?') }} Disk
+                    </p>
+                </header>
+                {% if product.plan and product.plan.description %}
+                <p>{{ product.plan.description }}</p>
+                {% endif %}
+                <dl>
+                    <div>
+                        <dt>Identifier</dt>
+                        <dd>{{ product.id }}</dd>
+                    </div>
+                    {% if price and price.hourlyPrice is not none %}
+                    <div>
+                        <dt>Hourly</dt>
+                        <dd>${{ price.hourlyPrice }}</dd>
+                    </div>
+                    {% endif %}
+                    {% if price and price.monthlyPrice is not none %}
+                    <div>
+                        <dt>Monthly</dt>
+                        <dd>${{ price.monthlyPrice }}</dd>
+                    </div>
+                    {% endif %}
+                </dl>
+                {% if product.tags %}
+                <footer>
+                    <p>
+                        {% if product.tags is string %}
+                        {{ product.tags }}
+                        {% else %}
+                        {{ product.tags | join(', ') }}
+                        {% endif %}
+                    </p>
+                </footer>
+                {% endif %}
+            </article>
+            {% endfor %}
+            {% else %}
+            <p>No products available for this region.</p>
+            {% endif %}
+        </div>
         <div id="product-details" class="product-details muted"></div>
         <div class="fields-grid compact">
             <div>
@@ -132,7 +177,8 @@
     const fixedFields = document.getElementById('fixed-plan-fields');
     const customFields = document.getElementById('custom-plan-fields');
     const regionSelect = document.getElementById('region');
-    const productSelect = document.getElementById('product_id');
+    const productField = document.getElementById('product_id');
+    const productList = document.querySelector('[data-product-grid]');
     const productDetails = document.getElementById('product-details');
     const thresholdMessage = document.getElementById('threshold-message');
     const regionConfigs = {{ region_configs | tojson }};
@@ -141,7 +187,7 @@
     let currentProducts = [];
     let lastFixedProductSelection = preselectedProduct;
 
-    if (!regionSelect || !productSelect) {
+    if (!regionSelect || !productField || !productList) {
         return;
     }
 
@@ -167,13 +213,18 @@
     }
 
     function renderProductDetails(productId) {
+        if (!productDetails) {
+            return;
+        }
         if (getPlanType() === 'custom') {
             productDetails.textContent = 'Custom plan selected. Product catalog is disabled.';
             return;
         }
         const product = currentProducts.find(item => String(item.id) === String(productId));
         if (!product) {
-            productDetails.textContent = 'Select a product to review its specs.';
+            productDetails.textContent = currentProducts.length
+                ? 'Select a product to review its specs.'
+                : 'No products available for the selected region.';
             return;
         }
         const spec = product.plan?.specification || {};
@@ -185,36 +236,154 @@
         if (spec.bandwidth) chunks.push(`${spec.bandwidth} Bandwidth`);
         if (priceInfo) {
             const pieces = [];
-            if (priceInfo.hourlyPrice) pieces.push(`$${priceInfo.hourlyPrice}/hr`);
-            if (priceInfo.monthlyPrice) pieces.push(`$${priceInfo.monthlyPrice}/mo`);
+            if (priceInfo.hourlyPrice !== undefined && priceInfo.hourlyPrice !== null) {
+                pieces.push(`$${Number(priceInfo.hourlyPrice).toFixed(2)}/hr`);
+            }
+            if (priceInfo.monthlyPrice !== undefined && priceInfo.monthlyPrice !== null) {
+                pieces.push(`$${Number(priceInfo.monthlyPrice).toFixed(2)}/mo`);
+            }
             if (pieces.length) chunks.push(`Pricing: ${pieces.join(' · ')}`);
         }
         productDetails.textContent = chunks.join(' · ');
     }
 
+    function markProductSelection(productId) {
+        const normalized = productId ? String(productId) : '';
+        productField.value = normalized;
+        productList.querySelectorAll('[data-product-id]').forEach(card => {
+            if (normalized && String(card.dataset.productId) === normalized) {
+                card.setAttribute('data-selected', 'true');
+                card.setAttribute('aria-pressed', 'true');
+            } else {
+                card.removeAttribute('data-selected');
+                card.setAttribute('aria-pressed', 'false');
+            }
+        });
+        if (getPlanType() === 'fixed' && normalized) {
+            lastFixedProductSelection = normalized;
+        }
+        renderProductDetails(normalized);
+    }
+
+    function setProductCardsDisabled(disabled) {
+        if (disabled) {
+            productList.setAttribute('data-disabled', 'true');
+        } else {
+            productList.removeAttribute('data-disabled');
+        }
+        productList.querySelectorAll('[data-product-id]').forEach(card => {
+            card.setAttribute('aria-disabled', disabled ? 'true' : 'false');
+            card.tabIndex = disabled ? -1 : 0;
+        });
+        if (disabled) {
+            renderProductDetails('');
+        } else if (productField.value) {
+            renderProductDetails(productField.value);
+        }
+    }
+
+    function buildDefinition(term, value) {
+        const container = document.createElement('div');
+        const dt = document.createElement('dt');
+        dt.textContent = term;
+        const dd = document.createElement('dd');
+        dd.textContent = value;
+        container.appendChild(dt);
+        container.appendChild(dd);
+        return container;
+    }
+
+    function buildProductCard(product) {
+        const spec = product.plan?.specification || {};
+        const priceInfo = product.priceItems?.[0];
+        const card = document.createElement('article');
+        card.setAttribute('role', 'listitem');
+        card.dataset.productId = product.id;
+        card.tabIndex = 0;
+        card.setAttribute('aria-pressed', 'false');
+
+        const header = document.createElement('header');
+        const title = document.createElement('h3');
+        title.textContent = product.plan?.name || `Product ${product.id}`;
+        header.appendChild(title);
+
+        const summary = document.createElement('p');
+        const summaryParts = [
+            spec.cpu ? `${spec.cpu} vCPU` : '? vCPU',
+            spec.ram ? `${spec.ram} RAM` : '? RAM',
+            spec.disk ? `${spec.disk} Disk` : '? Disk'
+        ];
+        summary.textContent = summaryParts.join(' · ');
+        header.appendChild(summary);
+        card.appendChild(header);
+
+        if (product.plan?.description) {
+            const description = document.createElement('p');
+            description.textContent = product.plan.description;
+            card.appendChild(description);
+        }
+
+        const meta = document.createElement('dl');
+        meta.appendChild(buildDefinition('Identifier', String(product.id)));
+        if (priceInfo && priceInfo.hourlyPrice !== undefined && priceInfo.hourlyPrice !== null) {
+            meta.appendChild(buildDefinition('Hourly', `$${Number(priceInfo.hourlyPrice).toFixed(2)}`));
+        }
+        if (priceInfo && priceInfo.monthlyPrice !== undefined && priceInfo.monthlyPrice !== null) {
+            meta.appendChild(buildDefinition('Monthly', `$${Number(priceInfo.monthlyPrice).toFixed(2)}`));
+        }
+        card.appendChild(meta);
+
+        const tagsValue = Array.isArray(product.tags)
+            ? product.tags.join(', ')
+            : (product.tags || '');
+        if (tagsValue) {
+            const footer = document.createElement('footer');
+            const tagsText = document.createElement('p');
+            tagsText.textContent = tagsValue;
+            footer.appendChild(tagsText);
+            card.appendChild(footer);
+        }
+
+        return card;
+    }
+
     function populateProducts(products, selected) {
         currentProducts = products || [];
-        const effectiveSelection = getPlanType() === 'fixed'
+        productList.innerHTML = '';
+        const isFixedPlan = getPlanType() === 'fixed';
+        const normalizedSelection = isFixedPlan
             ? (selected || lastFixedProductSelection || '')
             : '';
-        productSelect.innerHTML = '<option value="">Select a product</option>';
+
+        if (!currentProducts.length) {
+            const emptyMessage = document.createElement('p');
+            emptyMessage.textContent = 'No products available for this region.';
+            productList.appendChild(emptyMessage);
+            markProductSelection('');
+            return;
+        }
+
         currentProducts.forEach(product => {
-            const option = document.createElement('option');
-            const spec = product.plan?.specification || {};
-            option.value = product.id;
-            option.textContent = `${spec.cpu || '?'} vCPU / ${spec.ram || '?'} RAM · ${product.id}`;
-            if (String(product.id) === String(effectiveSelection)) {
-                option.selected = true;
+            const card = buildProductCard(product);
+            if (normalizedSelection && String(product.id) === String(normalizedSelection)) {
+                card.setAttribute('data-selected', 'true');
+                card.setAttribute('aria-pressed', 'true');
             }
-            productSelect.appendChild(option);
+            productList.appendChild(card);
         });
-        if (effectiveSelection) {
-            productSelect.value = effectiveSelection;
+
+        const selectionExists = normalizedSelection
+            && currentProducts.some(item => String(item.id) === String(normalizedSelection));
+
+        if (selectionExists) {
+            markProductSelection(normalizedSelection);
+        } else {
+            if (normalizedSelection) {
+                lastFixedProductSelection = '';
+            }
+            markProductSelection('');
         }
-        if (getPlanType() === 'fixed' && productSelect.value) {
-            lastFixedProductSelection = productSelect.value;
-        }
-        renderProductDetails(productSelect.value);
+        setProductCardsDisabled(getPlanType() === 'custom');
     }
 
     function updateThresholdMessage(regionId) {
@@ -269,14 +438,17 @@
         setFixedExtrasDisabled(isCustom);
 
         if (isCustom) {
-            lastFixedProductSelection = productSelect.value || lastFixedProductSelection;
-            productSelect.value = '';
+            if (productField.value) {
+                lastFixedProductSelection = productField.value;
+            }
+            markProductSelection('');
         } else if (lastFixedProductSelection) {
-            productSelect.value = lastFixedProductSelection;
+            markProductSelection(lastFixedProductSelection);
+        } else {
+            renderProductDetails('');
         }
-        productSelect.disabled = isCustom;
 
-        renderProductDetails(productSelect.value);
+        setProductCardsDisabled(isCustom);
         updateThresholdMessage(regionSelect.value);
         updateThresholdConstraints(regionSelect.value);
     }
@@ -288,10 +460,14 @@
         }
 
         const keepSelection = preserveSelection && getPlanType() === 'fixed'
-            ? (productSelect.value || lastFixedProductSelection || '')
+            ? (productField.value || lastFixedProductSelection || '')
             : '';
-        productSelect.innerHTML = '<option value="">Loading products…</option>';
-        productSelect.disabled = true;
+
+        productList.innerHTML = '';
+        const loading = document.createElement('p');
+        loading.textContent = 'Loading products…';
+        productList.appendChild(loading);
+
         try {
             const response = await fetch(`/api/regions/${regionId}/products`);
             if (!response.ok) {
@@ -300,22 +476,44 @@
             const payload = await response.json();
             populateProducts(payload.products || [], keepSelection);
         } catch (error) {
-            populateProducts([], null);
-            productDetails.textContent = error.message;
+            productList.innerHTML = '';
+            const message = document.createElement('p');
+            message.textContent = error.message;
+            productList.appendChild(message);
+            currentProducts = [];
+            markProductSelection('');
         } finally {
-            productSelect.disabled = getPlanType() === 'custom';
+            setProductCardsDisabled(getPlanType() === 'custom');
         }
+    }
+
+    function handleProductSelection(target) {
+        if (!target || getPlanType() === 'custom' || target.getAttribute('aria-disabled') === 'true') {
+            return;
+        }
+        const productId = target.dataset.productId || '';
+        markProductSelection(productId);
     }
 
     planTypeRadios.forEach(radio => radio.addEventListener('change', () => {
         applyPlanType();
     }));
 
-    productSelect.addEventListener('change', () => {
-        if (getPlanType() === 'custom') {
-            return;
+    productList.addEventListener('click', event => {
+        const card = event.target.closest('[data-product-id]');
+        if (card) {
+            handleProductSelection(card);
         }
-        renderProductDetails(productSelect.value);
+    });
+
+    productList.addEventListener('keydown', event => {
+        if (event.key === 'Enter' || event.key === ' ') {
+            const card = event.target.closest('[data-product-id]');
+            if (card) {
+                event.preventDefault();
+                handleProductSelection(card);
+            }
+        }
     });
 
     regionSelect.addEventListener('change', () => {
