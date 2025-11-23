@@ -2,6 +2,7 @@ from pathlib import Path
 import json
 import logging
 import os
+import sys
 from functools import wraps
 
 import requests
@@ -12,7 +13,11 @@ from werkzeug.security import check_password_hash, generate_password_hash
 load_dotenv()
 
 # Configure logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    handlers=[logging.StreamHandler(sys.stdout)]
+)
 
 app = Flask(__name__)
 app.secret_key = 'your_secret_key'  # Change this
@@ -128,7 +133,18 @@ def api_call(method, endpoint, data=None, params=None):
         response = requests.delete(url, headers=headers)
     else:
         raise ValueError('Unsupported HTTP method')
-    return response.json()
+    try:
+        payload = response.json()
+    except ValueError:
+        payload = {'raw': response.text}
+    logging.info(
+        "API Response: %s %s - Status: %s - Body: %s",
+        method,
+        url,
+        response.status_code,
+        payload
+    )
+    return payload
 
 
 @app.context_processor
@@ -316,20 +332,20 @@ def create():
         data = {
             'hostnames': [h.strip() for h in hostnames],
             'region': region,
-            'instance_class': instance_class,
-            'assign_ipv4': assign_ipv4,
-            'assign_ipv6': assign_ipv6
+            'class': instance_class,
+            'assignIpv4': assign_ipv4,
+            'assignIpv6': assign_ipv6
         }
         if product_id:
-            data['product_id'] = product_id
+            data['productId'] = product_id
         if cpu:
-            data.setdefault('extra_resource', {})['cpu'] = int(cpu)
+            data.setdefault('extraResource', {})['cpu'] = int(cpu)
         if ramInGB:
-            data.setdefault('extra_resource', {})['ramInGB'] = int(ramInGB)
+            data.setdefault('extraResource', {})['ramInGB'] = int(ramInGB)
         if diskInGB:
-            data.setdefault('extra_resource', {})['diskInGB'] = int(diskInGB)
+            data.setdefault('extraResource', {})['diskInGB'] = int(diskInGB)
         if bandwidthInTB:
-            data.setdefault('extra_resource', {})['bandwidthInTB'] = int(bandwidthInTB)
+            data.setdefault('extraResource', {})['bandwidthInTB'] = int(bandwidthInTB)
 
         response = api_call('POST', '/v1/instances', data=data)
         if response.get('code') == 'OKAY':
