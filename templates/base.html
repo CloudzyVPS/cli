@@ -8,12 +8,30 @@
 </head>
 <body>
     {% if current_user %}
-    <nav>
-        <p>Zyffiliate · {{ current_user.username }} ({{ current_user.role }})</p>
-        <div>
+    <nav class="site-nav">
+        {% set user_initial = (current_user.username or '')[:1]|upper %}
+        <div class="nav-header">
+            <div class="brand-cluster">
+                <div class="brand-mark" aria-label="Zyffiliate">
+                    <span>ZY</span>
+                </div>
+                <p class="brand-name">Zyffiliate Control</p>
+            </div>
+            <div class="nav-account" data-user-account>
+                <div class="account-avatar" aria-hidden="true">{{ user_initial if user_initial else 'U' }}</div>
+                <div class="account-details">
+                    <span class="account-name">{{ current_user.username }}</span>
+                    <span class="account-role">{{ current_user.role|title }}</span>
+                </div>
+                <form method="post" action="{{ url_for('logout') }}" class="account-action">
+                    <button type="submit">Logout</button>
+                </form>
+            </div>
+        </div>
+        <div class="nav-links" role="navigation">
             <a href="{{ url_for('instances') }}">Instances</a>
             {% if current_user.role == 'owner' %}
-            <a href="{{ url_for('create') }}">Create</a>
+            <a href="{{ url_for('create_start') }}">Create</a>
             <a href="{{ url_for('bulk_subscription_refund') }}">Bulk refunds</a>
             <a href="{{ url_for('regions') }}">Regions</a>
             <a href="{{ url_for('products') }}">Products</a>
@@ -23,9 +41,6 @@
             <a href="{{ url_for('access_management') }}">Assignments</a>
             {% endif %}
         </div>
-        <form method="post" action="{{ url_for('logout') }}">
-            <button type="submit">Logout</button>
-        </form>
     </nav>
     {% endif %}
 
