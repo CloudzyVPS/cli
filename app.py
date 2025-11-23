@@ -332,6 +332,35 @@ def load_regions():
     return regions, lookup, configs
 
 
+def load_ssh_keys():
+    response = api_call('GET', '/v1/ssh-keys')
+    payload = response.get('data', []) if response.get('code') == 'OKAY' else []
+    if isinstance(payload, dict):
+        candidates = (
+            payload.get('sshKeys')
+            or payload.get('ssh_keys')
+            or payload.get('items')
+            or payload.get('data')
+            or []
+        )
+    else:
+        candidates = payload
+
+    normalized = []
+    for item in candidates or []:
+        if not isinstance(item, dict):
+            continue
+        key_id = item.get('id')
+        normalized.append({
+            'id': key_id,
+            'name': item.get('name') or (f"SSH Key {key_id}" if key_id is not None else 'SSH Key'),
+            'public_key': item.get('publicKey') or item.get('public_key') or '',
+            'fingerprint': item.get('fingerprint') or item.get('fingerPrint') or '',
+            'customer_id': item.get('customerId') or item.get('userId') or item.get('customer_id'),
+        })
+    return normalized
+
+
 def is_high_frequency(product):
     plan = product.get('plan') or {}
     plan_name = (plan.get('name') or '').lower()
@@ -601,6 +630,60 @@ def update_access(username):
     return redirect(url_for('access_management'))
 
 
+@app.route('/ssh-keys', methods=['GET', 'POST'])
+@owner_required
+def ssh_keys():
+    form_values = {
+        'name': '',
+        'public_key': '',
+        'customer_id': '',
+    }
+
+    if request.method == 'POST':
+        action = (request.form.get('action') or 'create').strip().lower()
+
+        if action == 'delete':
+            key_id_raw = (request.form.get('ssh_key_id') or '').strip()
+            if not key_id_raw.isdigit():
+                flash('Invalid SSH key identifier provided.')
+            else:
+                response = api_call('DELETE', f"/v1/ssh-keys/{key_id_raw}")
+                if response.get('code') == 'OKAY':
+                    flash('SSH key removed.')
+                else:
+                    detail = response.get('detail') or 'Unable to delete SSH key.'
+                    flash(f'Error: {detail}')
+            return redirect(url_for('ssh_keys'))
+
+        name = (request.form.get('name') or '').strip()
+        public_key = (request.form.get('public_key') or '').strip()
+        customer_id = (request.form.get('customer_id') or '').strip()
+        form_values.update({'name': name, 'public_key': public_key, 'customer_id': customer_id})
+
+        errors = []
+        if not name:
+            errors.append('Provide a name for the SSH key.')
+        if not public_key:
+            errors.append('Provide the public key material.')
+
+        if errors:
+            for message in errors:
+                flash(message)
+        else:
+            payload = {'name': name, 'publicKey': public_key}
+            if customer_id:
+                payload['customerId'] = customer_id
+            response = api_call('POST', '/v1/ssh-keys', data=payload)
+            if response.get('code') == 'OKAY':
+                flash('SSH key added successfully.')
+                return redirect(url_for('ssh_keys'))
+            detail = response.get('detail') or 'Unable to add SSH key.'
+            flash(f'Error: {detail}')
+
+    ssh_keys_list = load_ssh_keys()
+    return render_template('ssh_keys.html', ssh_keys=ssh_keys_list, form_values=form_values)
+
+
 @app.route('/')
 def root():
     user = get_current_user()
@@ -634,6 +717,8 @@ def create_start():
     regions, region_lookup, _ = load_regions()
     if not regions:
         flash('No regions were returned by the developer API.')
+    ssh_keys = load_ssh_keys()
+    available_ssh_key_ids = {str(key['id']) for key in ssh_keys if key.get('id') is not None}
 
     base_state = parse_wizard_base(request.args)
     if not base_state['region'] and regions:
@@ -647,7 +732,7 @@ def create_start():
         'assign_ipv6': base_state['assign_ipv6'],
         'plan_type': base_state['plan_type'],
         'floating_ip_count': str(base_state['floating_ip_count']),
-        'ssh_key_ids': ', '.join(str(item) for item in base_state['ssh_key_ids']),
+        'selected_ssh_keys': [str(item) for item in base_state['ssh_key_ids']],
     }
 
     if request.method == 'POST':
@@ -661,7 +746,7 @@ def create_start():
         assign_ipv4 = 'assign_ipv4' in request.form
         assign_ipv6 = 'assign_ipv6' in request.form
         floating_ip_raw = request.form.get('floating_ip_count', '').strip()
-        ssh_key_raw = request.form.get('ssh_key_ids', '').strip()
+        selected_key_values = [value.strip() for value in request.form.getlist('ssh_key_ids') if value.strip()]
 
         errors = []
 
@@ -684,16 +769,16 @@ def create_start():
                     errors.append('Floating IP count must be a number between 0 and 5.')
 
         ssh_key_ids = []
-        if ssh_key_raw:
-            for chunk in ssh_key_raw.split(','):
-                token = chunk.strip()
-                if not token:
-                    continue
-                if not token.isdigit():
-                    errors.append('SSH key IDs must be comma-separated numbers.')
-                    ssh_key_ids = []
-                    break
-                ssh_key_ids.append(int(token))
+        for token in selected_key_values:
+            if not token.isdigit():
+                errors.append('Invalid SSH key selection detected.')
+                ssh_key_ids = []
+                break
+            if available_ssh_key_ids and token not in available_ssh_key_ids:
+                errors.append('Selected SSH key is no longer available.')
+                ssh_key_ids = []
+                break
+            ssh_key_ids.append(int(token))
 
         if errors:
             for message in errors:
@@ -711,10 +796,7 @@ def create_start():
             }
             query_pairs = build_base_query_pairs(base_state)
             query_string = build_query_string(query_pairs)
-            if plan_type == 'fixed':
-                target = url_for('create_fixed')
-            else:
-                target = url_for('create_custom')
+            target = url_for('create_fixed') if plan_type == 'fixed' else url_for('create_custom')
             if query_string:
                 target = f"{target}?{query_string}"
             return redirect(target)
@@ -727,7 +809,7 @@ def create_start():
             'assign_ipv4': assign_ipv4,
             'assign_ipv6': assign_ipv6,
             'floating_ip_count': floating_ip_raw if floating_ip_raw else '0',
-            'ssh_key_ids': ssh_key_raw,
+            'selected_ssh_keys': selected_key_values,
         })
 
     if regions and not form_data['region']:
@@ -737,6 +819,7 @@ def create_start():
         'create/start.html',
         regions=regions,
         form_data=form_data,
+        ssh_keys=ssh_keys,
     )
 
 
@@ -1200,6 +1283,20 @@ def create_review():
     if back_query:
         back_url = f"{back_url}?{back_query}"
 
+    ssh_keys_catalog = load_ssh_keys()
+    ssh_key_lookup = {str(item['id']): item for item in ssh_keys_catalog if item.get('id') is not None}
+    ssh_keys_display = []
+    for key_id in base_state['ssh_key_ids']:
+        key_str = str(key_id)
+        entry = ssh_key_lookup.get(key_str)
+        if entry:
+            label = entry.get('name') or entry.get('label') or key_str
+            if entry.get('id') is not None:
+                label = f"{label} (#{entry['id']})"
+        else:
+            label = key_str
+        ssh_keys_display.append(label)
+
     wizard = {
         'hostnames': base_state['hostnames'],
         'plan_type': plan_type,
@@ -1207,6 +1304,7 @@ def create_review():
         'assign_ipv4': base_state['assign_ipv4'],
         'assign_ipv6': base_state['assign_ipv6'],
         'ssh_key_ids': [str(item) for item in base_state['ssh_key_ids']],
+        'ssh_keys_display': ssh_keys_display,
         'instance_class': base_state['instance_class'],
         'region': base_state['region'],
     }
