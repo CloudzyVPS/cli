@@ -1,9 +1,13 @@
 from flask import Flask, render_template, request, redirect, url_for, flash
 import requests
 import os
+import logging
 from dotenv import load_dotenv
 
 load_dotenv()
+
+# Configure logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 app = Flask(__name__)
 app.secret_key = 'your_secret_key'  # Change this
@@ -14,6 +18,7 @@ API_TOKEN = os.getenv('API_TOKEN')
 def api_call(method, endpoint, data=None, params=None):
     url = f"{API_BASE_URL}{endpoint}"
     headers = {'API-Token': API_TOKEN}
+    logging.info(f"API Request: {method} {url} - Params: {params} - Data: {data}")
     if method == 'GET':
         response = requests.get(url, headers=headers, params=params)
     elif method == 'POST':
