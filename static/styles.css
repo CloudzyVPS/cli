@@ -726,6 +726,57 @@ footer {
   gap: var(--space-3);
 }
 
+.form-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.7);
+  border: 1px solid rgba(148, 163, 184, 0.25);
+}
+
+.form-label {
+  font-weight: 600;
+  color: var(--gray-700);
+}
+
+.fields-grid {
+  display: grid;
+  gap: var(--space-3);
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.fields-grid.compact {
+  gap: var(--space-2);
+}
+
+.radio-group,
+.checkbox-group {
+  display: flex;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.help-text {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--gray-500);
+}
+
+.product-details {
+  font-size: 0.85rem;
+}
+
+.muted {
+  color: var(--gray-500);
+}
+
+.hidden {
+  display: none !important;
+}
+
 @keyframes fade-in-up {
   from {
     opacity: 0;

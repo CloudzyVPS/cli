@@ -3,50 +3,330 @@
 {% block title %}Create Instance{% endblock %}
 
 {% block content %}
-<h1>Create Instance</h1>
-<form method="post">
-    <label for="hostnames">Hostnames (comma-separated)</label>
-    <input type="text" id="hostnames" name="hostnames" required>
+<header class="page-header">
+    <div>
+        <h1>Provision New Instance</h1>
+        <p>Select a predefined product or craft a custom configuration.</p>
+    </div>
+</header>
 
-    <label for="region">Region</label>
-    <select id="region" name="region" required>
-        {% for region in regions %}
-        <option value="{{ region.id }}">{{ region.name }}</option>
-        {% endfor %}
-    </select>
+<form method="post" id="create-instance-form" class="surface">
+    <div class="form-section">
+        <label for="hostnames">Hostnames (comma-separated)</label>
+        <input type="text" id="hostnames" name="hostnames" value="{{ form_data.get('hostnames', '') }}" required>
+        <p class="help-text">You can submit up to 10 hostnames. Each hostname provisions a separate instance.</p>
+    </div>
 
-    <label for="product_id">Product ID (optional)</label>
-    <input type="text" id="product_id" name="product_id">
+    <div class="fields-grid">
+        <div class="form-section">
+            <label for="region">Region</label>
+            <select id="region" name="region" required>
+                {% for region in regions %}
+                <option value="{{ region.id }}" {% if selected_region == region.id %}selected{% endif %}>{{ region.name }}</option>
+                {% endfor %}
+            </select>
+            <p class="help-text">Switch regions to load available plans and thresholds.</p>
+        </div>
+        <div class="form-section">
+            <label for="instance_class">Instance class</label>
+            <select id="instance_class" name="instance_class">
+                <option value="default" {% if form_data.get('instance_class', 'default') == 'default' %}selected{% endif %}>Default</option>
+                <option value="cpu-optimized" {% if form_data.get('instance_class') == 'cpu-optimized' %}selected{% endif %}>CPU Optimized</option>
+                <option value="gpu-provided" {% if form_data.get('instance_class') == 'gpu-provided' %}selected{% endif %}>GPU Provided</option>
+            </select>
+            <p class="help-text">Use custom class types for specialised workloads.</p>
+        </div>
+    </div>
 
-    <label for="instance_class">Instance class</label>
-    <select id="instance_class" name="instance_class">
-        <option value="default">Default</option>
-        <option value="cpu-optimized">CPU Optimized</option>
-        <option value="gpu-provided">GPU Provided</option>
-    </select>
+    <div class="form-section">
+        <span class="form-label">Plan type</span>
+        <div class="radio-group">
+            <label>
+                <input type="radio" name="plan_type" value="fixed" {% if plan_type != 'custom' %}checked{% endif %}>
+                Use existing product
+            </label>
+            <label>
+                <input type="radio" name="plan_type" value="custom" {% if plan_type == 'custom' %}checked{% endif %}>
+                Custom resources
+            </label>
+        </div>
+    </div>
 
-    <label for="cpu">CPU</label>
-    <input type="number" id="cpu" name="cpu">
+    <div id="fixed-plan-fields" class="form-section {% if plan_type == 'custom' %}hidden{% endif %}">
+        <label for="product_id">Product</label>
+        <select id="product_id" name="product_id">
+            <option value="">Select a product</option>
+            {% for product in products %}
+            <option value="{{ product.id }}" {% if selected_product_id == product.id %}selected{% endif %}>
+                {{ product.plan.specification.cpu | default('?') }} vCPU / {{ product.plan.specification.ram | default('?') }} RAM · {{ product.id }}
+            </option>
+            {% endfor %}
+        </select>
+        <p class="help-text">Products include predefined CPU, RAM, and disk. You can optionally extend disk or bandwidth.</p>
+        <div id="product-details" class="product-details muted"></div>
+        <div class="fields-grid compact">
+            <div>
+                <label for="fixed_diskInGB">Extra Disk (GB)</label>
+                <input type="number" id="fixed_diskInGB" name="fixed_diskInGB" min="1" value="{{ form_data.get('fixed_diskInGB', '') }}">
+            </div>
+            <div>
+                <label for="fixed_bandwidthInTB">Extra Bandwidth (TB)</label>
+                <input type="number" id="fixed_bandwidthInTB" name="fixed_bandwidthInTB" min="1" value="{{ form_data.get('fixed_bandwidthInTB', '') }}">
+            </div>
+        </div>
+    </div>
 
-    <label for="ramInGB">RAM in GB</label>
-    <input type="number" id="ramInGB" name="ramInGB">
+    <div id="custom-plan-fields" class="form-section {% if plan_type != 'custom' %}hidden{% endif %}">
+        <p class="help-text" id="threshold-message">Provide the desired resource values for the custom plan.</p>
+        <div class="fields-grid compact">
+            <div>
+                <label for="cpu">CPU (cores)</label>
+                <input type="number" id="cpu" name="cpu" min="1" value="{{ form_data.get('cpu', '') }}">
+            </div>
+            <div>
+                <label for="ramInGB">RAM (GB)</label>
+                <input type="number" id="ramInGB" name="ramInGB" min="1" value="{{ form_data.get('ramInGB', '') }}">
+            </div>
+            <div>
+                <label for="diskInGB">Disk (GB)</label>
+                <input type="number" id="diskInGB" name="diskInGB" min="1" value="{{ form_data.get('diskInGB', '') }}">
+            </div>
+            <div>
+                <label for="bandwidthInTB">Bandwidth (TB)</label>
+                <input type="number" id="bandwidthInTB" name="bandwidthInTB" min="1" value="{{ form_data.get('bandwidthInTB', '') }}">
+            </div>
+        </div>
+    </div>
 
-    <label for="diskInGB">Disk in GB</label>
-    <input type="number" id="diskInGB" name="diskInGB">
+    <div class="form-section">
+        <div class="fields-grid compact">
+            <div>
+                <label for="floating_ip_count">Floating IP count</label>
+                <input type="number" id="floating_ip_count" name="floating_ip_count" min="0" max="5" value="{{ form_data.get('floating_ip_count', '') }}">
+                <p class="help-text">Optional. Allocate up to five floating IPs during provisioning.</p>
+            </div>
+            <div>
+                <label for="ssh_key_ids">SSH Key IDs</label>
+                <input type="text" id="ssh_key_ids" name="ssh_key_ids" placeholder="e.g. 123, 456" value="{{ form_data.get('ssh_key_ids', '') }}">
+                <p class="help-text">Optional. Comma-separated list of SSH key IDs already uploaded in the panel.</p>
+            </div>
+        </div>
+        <div class="checkbox-group">
+            <label>
+                <input type="checkbox" id="assign_ipv4" name="assign_ipv4" {% if form_data.get('assign_ipv4', 'on') %}checked{% endif %}>
+                Assign IPv4
+            </label>
+            <label>
+                <input type="checkbox" id="assign_ipv6" name="assign_ipv6" {% if form_data.get('assign_ipv6') %}checked{% endif %}>
+                Assign IPv6
+            </label>
+        </div>
+    </div>
 
-    <label for="bandwidthInTB">Bandwidth in TB</label>
-    <input type="number" id="bandwidthInTB" name="bandwidthInTB">
-
-    <label>
-        <input type="checkbox" id="assign_ipv4" name="assign_ipv4" checked>
-        Assign IPv4
-    </label>
-
-    <label>
-        <input type="checkbox" id="assign_ipv6" name="assign_ipv6">
-        Assign IPv6
-    </label>
-
-    <button type="submit">Create</button>
+    <button type="submit">Create Instance</button>
 </form>
+
+<script>
+(() => {
+    const planTypeRadios = document.querySelectorAll('input[name="plan_type"]');
+    const fixedFields = document.getElementById('fixed-plan-fields');
+    const customFields = document.getElementById('custom-plan-fields');
+    const regionSelect = document.getElementById('region');
+    const productSelect = document.getElementById('product_id');
+    const productDetails = document.getElementById('product-details');
+    const thresholdMessage = document.getElementById('threshold-message');
+    const regionConfigs = {{ region_configs | tojson }};
+    const initialProducts = {{ products | tojson }};
+    const preselectedProduct = "{{ selected_product_id or '' }}";
+    let currentProducts = [];
+    let lastFixedProductSelection = preselectedProduct;
+
+    if (!regionSelect || !productSelect) {
+        return;
+    }
+
+    const customInputs = customFields ? customFields.querySelectorAll('input') : [];
+    const fixedExtraInputs = fixedFields ? fixedFields.querySelectorAll('input') : [];
+    const ramInput = document.getElementById('ramInGB');
+    const diskInput = document.getElementById('diskInGB');
+
+    function getPlanType() {
+        return document.querySelector('input[name="plan_type"]:checked')?.value || 'fixed';
+    }
+
+    function setCustomInputsDisabled(disabled) {
+        customInputs.forEach(input => {
+            input.disabled = disabled;
+        });
+    }
+
+    function setFixedExtrasDisabled(disabled) {
+        fixedExtraInputs.forEach(input => {
+            input.disabled = disabled;
+        });
+    }
+
+    function renderProductDetails(productId) {
+        if (getPlanType() === 'custom') {
+            productDetails.textContent = 'Custom plan selected. Product catalog is disabled.';
+            return;
+        }
+        const product = currentProducts.find(item => String(item.id) === String(productId));
+        if (!product) {
+            productDetails.textContent = 'Select a product to review its specs.';
+            return;
+        }
+        const spec = product.plan?.specification || {};
+        const priceInfo = product.priceItems?.[0];
+        const chunks = [];
+        if (spec.cpu) chunks.push(`${spec.cpu} vCPU`);
+        if (spec.ram) chunks.push(`${spec.ram} RAM`);
+        if (spec.disk) chunks.push(`${spec.disk} Disk`);
+        if (spec.bandwidth) chunks.push(`${spec.bandwidth} Bandwidth`);
+        if (priceInfo) {
+            const pieces = [];
+            if (priceInfo.hourlyPrice) pieces.push(`$${priceInfo.hourlyPrice}/hr`);
+            if (priceInfo.monthlyPrice) pieces.push(`$${priceInfo.monthlyPrice}/mo`);
+            if (pieces.length) chunks.push(`Pricing: ${pieces.join(' · ')}`);
+        }
+        productDetails.textContent = chunks.join(' · ');
+    }
+
+    function populateProducts(products, selected) {
+        currentProducts = products || [];
+        const effectiveSelection = getPlanType() === 'fixed'
+            ? (selected || lastFixedProductSelection || '')
+            : '';
+        productSelect.innerHTML = '<option value="">Select a product</option>';
+        currentProducts.forEach(product => {
+            const option = document.createElement('option');
+            const spec = product.plan?.specification || {};
+            option.value = product.id;
+            option.textContent = `${spec.cpu || '?'} vCPU / ${spec.ram || '?'} RAM · ${product.id}`;
+            if (String(product.id) === String(effectiveSelection)) {
+                option.selected = true;
+            }
+            productSelect.appendChild(option);
+        });
+        if (effectiveSelection) {
+            productSelect.value = effectiveSelection;
+        }
+        if (getPlanType() === 'fixed' && productSelect.value) {
+            lastFixedProductSelection = productSelect.value;
+        }
+        renderProductDetails(productSelect.value);
+    }
+
+    function updateThresholdMessage(regionId) {
+        const config = regionConfigs?.[regionId] || {};
+        const requirements = [];
+        if (config.ramThresholdInGB) {
+            requirements.push(`RAM ≥ ${config.ramThresholdInGB} GB`);
+        }
+        if (config.diskThresholdInGB) {
+            requirements.push(`Disk ≥ ${config.diskThresholdInGB} GB`);
+        }
+        if (getPlanType() !== 'custom') {
+            thresholdMessage.textContent = 'Switch to custom resources to enter manual values.';
+            return;
+        }
+        thresholdMessage.textContent = requirements.length
+            ? `Custom plans in this region must meet: ${requirements.join(' · ')}.`
+            : 'Provide the desired resource values for the custom plan.';
+    }
+
+    function updateThresholdConstraints(regionId) {
+        const config = regionConfigs?.[regionId] || {};
+        const isCustom = getPlanType() === 'custom';
+        const minRam = config.ramThresholdInGB || 1;
+        const minDisk = config.diskThresholdInGB || 1;
+        if (ramInput) {
+            if (isCustom) {
+                ramInput.min = minRam;
+            } else {
+                ramInput.removeAttribute('min');
+            }
+        }
+        if (diskInput) {
+            if (isCustom) {
+                diskInput.min = minDisk;
+            } else {
+                diskInput.removeAttribute('min');
+            }
+        }
+    }
+
+    function applyPlanType() {
+        const isCustom = getPlanType() === 'custom';
+        if (fixedFields) {
+            fixedFields.classList.toggle('hidden', isCustom);
+        }
+        if (customFields) {
+            customFields.classList.toggle('hidden', !isCustom);
+        }
+
+        setCustomInputsDisabled(!isCustom);
+        setFixedExtrasDisabled(isCustom);
+
+        if (isCustom) {
+            lastFixedProductSelection = productSelect.value || lastFixedProductSelection;
+            productSelect.value = '';
+        } else if (lastFixedProductSelection) {
+            productSelect.value = lastFixedProductSelection;
+        }
+        productSelect.disabled = isCustom;
+
+        renderProductDetails(productSelect.value);
+        updateThresholdMessage(regionSelect.value);
+        updateThresholdConstraints(regionSelect.value);
+    }
+
+    async function fetchProducts(regionId, preserveSelection = false) {
+        if (!regionId) {
+            populateProducts([], null);
+            return;
+        }
+
+        const keepSelection = preserveSelection && getPlanType() === 'fixed'
+            ? (productSelect.value || lastFixedProductSelection || '')
+            : '';
+        productSelect.innerHTML = '<option value="">Loading products…</option>';
+        productSelect.disabled = true;
+        try {
+            const response = await fetch(`/api/regions/${regionId}/products`);
+            if (!response.ok) {
+                throw new Error('Unable to load products for the selected region.');
+            }
+            const payload = await response.json();
+            populateProducts(payload.products || [], keepSelection);
+        } catch (error) {
+            populateProducts([], null);
+            productDetails.textContent = error.message;
+        } finally {
+            productSelect.disabled = getPlanType() === 'custom';
+        }
+    }
+
+    planTypeRadios.forEach(radio => radio.addEventListener('change', () => {
+        applyPlanType();
+    }));
+
+    productSelect.addEventListener('change', () => {
+        if (getPlanType() === 'custom') {
+            return;
+        }
+        renderProductDetails(productSelect.value);
+    });
+
+    regionSelect.addEventListener('change', () => {
+        const regionId = regionSelect.value;
+        updateThresholdMessage(regionId);
+        updateThresholdConstraints(regionId);
+        fetchProducts(regionId, true);
+    });
+
+    populateProducts(initialProducts, preselectedProduct);
+    applyPlanType();
+})();
+</script>
 {% endblock %}
