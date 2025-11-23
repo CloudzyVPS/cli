@@ -5,7 +5,7 @@
 {% block content %}
 <h1>Bulk Subscription Refund Results</h1>
 {% if refunds %}
-<table class="table">
+<table>
     <thead>
         <tr>
             <th>Instance ID</th>
@@ -28,5 +28,5 @@
 {% else %}
 <p>No refunds found.</p>
 {% endif %}
-<a href="/bulk-subscription-refund" class="btn btn-secondary">Back</a>
+<a href="/bulk-subscription-refund">Back</a>
 {% endblock %}

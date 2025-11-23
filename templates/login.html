@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+
+{% block title %}Sign In{% endblock %}
+
+{% block content %}
+<h1>Sign in</h1>
+<form method="post">
+    <label for="username">Username</label>
+    <input type="text" id="username" name="username" required autofocus>
+
+    <label for="password">Password</label>
+    <input type="password" id="password" name="password" required>
+
+    <button type="submit">Submit</button>
+</form>
+{% endblock %}

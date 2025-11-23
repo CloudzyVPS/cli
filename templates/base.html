@@ -5,33 +5,44 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}Zyffiliate{% endblock %}</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 </head>
 <body>
-    <nav class="navbar">
-        <div class="container">
-            <a class="navbar-brand" href="/">Zyffiliate</a>
-            <ul class="nav-links">
-                <li><a href="/">Instances</a></li>
-                <li><a href="/create">Create</a></li>
-                <li><a href="/regions">Regions</a></li>
-                <li><a href="/products">Products</a></li>
-                <li><a href="/os">OS</a></li>
-                <li><a href="/applications">Apps</a></li>
-            </ul>
+    {% if current_user %}
+    <nav>
+        <p>Zyffiliate · {{ current_user.username }} ({{ current_user.role }})</p>
+        <div>
+            <a href="{{ url_for('instances') }}">Instances</a>
+            {% if current_user.role == 'owner' %}
+            <a href="{{ url_for('create') }}">Create</a>
+            <a href="{{ url_for('bulk_subscription_refund') }}">Bulk refunds</a>
+            <a href="{{ url_for('regions') }}">Regions</a>
+            <a href="{{ url_for('products') }}">Products</a>
+            <a href="{{ url_for('os_list') }}">OS</a>
+            <a href="{{ url_for('applications') }}">Apps</a>
+            <a href="{{ url_for('manage_users') }}">Users</a>
+            <a href="{{ url_for('access_management') }}">Assignments</a>
+            {% endif %}
         </div>
+        <form method="post" action="{{ url_for('logout') }}">
+            <button type="submit">Logout</button>
+        </form>
     </nav>
-    <div class="container">
+    {% endif %}
+
+    <main>
         {% with messages = get_flashed_messages() %}
         {% if messages %}
-        {% for message in messages %}
-        <div class="alert alert-info">{{ message }}</div>
-        {% endfor %}
+        <section>
+            <ul>
+                {% for message in messages %}
+                <li>{{ message }}</li>
+                {% endfor %}
+            </ul>
+        </section>
         {% endif %}
         {% endwith %}
+
         {% block content %}{% endblock %}
-    </div>
+    </main>
 </body>
 </html>

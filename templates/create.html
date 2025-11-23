@@ -4,55 +4,49 @@
 
 {% block content %}
 <h1>Create Instance</h1>
-<form method="post" class="card">
-    <div class="form-group">
-        <label for="hostnames" class="form-label">Hostnames (comma-separated)</label>
-        <input type="text" class="form-control" id="hostnames" name="hostnames" required>
-    </div>
-    <div class="form-group">
-        <label for="region" class="form-label">Region</label>
-        <select class="form-select" id="region" name="region" required>
-            {% for region in regions %}
-            <option value="{{ region.id }}">{{ region.name }}</option>
-            {% endfor %}
-        </select>
-    </div>
-    <div class="form-group">
-        <label for="product_id" class="form-label">Product ID (optional for custom)</label>
-        <input type="text" class="form-control" id="product_id" name="product_id">
-    </div>
-    <div class="form-group">
-        <label for="instance_class" class="form-label">Instance Class</label>
-        <select class="form-select" id="instance_class" name="instance_class">
-            <option value="default">Default</option>
-            <option value="cpu-optimized">CPU Optimized</option>
-            <option value="gpu-provided">GPU Provided</option>
-        </select>
-    </div>
-    <div class="form-group">
-        <label for="cpu" class="form-label">CPU (for custom)</label>
-        <input type="number" class="form-control" id="cpu" name="cpu">
-    </div>
-    <div class="form-group">
-        <label for="ramInGB" class="form-label">RAM in GB</label>
-        <input type="number" class="form-control" id="ramInGB" name="ramInGB">
-    </div>
-    <div class="form-group">
-        <label for="diskInGB" class="form-label">Disk in GB</label>
-        <input type="number" class="form-control" id="diskInGB" name="diskInGB">
-    </div>
-    <div class="form-group">
-        <label for="bandwidthInTB" class="form-label">Bandwidth in TB</label>
-        <input type="number" class="form-control" id="bandwidthInTB" name="bandwidthInTB">
-    </div>
-    <div class="checkbox-group">
-        <input type="checkbox" class="form-check-input" id="assign_ipv4" name="assign_ipv4" checked>
-        <label class="form-check-label" for="assign_ipv4">Assign IPv4</label>
-    </div>
-    <div class="checkbox-group">
-        <input type="checkbox" class="form-check-input" id="assign_ipv6" name="assign_ipv6">
-        <label class="form-check-label" for="assign_ipv6">Assign IPv6</label>
-    </div>
-    <button type="submit" class="btn btn-primary">Create</button>
+<form method="post">
+    <label for="hostnames">Hostnames (comma-separated)</label>
+    <input type="text" id="hostnames" name="hostnames" required>
+
+    <label for="region">Region</label>
+    <select id="region" name="region" required>
+        {% for region in regions %}
+        <option value="{{ region.id }}">{{ region.name }}</option>
+        {% endfor %}
+    </select>
+
+    <label for="product_id">Product ID (optional)</label>
+    <input type="text" id="product_id" name="product_id">
+
+    <label for="instance_class">Instance class</label>
+    <select id="instance_class" name="instance_class">
+        <option value="default">Default</option>
+        <option value="cpu-optimized">CPU Optimized</option>
+        <option value="gpu-provided">GPU Provided</option>
+    </select>
+
+    <label for="cpu">CPU</label>
+    <input type="number" id="cpu" name="cpu">
+
+    <label for="ramInGB">RAM in GB</label>
+    <input type="number" id="ramInGB" name="ramInGB">
+
+    <label for="diskInGB">Disk in GB</label>
+    <input type="number" id="diskInGB" name="diskInGB">
+
+    <label for="bandwidthInTB">Bandwidth in TB</label>
+    <input type="number" id="bandwidthInTB" name="bandwidthInTB">
+
+    <label>
+        <input type="checkbox" id="assign_ipv4" name="assign_ipv4" checked>
+        Assign IPv4
+    </label>
+
+    <label>
+        <input type="checkbox" id="assign_ipv6" name="assign_ipv6">
+        Assign IPv6
+    </label>
+
+    <button type="submit">Create</button>
 </form>
 {% endblock %}
