@@ -227,6 +227,9 @@ def update_role(username):
     if not target:
         flash('User not found.')
         return redirect(url_for('manage_users'))
+    if username == session.get('username'):
+        flash('You cannot change your own role.')
+        return redirect(url_for('manage_users'))
     new_role = request.form['role']
     if new_role not in {'owner', 'admin'}:
         flash('Invalid role selection.')
