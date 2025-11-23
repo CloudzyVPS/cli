@@ -5,28 +5,30 @@
 {% block content %}
 <h1>Instance: {{ instance.hostname }}</h1>
 <div class="card">
-    <dl class="row">
-        <dt class="col-sm-3">ID</dt>
-        <dd class="col-sm-9">{{ instance.id }}</dd>
-        <dt class="col-sm-3">Status</dt>
-        <dd class="col-sm-9">{{ instance.status }}</dd>
-        <dt class="col-sm-3">Region</dt>
-        <dd class="col-sm-9">{{ instance.region }}</dd>
-        <dt class="col-sm-3">Main IP</dt>
-        <dd class="col-sm-9">{{ instance.mainIp }}</dd>
-        <dt class="col-sm-3">vCPUs</dt>
-        <dd class="col-sm-9">{{ instance.vcpuCount }}</dd>
-        <dt class="col-sm-3">RAM</dt>
-        <dd class="col-sm-9">{{ instance.ram }} MB</dd>
-        <dt class="col-sm-3">Disk</dt>
-        <dd class="col-sm-9">{{ instance.disk }} GB</dd>
-        <dt class="col-sm-3">OS</dt>
-        <dd class="col-sm-9">{{ instance.os.name if instance.os else 'N/A' }}</dd>
-        <dt class="col-sm-3">Class</dt>
-        <dd class="col-sm-9">{{ instance.class }}</dd>
-    </dl>
+    <div class="card-body">
+        <dl class="row">
+            <dt class="col-sm-3">ID</dt>
+            <dd class="col-sm-9">{{ instance.id }}</dd>
+            <dt class="col-sm-3">Status</dt>
+            <dd class="col-sm-9">{{ instance.status }}</dd>
+            <dt class="col-sm-3">Region</dt>
+            <dd class="col-sm-9">{{ instance.region }}</dd>
+            <dt class="col-sm-3">Main IP</dt>
+            <dd class="col-sm-9">{{ instance.mainIp }}</dd>
+            <dt class="col-sm-3">vCPUs</dt>
+            <dd class="col-sm-9">{{ instance.vcpuCount }}</dd>
+            <dt class="col-sm-3">RAM</dt>
+            <dd class="col-sm-9">{{ instance.ram }} MB</dd>
+            <dt class="col-sm-3">Disk</dt>
+            <dd class="col-sm-9">{{ instance.disk }} GB</dd>
+            <dt class="col-sm-3">OS</dt>
+            <dd class="col-sm-9">{{ instance.os.name if instance.os else 'N/A' }}</dd>
+            <dt class="col-sm-3">Class</dt>
+            <dd class="col-sm-9">{{ instance.class }}</dd>
+        </dl>
+    </div>
 </div>
-<div class="mt-4">
+<div class="d-flex justify-content-center gap-2 mt-4">
     <form method="post" action="/instance/{{ instance.id }}/poweron" style="display:inline;">
         <button type="submit" class="btn btn-success">Power On</button>
     </form>
@@ -38,6 +40,6 @@
     </form>
     <a href="/instance/{{ instance.id }}/resize" class="btn btn-primary">Resize</a>
     <a href="/instance/{{ instance.id }}/change-os" class="btn btn-info">Change OS</a>
-    <a href="/instance/{{ instance.id }}/subscription-refund" class="btn btn-light">Subscription Refund</a>
+    <a href="/instance/{{ instance.id }}/subscription-refund" class="btn btn-outline">Refund</a>
 </div>
 {% endblock %}

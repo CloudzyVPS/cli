@@ -4,21 +4,24 @@
 
 {% block content %}
 <h1>Products</h1>
-<form method="post" class="mb-4">
-    <div class="input-group">
-        <select class="form-select" name="region_id" required>
-            <option value="">Select Region</option>
-            {% for region in regions %}
-            <option value="{{ region.id }}" {% if selected_region == region.id %}selected{% endif %}>{{ region.name }}</option>
-            {% endfor %}
-        </select>
+<form method="post" class="card mb-4">
+    <div class="card-body">
+        <div class="form-group">
+            <label for="region_id" class="form-label">Select Region</label>
+            <select class="form-select" name="region_id" required>
+                <option value="">Select Region</option>
+                {% for region in regions %}
+                <option value="{{ region.id }}" {% if selected_region == region.id %}selected{% endif %}>{{ region.name }}</option>
+                {% endfor %}
+            </select>
+        </div>
         <button type="submit" class="btn btn-primary">Load Products</button>
     </div>
 </form>
 {% if products %}
 <div class="row">
     {% for product in products %}
-    <div class="col-md-6 mb-4">
+    <div class="col-12 col-md-6 mb-4">
         <div class="card">
             <div class="card-body">
                 <h5 class="card-title">{{ product.plan.specification.cpu }} CPU, {{ product.plan.specification.ram }} RAM</h5>
