@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Zyffiliate{% endblock %}</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #fefefe;
+            color: #333;
+            margin: 0;
+            padding: 0;
+        }
+        .navbar {
+            background: linear-gradient(135deg, #ff9a56, #ff6b35);
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            padding: 1rem 0;
+        }
+        .navbar-brand {
+            color: #fff !important;
+            font-weight: bold;
+            font-size: 1.5rem;
+        }
+        .nav-link {
+            color: #fff !important;
+            margin: 0 1rem;
+            transition: color 0.3s ease;
+        }
+        .nav-link:hover {
+            color: #ffeaa7 !important;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+        h1, h2 {
+            color: #ff6b35;
+            margin-bottom: 1.5rem;
+        }
+        .btn {
+            border: none;
+            border-radius: 8px;
+            padding: 0.5rem 1rem;
+            font-weight: 500;
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+        .btn-primary {
+            background-color: #ff9a56;
+            color: white;
+        }
+        .btn-primary:hover {
+            background-color: #ff6b35;
+            transform: translateY(-2px);
+        }
+        .btn-success {
+            background-color: #4caf50;
+            color: white;
+        }
+        .btn-success:hover {
+            background-color: #45a049;
+            transform: translateY(-2px);
+        }
+        .btn-warning {
+            background-color: #ff9800;
+            color: white;
+        }
+        .btn-warning:hover {
+            background-color: #e68900;
+            transform: translateY(-2px);
+        }
+        .btn-danger {
+            background-color: #f44336;
+            color: white;
+        }
+        .btn-danger:hover {
+            background-color: #d32f2f;
+            transform: translateY(-2px);
+        }
+        .btn-info {
+            background-color: #2196f3;
+            color: white;
+        }
+        .btn-info:hover {
+            background-color: #1976d2;
+            transform: translateY(-2px);
+        }
+        .btn-secondary {
+            background-color: #9e9e9e;
+            color: white;
+        }
+        .btn-secondary:hover {
+            background-color: #757575;
+            transform: translateY(-2px);
+        }
+        .table {
+            background-color: white;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        .table th {
+            background-color: #ff9a56;
+            color: white;
+            border: none;
+        }
+        .table td {
+            border: none;
+            padding: 1rem;
+        }
+        .form-control, .form-select {
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 0.75rem;
+            transition: border-color 0.3s ease;
+        }
+        .form-control:focus, .form-select:focus {
+            border-color: #ff9a56;
+            box-shadow: 0 0 0 0.2rem rgba(255, 154, 86, 0.25);
+        }
+        .alert {
+            border-radius: 8px;
+            margin-bottom: 1rem;
+        }
+        .card {
+            background-color: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            margin-bottom: 1rem;
+            padding: 1.5rem;
+        }
+        dl.row dt {
+            font-weight: bold;
+            color: #ff6b35;
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg">
+        <div class="container">
+            <a class="navbar-brand" href="/">Zyffiliate</a>
+            <div class="navbar-nav">
+                <a class="nav-link" href="/">Instances</a>
+                <a class="nav-link" href="/create">Create</a>
+                <a class="nav-link" href="/regions">Regions</a>
+                <a class="nav-link" href="/products">Products</a>
+                <a class="nav-link" href="/os">OS</a>
+                <a class="nav-link" href="/applications">Apps</a>
+            </div>
+        </div>
+    </nav>
+    <div class="container">
+        {% with messages = get_flashed_messages() %}
+        {% if messages %}
+        {% for message in messages %}
+        <div class="alert alert-info">{{ message }}</div>
+        {% endfor %}
+        {% endif %}
+        {% endwith %}
+        {% block content %}{% endblock %}
+    </div>
+</body>
+</html>

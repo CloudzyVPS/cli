@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+
+{% block title %}Bulk Subscription Refund{% endblock %}
+
+{% block content %}
+<h1>Bulk Subscription Refund</h1>
+<form method="post" class="card">
+    <div class="mb-3">
+        <label for="ids" class="form-label">Instance IDs (comma-separated)</label>
+        <input type="text" class="form-control" id="ids" name="ids" required placeholder="e.g., id1,id2,id3">
+    </div>
+    <button type="submit" class="btn btn-primary">Get Refunds</button>
+</form>
+{% endblock %}

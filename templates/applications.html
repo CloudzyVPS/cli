@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+
+{% block title %}Applications{% endblock %}
+
+{% block content %}
+<h1>Available Applications</h1>
+{% if apps %}
+<div class="row">
+    {% for app in apps %}
+    <div class="col-md-4 mb-4">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">{{ app.name }}</h5>
+                <p class="card-text">{{ app.description }}</p>
+                <p class="card-text">Price: ${{ app.price }}</p>
+                <p class="card-text">Tag: {{ app.tag }}</p>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% else %}
+<p>No applications found.</p>
+{% endif %}
+{% endblock %}

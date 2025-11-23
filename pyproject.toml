@@ -1,0 +1,17 @@
+[build-system]
+requires = ["setuptools", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "zyffiliate"
+version = "0.1.0"
+description = "Cloud provider service using Cloudzy Developer API"
+authors = [{name = "Your Name"}]
+dependencies = [
+    "flask",
+    "requests",
+    "python-dotenv"
+]
+
+[tool.setuptools]
+packages = ["zyffiliate"]

@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+
+{% block title %}Change OS{% endblock %}
+
+{% block content %}
+<h1>Change OS for Instance {{ instance_id }}</h1>
+<form method="post" class="card">
+    <div class="mb-3">
+        <label for="os_id" class="form-label">Select OS</label>
+        <select class="form-select" id="os_id" name="os_id" required>
+            {% for os in os_list %}
+            <option value="{{ os.id }}">{{ os.name }} ({{ os.family }})</option>
+            {% endfor %}
+        </select>
+    </div>
+    <button type="submit" class="btn btn-primary">Change OS</button>
+</form>
+{% endblock %}
