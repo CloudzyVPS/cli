@@ -1,0 +1,93 @@
+{% extends "base.html" %}
+
+{% block title %}Create · Step 1{% endblock %}
+
+{% block content %}
+<header class="page-header">
+    <div>
+        <h1>Provision New Instance</h1>
+        <p>Step 1 · Describe the instance group, select a region, and choose how you want to size resources.</p>
+    </div>
+</header>
+
+<form method="post" class="surface" novalidate>
+    <fieldset class="form-section">
+        <legend>Hostnames</legend>
+        <label for="hostnames" class="form-label">Hostnames (comma-separated)</label>
+        <input type="text" id="hostnames" name="hostnames" value="{{ form_data.hostnames }}" required>
+        <p class="help-text">Up to 10 entries. Each hostname provisions a dedicated instance.</p>
+    </fieldset>
+
+    <div class="fields-grid">
+        <fieldset class="form-section">
+            <legend class="form-label">Region</legend>
+            <label for="region" class="sr-only">Deployment region</label>
+            <select id="region" name="region" required>
+                {% for region in regions %}
+                <option value="{{ region.id }}" {% if form_data.region == region.id %}selected{% endif %}>{{ region.name }}</option>
+                {% endfor %}
+            </select>
+            <p class="help-text">Only active regions are listed. Switch regions to load tailored plans later.</p>
+        </fieldset>
+        <fieldset class="form-section">
+            <legend class="form-label">Instance class</legend>
+            <label for="instance_class" class="sr-only">Instance class</label>
+            <select id="instance_class" name="instance_class">
+                <option value="default" {% if form_data.instance_class == 'default' %}selected{% endif %}>Default</option>
+                <option value="cpu-optimized" {% if form_data.instance_class == 'cpu-optimized' %}selected{% endif %}>CPU Optimized</option>
+                <option value="gpu-provided" {% if form_data.instance_class == 'gpu-provided' %}selected{% endif %}>GPU Provided</option>
+            </select>
+            <p class="help-text">Use custom class types for specialised workloads.</p>
+        </fieldset>
+    </div>
+
+    <fieldset class="form-section">
+        <legend class="form-label">Networking & access</legend>
+        <div class="fields-grid compact">
+            <div>
+                <label for="floating_ip_count">Floating IP count</label>
+                <input type="number" id="floating_ip_count" name="floating_ip_count" min="0" max="5" value="{{ form_data.floating_ip_count|default('0', true) }}">
+                <p class="help-text">Allocate up to five floating IPs during provisioning.</p>
+            </div>
+            <div>
+                <label for="ssh_key_ids">SSH Key IDs</label>
+                <input type="text" id="ssh_key_ids" name="ssh_key_ids" placeholder="e.g. 123, 456" value="{{ form_data.ssh_key_ids }}">
+                <p class="help-text">Comma-separated list of SSH key IDs already uploaded in the panel.</p>
+            </div>
+        </div>
+    </fieldset>
+
+    <fieldset class="form-section">
+        <legend class="form-label">IPv4 / IPv6 assignment</legend>
+        <div class="checkbox-group">
+            <label>
+                <input type="checkbox" name="assign_ipv4" value="on" {% if form_data.assign_ipv4 %}checked{% endif %}>
+                <span>Assign IPv4</span>
+            </label>
+            <label>
+                <input type="checkbox" name="assign_ipv6" value="on" {% if form_data.assign_ipv6 %}checked{% endif %}>
+                <span>Assign IPv6</span>
+            </label>
+        </div>
+    </fieldset>
+
+    <fieldset class="form-section">
+        <legend class="form-label">Plan type</legend>
+        <div class="radio-group">
+            <label>
+                <input type="radio" name="plan_type" value="fixed" {% if form_data.plan_type == 'fixed' %}checked{% endif %}>
+                <span>Use existing product</span>
+            </label>
+            <label>
+                <input type="radio" name="plan_type" value="custom" {% if form_data.plan_type == 'custom' %}checked{% endif %}>
+                <span>Custom resources</span>
+            </label>
+        </div>
+        <p class="help-text">Products provide curated CPU, RAM, and disk footprints. Custom plans let you define exact limits.</p>
+    </fieldset>
+
+    <footer class="form-actions">
+        <button type="submit">Continue to step 2</button>
+    </footer>
+</form>
+{% endblock %}

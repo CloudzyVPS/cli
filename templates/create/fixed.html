@@ -1,0 +1,107 @@
+{% extends "base.html" %}
+
+{% block title %}Create · Step 2 (Product){% endblock %}
+
+{% block content %}
+<header class="page-header">
+    <div>
+        <p class="breadcrumb"><a href="{{ back_to_start_url }}">← Back to step 1</a></p>
+        <h1>Select a product</h1>
+        <p>Step 2 · Choose a plan for {{ region.name }}. Extras default to zero and remain optional.</p>
+    </div>
+</header>
+
+{% if not products %}
+<section class="surface">
+    <p>No products were returned for the selected region. <a href="{{ url_for('create_start') }}">Go back</a> to pick another region.</p>
+</section>
+{% else %}
+<form method="post" class="surface" novalidate>
+    {% for host in base_state.hostnames %}
+    <input type="hidden" name="hostnames" value="{{ host }}">
+    {% endfor %}
+    <input type="hidden" name="region" value="{{ base_state.region }}">
+    <input type="hidden" name="instance_class" value="{{ base_state.instance_class }}">
+    <input type="hidden" name="plan_type" value="{{ base_state.plan_type }}">
+    <input type="hidden" name="assign_ipv4" value="{{ '1' if base_state.assign_ipv4 else '0' }}">
+    <input type="hidden" name="assign_ipv6" value="{{ '1' if base_state.assign_ipv6 else '0' }}">
+    <input type="hidden" name="floating_ip_count" value="{{ base_state.floating_ip_count|default(0, true) }}">
+    {% for key_id in base_state.ssh_key_ids %}
+    <input type="hidden" name="ssh_key_ids" value="{{ key_id }}">
+    {% endfor %}
+    <fieldset class="form-section" aria-label="Product catalog">
+        <legend class="form-label">Plans for {{ region.name }}</legend>
+        <div class="product-grid" role="list">
+            {% for product in products %}
+            <label class="product-card" role="listitem" data-product-card {% if selected_product_id == product.id %}data-selected="true"{% endif %}>
+                <input type="radio" name="product_id" value="{{ product.id }}" {% if selected_product_id == product.id %}checked{% endif %}>
+                <div class="product-card-body">
+                <header>
+                    <h2 data-product-headline>
+                        {% for metric in product.metrics %}
+                        <span data-metric="{{ metric.type }}"{% if metric.variant %} data-variant="{{ metric.variant }}"{% endif %} title="{{ metric.label }}" aria-label="{{ metric.label }}">
+                            <img src="{{ url_for('static', filename='icons/' ~ metric.icon) }}" alt="" aria-hidden="true">
+                            <span>{{ metric.value }}</span>
+                        </span>
+                        {% endfor %}
+                    </h2>
+                    {% if product.plan_name %}
+                    <p data-product-plan>{{ product.plan_name }}</p>
+                    {% endif %}
+                </header>
+                {% if product.description %}
+                <p data-product-note>{{ product.description }}</p>
+                {% endif %}
+                {% if product.spec_entries %}
+                <dl data-product-facts>
+                    {% for entry in product.spec_entries %}
+                    <div>
+                        <dt>{{ entry.term }}</dt>
+                        <dd>{{ entry.value }}</dd>
+                    </div>
+                    {% endfor %}
+                </dl>
+                {% endif %}
+                {% if product.price_entries %}
+                <dl data-product-pricing>
+                    {% for entry in product.price_entries %}
+                    <div>
+                        <dt>{{ entry.term }}</dt>
+                        <dd>{{ entry.value }}</dd>
+                    </div>
+                    {% endfor %}
+                </dl>
+                {% endif %}
+                {% if product.tags %}
+                <footer>
+                    <p data-product-tags>{{ product.tags }}</p>
+                </footer>
+                {% endif %}
+                </div>
+            </label>
+            {% endfor %}
+        </div>
+    </fieldset>
+
+    <fieldset class="form-section compact">
+        <legend class="form-label">Optional extras</legend>
+        <div class="fields-grid compact">
+            <div>
+                <label for="extra_disk">Extra Disk (GB)</label>
+                <input type="number" id="extra_disk" name="extra_disk" min="0" value="{{ extras.extra_disk }}">
+            </div>
+            <div>
+                <label for="extra_bandwidth">Extra Bandwidth (TB)</label>
+                <input type="number" id="extra_bandwidth" name="extra_bandwidth" min="0" value="{{ extras.extra_bandwidth }}">
+            </div>
+        </div>
+        <p class="help-text">Extras stay at zero unless you provide a value. They are billed in addition to the base product.</p>
+    </fieldset>
+
+    <footer class="form-actions">
+        <a class="button-secondary" href="{{ back_to_start_url }}">Back</a>
+        <button type="submit">Continue to review</button>
+    </footer>
+</form>
+{% endif %}
+{% endblock %}

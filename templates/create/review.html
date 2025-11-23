@@ -1,0 +1,116 @@
+{% extends "base.html" %}
+
+{% block title %}Create · Review{% endblock %}
+
+{% block content %}
+<header class="page-header">
+    <div>
+        <p class="breadcrumb"><a href="{{ back_url }}">← Back to step 2</a></p>
+        <h1>Review and confirm</h1>
+        <p>Step 3 · Verify resources, networking, and billing details before provisioning.</p>
+    </div>
+</header>
+
+<form method="post" class="surface" novalidate>
+    {% for host in base_state.hostnames %}
+    <input type="hidden" name="hostnames" value="{{ host }}">
+    {% endfor %}
+    <input type="hidden" name="region" value="{{ base_state.region }}">
+    <input type="hidden" name="instance_class" value="{{ base_state.instance_class }}">
+    <input type="hidden" name="plan_type" value="{{ base_state.plan_type }}">
+    <input type="hidden" name="assign_ipv4" value="{{ '1' if base_state.assign_ipv4 else '0' }}">
+    <input type="hidden" name="assign_ipv6" value="{{ '1' if base_state.assign_ipv6 else '0' }}">
+    <input type="hidden" name="floating_ip_count" value="{{ base_state.floating_ip_count|default(0, true) }}">
+    {% for key_id in base_state.ssh_key_ids %}
+    <input type="hidden" name="ssh_key_ids" value="{{ key_id }}">
+    {% endfor %}
+    {% if base_state.plan_type == 'fixed' %}
+    <input type="hidden" name="product_id" value="{{ plan_state.product_id }}">
+    <input type="hidden" name="extra_disk" value="{{ plan_state.extra_disk }}">
+    <input type="hidden" name="extra_bandwidth" value="{{ plan_state.extra_bandwidth }}">
+    {% else %}
+    <input type="hidden" name="cpu" value="{{ plan_state.cpu }}">
+    <input type="hidden" name="ramInGB" value="{{ plan_state.ramInGB }}">
+    <input type="hidden" name="diskInGB" value="{{ plan_state.diskInGB }}">
+    <input type="hidden" name="bandwidthInTB" value="{{ plan_state.bandwidthInTB }}">
+    {% endif %}
+    <section class="invoice" aria-labelledby="invoice-heading">
+        <header>
+            <div>
+                <p class="invoice-tag">Provision summary</p>
+                <h2 id="invoice-heading">{{ region.name }} · {{ wizard.plan_type|capitalize }} plan</h2>
+                <p class="invoice-code">Hostnames: {{ wizard.hostnames|join(', ') }}</p>
+            </div>
+            {% if metrics %}
+            <div class="invoice-metrics">
+                {% for metric in metrics %}
+                <span data-metric="{{ metric.type }}"{% if metric.variant %} data-variant="{{ metric.variant }}"{% endif %} title="{{ metric.label }}" aria-label="{{ metric.label }}">
+                    <img src="{{ url_for('static', filename='icons/' ~ metric.icon) }}" alt="" aria-hidden="true">
+                    <span>{{ metric.value }}</span>
+                </span>
+                {% endfor %}
+            </div>
+            {% endif %}
+        </header>
+        <div class="invoice-body">
+            {% if plan_summary %}
+            <section>
+                <h3>Plan</h3>
+                <dl>
+                    {% for item in plan_summary %}
+                    <div>
+                        <dt>{{ item.term }}</dt>
+                        <dd>{{ item.value }}</dd>
+                    </div>
+                    {% endfor %}
+                </dl>
+            </section>
+            {% endif %}
+            {% if price_entries %}
+            <section>
+                <h3>Pricing</h3>
+                <dl>
+                    {% for entry in price_entries %}
+                    <div>
+                        <dt>{{ entry.term }}</dt>
+                        <dd>{{ entry.value }}</dd>
+                    </div>
+                    {% endfor %}
+                </dl>
+            </section>
+            {% endif %}
+            <section>
+                <h3>Networking</h3>
+                <dl>
+                    <div>
+                        <dt>Floating IPs</dt>
+                        <dd>{{ wizard.floating_ip_count or '0' }}</dd>
+                    </div>
+                    <div>
+                        <dt>Assign IPv4</dt>
+                        <dd>{{ 'Yes' if wizard.assign_ipv4 else 'No' }}</dd>
+                    </div>
+                    <div>
+                        <dt>Assign IPv6</dt>
+                        <dd>{{ 'Yes' if wizard.assign_ipv6 else 'No' }}</dd>
+                    </div>
+                    <div>
+                        <dt>SSH keys</dt>
+                        <dd>{% if wizard.ssh_key_ids %}{{ wizard.ssh_key_ids|join(', ') }}{% else %}None{% endif %}</dd>
+                    </div>
+                </dl>
+            </section>
+        </div>
+        {% if footnote %}
+        <footer>
+            <p>{{ footnote }}</p>
+        </footer>
+        {% endif %}
+    </section>
+
+    <footer class="form-actions">
+        <a class="button-secondary" href="{{ back_url }}">Back</a>
+        <button type="submit">Create instances</button>
+    </footer>
+</form>
+{% endblock %}
