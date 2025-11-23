@@ -4,12 +4,12 @@
 
 {% block content %}
 <h1>Create Instance</h1>
-<form method="post">
-    <div class="mb-3">
+<form method="post" class="card">
+    <div class="form-group">
         <label for="hostnames" class="form-label">Hostnames (comma-separated)</label>
         <input type="text" class="form-control" id="hostnames" name="hostnames" required>
     </div>
-    <div class="mb-3">
+    <div class="form-group">
         <label for="region" class="form-label">Region</label>
         <select class="form-select" id="region" name="region" required>
             {% for region in regions %}
@@ -17,11 +17,11 @@
             {% endfor %}
         </select>
     </div>
-    <div class="mb-3">
+    <div class="form-group">
         <label for="product_id" class="form-label">Product ID (optional for custom)</label>
         <input type="text" class="form-control" id="product_id" name="product_id">
     </div>
-    <div class="mb-3">
+    <div class="form-group">
         <label for="instance_class" class="form-label">Instance Class</label>
         <select class="form-select" id="instance_class" name="instance_class">
             <option value="default">Default</option>
@@ -29,27 +29,27 @@
             <option value="gpu-provided">GPU Provided</option>
         </select>
     </div>
-    <div class="mb-3">
+    <div class="form-group">
         <label for="cpu" class="form-label">CPU (for custom)</label>
         <input type="number" class="form-control" id="cpu" name="cpu">
     </div>
-    <div class="mb-3">
+    <div class="form-group">
         <label for="ramInGB" class="form-label">RAM in GB</label>
         <input type="number" class="form-control" id="ramInGB" name="ramInGB">
     </div>
-    <div class="mb-3">
+    <div class="form-group">
         <label for="diskInGB" class="form-label">Disk in GB</label>
         <input type="number" class="form-control" id="diskInGB" name="diskInGB">
     </div>
-    <div class="mb-3">
+    <div class="form-group">
         <label for="bandwidthInTB" class="form-label">Bandwidth in TB</label>
         <input type="number" class="form-control" id="bandwidthInTB" name="bandwidthInTB">
     </div>
-    <div class="mb-3 form-check">
+    <div class="checkbox-group">
         <input type="checkbox" class="form-check-input" id="assign_ipv4" name="assign_ipv4" checked>
         <label class="form-check-label" for="assign_ipv4">Assign IPv4</label>
     </div>
-    <div class="mb-3 form-check">
+    <div class="checkbox-group">
         <input type="checkbox" class="form-check-input" id="assign_ipv6" name="assign_ipv6">
         <label class="form-check-label" for="assign_ipv6">Assign IPv6</label>
     </div>
