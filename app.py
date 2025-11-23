@@ -636,7 +636,6 @@ def ssh_keys():
     form_values = {
         'name': '',
         'public_key': '',
-        'customer_id': '',
     }
 
     if request.method == 'POST':
@@ -657,8 +656,7 @@ def ssh_keys():
 
         name = (request.form.get('name') or '').strip()
         public_key = (request.form.get('public_key') or '').strip()
-        customer_id = (request.form.get('customer_id') or '').strip()
-        form_values.update({'name': name, 'public_key': public_key, 'customer_id': customer_id})
+        form_values.update({'name': name, 'public_key': public_key})
 
         errors = []
         if not name:
@@ -671,8 +669,6 @@ def ssh_keys():
                 flash(message)
         else:
             payload = {'name': name, 'publicKey': public_key}
-            if customer_id:
-                payload['customerId'] = customer_id
             response = api_call('POST', '/v1/ssh-keys', data=payload)
             if response.get('code') == 'OKAY':
                 flash('SSH key added successfully.')
@@ -1582,19 +1578,37 @@ def region_products(region_id):
     return jsonify({'products': [], 'detail': detail}), 502
 
 
-@app.route('/products', methods=['GET', 'POST'])
+@app.route('/products')
 @owner_required
 def products():
-    if request.method == 'POST':
-        region_id = request.form['region_id']
-        response = api_call('GET', '/v1/products', params={'regionId': region_id})
-        products = response.get('data', []) if response.get('code') == 'OKAY' else []
-        regions_response = api_call('GET', '/v1/regions')
-        regions = regions_response.get('data', []) if regions_response.get('code') == 'OKAY' else []
-        return render_template('products.html', products=products, regions=regions, selected_region=region_id)
-    regions_response = api_call('GET', '/v1/regions')
-    regions = regions_response.get('data', []) if regions_response.get('code') == 'OKAY' else []
-    return render_template('products.html', products=[], regions=regions, selected_region=None)
+    region_param = (request.args.get('region_id') or '').strip()
+    regions, raw_region_lookup, _ = load_regions()
+    region_lookup = {}
+    for region_id, region in raw_region_lookup.items():
+        if region_id is None:
+            continue
+        region_lookup[region_id] = region
+        region_lookup[str(region_id)] = region
+
+    selected_region = region_lookup.get(region_param)
+    products = []
+    if region_param:
+        request_region_id = (selected_region.get('id') if selected_region else region_param)
+        response = api_call('GET', '/v1/products', params={'regionId': request_region_id})
+        if response.get('code') == 'OKAY':
+            raw_products = response.get('data', []) or []
+            products = [build_product_view(item, region_lookup) for item in raw_products]
+        else:
+            detail = response.get('detail') or 'Unable to load products for the selected region.'
+            flash(detail)
+
+    return render_template(
+        'products.html',
+        products=products,
+        regions=regions,
+        selected_region=selected_region,
+        requested_region=region_param,
+    )
 
 
 @app.route('/os')

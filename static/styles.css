@@ -481,6 +481,190 @@ section li {
 .trend-up { color: var(--green-400); }
 .trend-down { color: var(--red-400); }
 
+.page-status {
+  margin: 0;
+  font-weight: 500;
+  color: var(--gray-600);
+}
+
+.page-status.warning {
+  color: var(--orange-400);
+}
+
+.region-grid,
+.data-grid {
+  display: grid;
+  gap: var(--space-4);
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+}
+
+.region-card,
+.data-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border-radius: var(--radius-lg);
+  border: 1px solid rgba(148, 163, 184, 0.32);
+  background: linear-gradient(155deg, rgba(255, 255, 255, 0.94), rgba(255, 255, 255, 0.7));
+  box-shadow: var(--shadow-soft);
+  color: inherit;
+  text-decoration: none;
+  min-height: 100%;
+  transition: transform var(--transition-slow), box-shadow var(--transition-slow), border-color var(--transition-slow);
+}
+
+.data-card {
+  text-decoration: none;
+  color: var(--gray-900);
+}
+
+.region-card:hover,
+.region-card:focus-visible,
+.data-card:hover,
+.data-card:focus-visible {
+  transform: translateY(-4px);
+  box-shadow: var(--shadow-card);
+  border-color: rgba(37, 99, 235, 0.45);
+}
+
+
+.region-card[data-selected="true"] {
+  border-color: rgba(37, 99, 235, 0.6);
+  box-shadow: var(--shadow-card);
+}
+
+.region-card[data-active="false"] {
+  opacity: 0.75;
+}
+
+.region-card header,
+.data-card header {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.region-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.region-card h3,
+.data-card h3 {
+  margin: 0;
+  font-size: 1.35rem;
+  color: var(--gray-900);
+}
+
+.region-card .region-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 var(--space-2);
+  border-radius: 999px;
+  background: rgba(37, 99, 235, 0.12);
+  color: var(--blue-600);
+  font-weight: 600;
+  font-size: 0.85rem;
+}
+
+.region-card .region-subtitle,
+.data-card p {
+  margin: 0;
+  color: var(--gray-600);
+}
+
+.region-card .region-description,
+.data-card .os-description,
+.product-tags {
+  color: var(--gray-700);
+}
+
+.region-metrics,
+.product-attributes,
+.product-pricing,
+.os-attributes {
+  margin: 0;
+  display: grid;
+  gap: var(--space-2);
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+}
+
+.region-metrics > div,
+.product-attributes > div,
+.product-pricing > div,
+.os-attributes > div {
+  background: rgba(29, 123, 255, 0.06);
+  border: 1px solid rgba(29, 123, 255, 0.12);
+  border-radius: var(--radius-sm);
+  padding: var(--space-2) var(--space-3);
+}
+
+.region-metrics dt,
+.product-attributes dt,
+.product-pricing dt,
+.os-attributes dt {
+  margin: 0;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--gray-500);
+}
+
+.region-metrics dd,
+.product-attributes dd,
+.product-pricing dd,
+.os-attributes dd {
+  margin: var(--space-1) 0 0;
+  font-weight: 600;
+  color: var(--gray-900);
+}
+
+.region-footer {
+  margin-top: auto;
+  padding-top: var(--space-2);
+  border-top: 1px dashed rgba(148, 163, 184, 0.4);
+}
+
+.region-footer p {
+  margin: 0;
+  font-size: 0.9rem;
+  color: var(--gray-500);
+}
+
+.region-cta {
+  margin-top: auto;
+  font-weight: 600;
+  color: var(--blue-500);
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.product-plan-name,
+.os-family {
+  margin: 0;
+  font-size: 0.9rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--gray-500);
+}
+
+.product-metrics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.product-tags {
+  margin-top: auto;
+  font-size: 0.9rem;
+}
+
 form {
   display: flex;
   flex-direction: column;
@@ -1071,6 +1255,10 @@ footer {
   transition: transform var(--transition-slow), box-shadow var(--transition-slow), border-color var(--transition-slow);
 }
 
+.product-card[data-view-only="true"] {
+  cursor: default;
+}
+
 .product-card input[type="radio"] {
   position: absolute;
   inset: 0;
@@ -1172,6 +1360,11 @@ footer {
   margin: 0;
   color: var(--gray-600);
   line-height: 1.5;
+}
+
+.product-card-body .product-meta {
+  color: var(--gray-500);
+  font-weight: 500;
 }
 
 .product-card-body dl {
