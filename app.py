@@ -494,6 +494,7 @@ def create():
             flash('Unable to load products for the selected region.')
 
     region_configs = {region.get('id'): region.get('config', {}) for region in regions}
+    region_lookup = {region.get('id'): region for region in regions}
 
     return render_template(
         'create.html',
@@ -504,6 +505,7 @@ def create():
         plan_type=plan_type,
         form_data=form_data,
         region_configs=region_configs,
+        region_lookup=region_lookup,
     )
 
 

@@ -759,6 +759,119 @@ footer {
   align-items: center;
 }
 
+.radio-group label,
+.checkbox-group label {
+  position: relative;
+  cursor: pointer;
+  display: inline-flex;
+}
+
+.radio-group label input,
+.checkbox-group label input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.radio-group label span,
+.checkbox-group label span {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-4);
+  padding-left: calc(var(--space-4) + 22px);
+  border-radius: var(--radius-lg);
+  border: 1px solid rgba(148, 163, 184, 0.45);
+  background: rgba(255, 255, 255, 0.75);
+  color: var(--gray-700);
+  font-weight: 500;
+  transition: background var(--transition-slow), border-color var(--transition-slow), color var(--transition-slow), box-shadow var(--transition-slow);
+}
+
+.radio-group label span::before,
+.checkbox-group label span::before {
+  content: "";
+  position: absolute;
+  left: var(--space-3);
+  top: 50%;
+  width: 18px;
+  height: 18px;
+  border: 2px solid rgba(148, 163, 184, 0.55);
+  background: rgba(255, 255, 255, 0.95);
+  transform: translateY(-50%);
+  transition: background var(--transition-fast), border-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.radio-group label span::before {
+  border-radius: 999px;
+}
+
+.checkbox-group label span::before {
+  border-radius: var(--radius-xs);
+}
+
+.radio-group label span::after {
+  content: "";
+  position: absolute;
+  left: calc(var(--space-3) + 5px);
+  top: 50%;
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: white;
+  transform: translateY(-50%) scale(0);
+  transition: transform var(--transition-fast);
+}
+
+.checkbox-group label span::after {
+  content: "";
+  position: absolute;
+  left: calc(var(--space-3) + 9px);
+  top: 50%;
+  width: 6px;
+  height: 11px;
+  border-right: 2px solid white;
+  border-bottom: 2px solid white;
+  transform: translate(-50%, -60%) rotate(45deg) scale(0);
+  transition: transform var(--transition-fast);
+}
+
+.radio-group label:hover span,
+.radio-group label:focus-within span,
+.checkbox-group label:hover span,
+.checkbox-group label:focus-within span {
+  border-color: rgba(29, 123, 255, 0.45);
+}
+
+.radio-group label input:focus-visible + span,
+.checkbox-group label input:focus-visible + span {
+  box-shadow: 0 0 0 3px rgba(29, 123, 255, 0.24);
+}
+
+.radio-group label input:checked + span,
+.checkbox-group label input:checked + span {
+  border-color: rgba(29, 123, 255, 0.65);
+  background: linear-gradient(135deg, rgba(29, 123, 255, 0.14), rgba(0, 212, 170, 0.14));
+  color: var(--blue-700);
+  box-shadow: var(--shadow-soft);
+}
+
+.radio-group label input:checked + span::before,
+.checkbox-group label input:checked + span::before {
+  border-color: transparent;
+  background: linear-gradient(135deg, var(--blue-500), var(--teal-400));
+  box-shadow: 0 0 0 3px rgba(29, 123, 255, 0.18);
+}
+
+.radio-group label input:checked + span::after {
+  transform: translateY(-50%) scale(1);
+}
+
+.checkbox-group label input:checked + span::after {
+  transform: translate(-50%, -60%) rotate(45deg) scale(1);
+}
+
 .help-text {
   margin: 0;
   font-size: 0.85rem;
@@ -766,7 +879,14 @@ footer {
 }
 
 .product-details {
-  font-size: 0.85rem;
+  margin-top: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+#product-details:empty {
+  display: none;
 }
 
 .muted {
@@ -862,10 +982,33 @@ div[data-product-grid] > article > header > h3 {
   color: var(--gray-900);
 }
 
-div[data-product-grid] > article > header > p {
+div[data-product-grid] > article [data-product-region] {
   margin: 0;
-  color: var(--gray-500);
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--blue-600);
+  font-weight: 600;
+}
+
+div[data-product-grid] > article [data-product-summary] {
+  margin: 0;
+  color: var(--gray-600);
   font-weight: 500;
+}
+
+div[data-product-grid] > article [data-product-code] {
+  margin: 0;
+  font-size: 0.8rem;
+  color: var(--gray-500);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+div[data-product-grid] > article [data-product-note] {
+  margin: 0;
+  color: var(--gray-600);
+  line-height: 1.4;
 }
 
 div[data-product-grid] > article > p {
@@ -885,6 +1028,11 @@ div[data-product-grid] > article dl > div {
   border: 1px solid rgba(29, 123, 255, 0.12);
   border-radius: var(--radius-sm);
   padding: var(--space-2) var(--space-3);
+}
+
+div[data-product-grid] > article [data-product-pricing] > div {
+  background: rgba(0, 212, 170, 0.08);
+  border-color: rgba(0, 212, 170, 0.18);
 }
 
 div[data-product-grid] > article dt {
@@ -908,6 +1056,98 @@ div[data-product-grid] > article > footer {
 }
 
 div[data-product-grid] > article > footer > p {
+  margin: 0;
+  font-size: 0.9rem;
+  color: var(--gray-500);
+}
+
+#product-details > p {
+  margin: 0;
+}
+
+#product-details [data-product-invoice] {
+  background: rgba(255, 255, 255, 0.82);
+  border: 1px dashed rgba(148, 163, 184, 0.5);
+  border-radius: var(--radius-lg);
+  padding: var(--space-4);
+  box-shadow: var(--shadow-soft);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+#product-details [data-product-invoice-header] {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+#product-details [data-product-invoice-body] {
+  display: grid;
+  gap: var(--space-3);
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+#product-details [data-product-invoice-section] {
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  border-radius: var(--radius-md);
+  background: rgba(29, 123, 255, 0.04);
+  padding: var(--space-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+#product-details [data-product-invoice-section] h4 {
+  margin: 0;
+  font-size: 0.9rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--gray-600);
+}
+
+#product-details [data-product-invoice-section] dl {
+  margin: 0;
+  display: grid;
+  gap: var(--space-2);
+}
+
+#product-details [data-product-invoice-section] dl > div {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.8);
+  border: 1px solid rgba(148, 163, 184, 0.25);
+}
+
+#product-details [data-product-invoice-section] dt {
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--gray-500);
+}
+
+#product-details [data-product-invoice-section] dd {
+  margin: 0;
+  font-weight: 600;
+  color: var(--gray-900);
+}
+
+#product-details [data-product-note] {
+  margin: 0;
+  color: var(--gray-600);
+  line-height: 1.45;
+}
+
+#product-details [data-product-invoice-footer] {
+  padding-top: var(--space-2);
+  border-top: 1px dashed rgba(148, 163, 184, 0.4);
+}
+
+#product-details [data-product-tags] {
   margin: 0;
   font-size: 0.9rem;
   color: var(--gray-500);
