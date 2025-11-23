@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+
+{% block title %}Admin Access{% endblock %}
+
+{% block content %}
+<header class="page-header">
+    <div>
+        <h1>Admin Access Control</h1>
+        <p>Review current assignments and adjust which instances each admin can manage.</p>
+    </div>
+</header>
+
+{% if admins %}
+<div class="card-grid">
+    {% for username, data in admins | dictsort %}
+    <section class="form-section">
+        <div>
+            <h2>{{ username }}</h2>
+            <p class="muted">{{ data.get('assigned_instances', []) | length }} assigned instance(s)</p>
+        </div>
+        <div>
+            <p class="form-label">Current assignments</p>
+            <ul>
+                {% for instance_id in data.get('assigned_instances', []) %}
+                {% set instance = instance_map.get(instance_id) %}
+                <li>
+                    <strong>{{ instance.hostname if instance else instance_id }}</strong>
+                    <span class="muted">ID: {{ instance_id }}</span>
+                </li>
+                {% else %}
+                <li class="muted">No instances assigned.</li>
+                {% endfor %}
+            </ul>
+        </div>
+        <form action="{{ url_for('update_access', username=username) }}" method="post">
+            <label class="form-label" for="instances-{{ loop.index }}">Instance IDs (comma separated)</label>
+            <input id="instances-{{ loop.index }}" type="text" name="instances" value="{{ data.get('assigned_instances', []) | join(', ') }}" placeholder="e.g. 101, 205">
+            <p class="help-text">Only IDs for active instances are accepted. Separate values with commas.</p>
+            <button type="submit">Save assignments</button>
+        </form>
+    </section>
+    {% endfor %}
+</div>
+{% else %}
+<section class="form-section">
+    <p>No admin users found. Create an admin account first.</p>
+</section>
+{% endif %}
+
+{% if instance_map %}
+<section class="form-section">
+    <h2>Available Instances</h2>
+    <p class="help-text">Use the identifiers below when assigning access. Owners automatically see every instance.</p>
+    <div class="fields-grid">
+            {% for instance_id, instance in instance_map | dictsort %}
+            <div>
+                <strong>{{ instance.get('hostname', 'Unnamed Instance') }}</strong>
+                <p class="muted">ID: {{ instance_id }}</p>
+                {% if instance.get('plan') %}
+                <p class="help-text">Plan: {{ instance.get('plan', {}).get('name', 'N/A') }}</p>
+                {% endif %}
+            </div>
+        {% endfor %}
+    </div>
+</section>
+{% else %}
+<section class="form-section">
+    <p class="muted">No instances available from the developer API.</p>
+</section>
+{% endif %}
+{% endblock %}

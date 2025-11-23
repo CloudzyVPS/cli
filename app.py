@@ -6,7 +6,7 @@ import sys
 from functools import wraps
 
 import requests
-from flask import Flask, flash, redirect, render_template, request, session, url_for
+from flask import Flask, flash, jsonify, redirect, render_template, request, session, url_for
 from dotenv import load_dotenv
 from werkzeug.security import check_password_hash, generate_password_hash
 
@@ -317,45 +317,191 @@ def instances():
 @app.route('/create', methods=['GET', 'POST'])
 @owner_required
 def create():
+    regions_response = api_call('GET', '/v1/regions')
+    regions = regions_response.get('data', []) if regions_response.get('code') == 'OKAY' else []
+
+    plan_type = 'fixed'
+    form_data = {}
+    selected_region = None
+    selected_product_id = ''
+    errors: list[str] = []
+
     if request.method == 'POST':
-        hostnames = request.form['hostnames'].split(',')
-        region = request.form['region']
-        product_id = request.form.get('product_id')
-        instance_class = request.form['instance_class']
-        cpu = request.form.get('cpu')
-        ramInGB = request.form.get('ramInGB')
-        diskInGB = request.form.get('diskInGB')
-        bandwidthInTB = request.form.get('bandwidthInTB')
+        form_data = request.form.to_dict()
+        form_data['assign_ipv4'] = 'on' if 'assign_ipv4' in request.form else ''
+        form_data['assign_ipv6'] = 'on' if 'assign_ipv6' in request.form else ''
+
+        plan_type = form_data.get('plan_type', 'fixed')
+        if plan_type not in {'fixed', 'custom'}:
+            plan_type = 'fixed'
+
+        selected_region = form_data.get('region') or (regions[0]['id'] if regions else None)
+        selected_product_id = form_data.get('product_id', '')
+
+        if plan_type == 'custom':
+            selected_product_id = ''
+
+        hostnames_raw = form_data.get('hostnames', '')
+        hostnames = [h.strip() for h in hostnames_raw.split(',') if h.strip()]
+        if not hostnames:
+            errors.append('Provide at least one hostname (comma-separated).')
+
+        if not selected_region:
+            errors.append('Select a deployment region.')
+
         assign_ipv4 = 'assign_ipv4' in request.form
         assign_ipv6 = 'assign_ipv6' in request.form
 
+        instance_class = form_data.get('instance_class', 'default')
+
         data = {
-            'hostnames': [h.strip() for h in hostnames],
-            'region': region,
+            'hostnames': hostnames,
+            'region': selected_region,
             'class': instance_class,
             'assignIpv4': assign_ipv4,
-            'assignIpv6': assign_ipv6
+            'assignIpv6': assign_ipv6,
         }
-        if product_id:
-            data['productId'] = product_id
-        if cpu:
-            data.setdefault('extraResource', {})['cpu'] = int(cpu)
-        if ramInGB:
-            data.setdefault('extraResource', {})['ramInGB'] = int(ramInGB)
-        if diskInGB:
-            data.setdefault('extraResource', {})['diskInGB'] = int(diskInGB)
-        if bandwidthInTB:
-            data.setdefault('extraResource', {})['bandwidthInTB'] = int(bandwidthInTB)
 
-        response = api_call('POST', '/v1/instances', data=data)
-        if response.get('code') == 'OKAY':
-            flash('Instance created successfully')
-            return redirect(url_for('instances'))
+        if plan_type == 'fixed':
+            if not selected_product_id:
+                errors.append('Select a product when using the fixed plan option.')
+            else:
+                data['productId'] = selected_product_id
+
+        def parse_int_field(field_name: str, label: str, *, min_value: int | None = None, max_value: int | None = None):
+            raw_value = form_data.get(field_name)
+            if raw_value is None or raw_value == '':
+                return None
+            try:
+                value = int(raw_value)
+            except ValueError:
+                errors.append(f'{label} must be a number.')
+                return None
+            if min_value is not None and value < min_value:
+                errors.append(f'{label} must be at least {min_value}.')
+                return None
+            if max_value is not None and value > max_value:
+                errors.append(f'{label} must be at most {max_value}.')
+                return None
+            return value
+
+        extras = {}
+        if plan_type == 'fixed':
+            disk_value = parse_int_field('fixed_diskInGB', 'Extra disk (GB)', min_value=1)
+            bandwidth_value = parse_int_field('fixed_bandwidthInTB', 'Extra bandwidth (TB)', min_value=1)
+            if disk_value is not None:
+                extras['diskInGB'] = disk_value
+            if bandwidth_value is not None:
+                extras['bandwidthInTB'] = bandwidth_value
+        elif plan_type == 'custom':
+            cpu_value = parse_int_field('cpu', 'CPU', min_value=1)
+            ram_value = parse_int_field('ramInGB', 'RAM (GB)', min_value=1)
+            disk_value = parse_int_field('diskInGB', 'Disk (GB)', min_value=1)
+            bandwidth_value = parse_int_field('bandwidthInTB', 'Bandwidth (TB)', min_value=1)
+
+            if cpu_value is None:
+                errors.append('CPU is required for custom plans.')
+            else:
+                extras['cpu'] = cpu_value
+            if ram_value is None:
+                errors.append('RAM (GB) is required for custom plans.')
+            else:
+                extras['ramInGB'] = ram_value
+            if disk_value is None:
+                errors.append('Disk (GB) is required for custom plans.')
+            else:
+                extras['diskInGB'] = disk_value
+            if bandwidth_value is not None:
+                extras['bandwidthInTB'] = bandwidth_value
+
+            config = next((region.get('config', {}) for region in regions if region.get('id') == selected_region), {})
+            ram_threshold = config.get('ramThresholdInGB')
+            disk_threshold = config.get('diskThresholdInGB')
+            if ram_threshold and extras.get('ramInGB') is not None and extras['ramInGB'] < ram_threshold:
+                errors.append(f'RAM must be at least {ram_threshold} GB for the selected region.')
+            if disk_threshold and extras.get('diskInGB') is not None and extras['diskInGB'] < disk_threshold:
+                errors.append(f'Disk must be at least {disk_threshold} GB for the selected region.')
         else:
+            errors.append('Unknown plan type submitted.')
+
+        if extras:
+            data['extraResource'] = extras
+
+        floating_ip_count = parse_int_field('floating_ip_count', 'Floating IP count', min_value=0, max_value=5)
+        if floating_ip_count is not None:
+            data['floatingIPCount'] = floating_ip_count
+
+        ssh_raw = form_data.get('ssh_key_ids', '')
+        if ssh_raw.strip():
+            ssh_ids = []
+            for chunk in ssh_raw.split(','):
+                token = chunk.strip()
+                if not token:
+                    continue
+                if not token.isdigit():
+                    errors.append('SSH key IDs must be comma-separated numbers.')
+                    ssh_ids = []
+                    break
+                ssh_ids.append(int(token))
+            if ssh_ids:
+                data['sshKeyIds'] = ssh_ids
+
+        if errors:
+            for message in errors:
+                flash(message)
+        else:
+            response = api_call('POST', '/v1/instances', data=data)
+            if response.get('code') == 'OKAY':
+                flash('Instance created successfully')
+                return redirect(url_for('instances'))
             flash(f"Error: {response.get('detail')}")
-    regions_response = api_call('GET', '/v1/regions')
-    regions = regions_response.get('data', []) if regions_response.get('code') == 'OKAY' else []
-    return render_template('create.html', regions=regions)
+
+    else:
+        plan_type = request.args.get('plan_type', 'fixed')
+        if plan_type not in {'fixed', 'custom'}:
+            plan_type = 'fixed'
+        selected_region = request.args.get('region') or (regions[0]['id'] if regions else None)
+        selected_product_id = request.args.get('product_id', '')
+        form_data = {
+            'hostnames': '',
+            'instance_class': 'default',
+            'assign_ipv4': 'on',
+            'assign_ipv6': '',
+            'fixed_diskInGB': '',
+            'fixed_bandwidthInTB': '',
+            'cpu': '',
+            'ramInGB': '',
+            'diskInGB': '',
+            'bandwidthInTB': '',
+            'floating_ip_count': '',
+            'ssh_key_ids': '',
+        }
+
+    selected_region = selected_region or (regions[0]['id'] if regions else None)
+    form_data.setdefault('instance_class', 'default')
+    form_data.setdefault('assign_ipv4', 'on')
+    form_data.setdefault('assign_ipv6', '')
+
+    products = []
+    if selected_region:
+        products_response = api_call('GET', '/v1/products', params={'regionId': selected_region})
+        if products_response.get('code') == 'OKAY':
+            products = products_response.get('data', [])
+        else:
+            flash('Unable to load products for the selected region.')
+
+    region_configs = {region.get('id'): region.get('config', {}) for region in regions}
+
+    return render_template(
+        'create.html',
+        regions=regions,
+        products=products,
+        selected_region=selected_region,
+        selected_product_id=selected_product_id,
+        plan_type=plan_type,
+        form_data=form_data,
+        region_configs=region_configs,
+    )
 
 
 @app.route('/instance/<instance_id>')
@@ -529,6 +675,20 @@ def regions():
     response = api_call('GET', '/v1/regions')
     regions = response.get('data', []) if response.get('code') == 'OKAY' else []
     return render_template('regions.html', regions=regions)
+
+
+@app.route('/api/regions/<region_id>/products')
+@owner_required
+def region_products(region_id):
+    if not region_id:
+        return jsonify({'products': [], 'detail': 'Region ID is required.'}), 400
+
+    response = api_call('GET', '/v1/products', params={'regionId': region_id})
+    if response.get('code') == 'OKAY':
+        return jsonify({'products': response.get('data', [])})
+
+    detail = response.get('detail') or 'Unable to load products.'
+    return jsonify({'products': [], 'detail': detail}), 502
 
 
 @app.route('/products', methods=['GET', 'POST'])
