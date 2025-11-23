@@ -50,9 +50,24 @@
                 <p class="help-text">Allocate up to five floating IPs during provisioning.</p>
             </div>
             <div>
-                <label for="ssh_key_ids">SSH Key IDs</label>
-                <input type="text" id="ssh_key_ids" name="ssh_key_ids" placeholder="e.g. 123, 456" value="{{ form_data.ssh_key_ids }}">
-                <p class="help-text">Comma-separated list of SSH key IDs already uploaded in the panel.</p>
+                <span class="form-label">SSH keys</span>
+                {% if ssh_keys %}
+                {% set selected_keys = form_data.selected_ssh_keys or [] %}
+                <div class="checkbox-group" data-ssh-key-select>
+                    {% for key in ssh_keys %}
+                    <label>
+                        <input type="checkbox" name="ssh_key_ids" value="{{ key.id }}" {% if key.id is not none and (key.id|string) in selected_keys %}checked{% endif %}>
+                        <span>
+                            {{ key.name }}{% if key.id %} · #{{ key.id }}{% endif %}
+                        </span>
+                    </label>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <p class="help-text">No SSH keys are registered yet.</p>
+                {% endif %}
+                <p class="help-text">Selection is optional; continue without keys by leaving everything unchecked.</p>
+                <p class="help-text"><a href="{{ url_for('ssh_keys') }}">Manage SSH keys</a></p>
             </div>
         </div>
     </fieldset>

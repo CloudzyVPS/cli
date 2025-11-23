@@ -96,7 +96,7 @@
                     </div>
                     <div>
                         <dt>SSH keys</dt>
-                        <dd>{% if wizard.ssh_key_ids %}{{ wizard.ssh_key_ids|join(', ') }}{% else %}None{% endif %}</dd>
+                        <dd>{%- if wizard.ssh_keys_display -%}{{ wizard.ssh_keys_display|join(', ') }}{%- elif wizard.ssh_key_ids -%}{{ wizard.ssh_key_ids|join(', ') }}{%- else -%}None{%- endif -%}</dd>
                     </div>
                 </dl>
             </section>
