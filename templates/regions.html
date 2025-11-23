@@ -3,46 +3,56 @@
 {% block title %}Regions{% endblock %}
 
 {% block content %}
-<section aria-labelledby="regions-heading">
+<header class="page-header">
+    <div>
+        <h1>Available Regions</h1>
+        <p>Select a region card to inspect the catalog of products offered there.</p>
+    </div>
+</header>
+
+{% if regions %}
+<section aria-labelledby="regions-heading" class="surface">
     <header>
-        <h1 id="regions-heading">Available Regions</h1>
-        <p>Review availability, abbreviations, and premium status for each data center.</p>
+        <h2 id="regions-heading">Regions</h2>
+        <p>Click any region to open <code>/products?region_id=&lt;id&gt;</code> with the relevant inventory.</p>
     </header>
-    {% if regions %}
-    <div role="list">
+    <div class="region-grid" role="list">
         {% for region in regions %}
-        <article role="listitem" data-region-id="{{ region.id }}">
+        <a class="region-card" role="listitem" href="{{ url_for('products', region_id=region.id) }}" data-active="{{ 'true' if region.isActive else 'false' }}">
             <header>
-                <h2>{{ region.name }}</h2>
-                <p>ID: {{ region.id }} · {{ region.abbr }}</p>
+                <div class="region-heading">
+                    <h3>{{ region.name }}</h3>
+                    <span class="region-chip">{{ region.abbr }}</span>
+                </div>
+                <p class="region-subtitle">Region ID {{ region.id }}</p>
             </header>
             {% if region.description %}
-            <p>{{ region.description }}</p>
+            <p class="region-description">{{ region.description }}</p>
             {% endif %}
-            <dl>
+            <dl class="region-metrics">
                 <div>
                     <dt>Status</dt>
                     <dd>{{ 'Active' if region.isActive else 'Disabled' }}</dd>
                 </div>
                 <div>
-                    <dt>Premium Tier</dt>
+                    <dt>Premium tier</dt>
                     <dd>{{ 'Yes' if region.isPremium else 'No' }}</dd>
                 </div>
                 {% if region.config and region.config.ramThresholdInGB %}
                 <div>
-                    <dt>RAM Threshold</dt>
+                    <dt>RAM threshold</dt>
                     <dd>{{ region.config.ramThresholdInGB }} GB</dd>
                 </div>
                 {% endif %}
                 {% if region.config and region.config.diskThresholdInGB %}
                 <div>
-                    <dt>Disk Threshold</dt>
+                    <dt>Disk threshold</dt>
                     <dd>{{ region.config.diskThresholdInGB }} GB</dd>
                 </div>
                 {% endif %}
             </dl>
             {% if region.tags %}
-            <footer>
+            <footer class="region-footer">
                 <p>Highlights:
                     {% if region.tags is string %}
                     {{ region.tags }}
@@ -52,11 +62,12 @@
                 </p>
             </footer>
             {% endif %}
-        </article>
+            <span class="region-cta" aria-hidden="true">Browse products →</span>
+        </a>
         {% endfor %}
     </div>
-    {% else %}
-    <p>No regions found.</p>
-    {% endif %}
 </section>
+{% else %}
+<p>No regions found.</p>
+{% endif %}
 {% endblock %}

@@ -3,23 +3,59 @@
 {% block title %}Operating Systems{% endblock %}
 
 {% block content %}
-<h1>Available Operating Systems</h1>
-{% if os_list %}
-<div class="row">
-    {% for os in os_list %}
-    <div class="col-12 col-md-6 col-lg-4 mb-4">
-        <div class="card">
-            <div class="card-body">
-                <h5 class="card-title">{{ os.name }}</h5>
-                <p class="card-text">Family: {{ os.family }}</p>
-                <p class="card-text">Arch: {{ os.arch }}</p>
-                <p class="card-text">Min RAM: {{ os.minRam }}</p>
-            </div>
-        </div>
+<header class="page-header">
+    <div>
+        <h1>Operating Systems</h1>
+        <p>Images available for provisioning. Review architecture, family, and requirements at a glance.</p>
     </div>
-    {% endfor %}
-</div>
-{% else %}
-<p>No OS found.</p>
-{% endif %}
+</header>
+
+<section class="surface" aria-labelledby="os-catalog">
+    <header>
+        <h2 id="os-catalog">OS catalog</h2>
+        <p>Select an image during provisioning or change-OS workflows.</p>
+    </header>
+    {% if os_list %}
+    <div class="data-grid" data-os-grid>
+        {% for os in os_list %}
+        <article class="data-card" data-os-card>
+            <header>
+                <h3>{{ os.name }}</h3>
+                <p class="os-family">{{ os.family | default('Unknown family', true) }}</p>
+            </header>
+            <dl class="os-attributes">
+                <div>
+                    <dt>Architecture</dt>
+                    <dd>{{ os.arch | default('n/a', true) }}</dd>
+                </div>
+                <div>
+                    <dt>Min RAM</dt>
+                    <dd>{{ os.minRam | default('n/a', true) }}</dd>
+                </div>
+                {% if os.version %}
+                <div>
+                    <dt>Version</dt>
+                    <dd>{{ os.version }}</dd>
+                </div>
+                {% endif %}
+                {% if os.disk %}
+                <div>
+                    <dt>Disk</dt>
+                    <dd>{{ os.disk }}</dd>
+                </div>
+                {% endif %}
+            </dl>
+            {% if os.description %}
+            <p class="os-description">{{ os.description }}</p>
+            {% endif %}
+        </article>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="empty-state">
+        <div class="icon" aria-hidden="true">💿</div>
+        <p>No operating systems were returned by the API.</p>
+    </div>
+    {% endif %}
+</section>
 {% endblock %}
