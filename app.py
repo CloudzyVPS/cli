@@ -286,9 +286,9 @@ def update_access(username):
     if not target or target.get('role') != 'admin':
         flash('Admin not found.')
         return redirect(url_for('access_management'))
-    assignments = request.form.get('instances', '')
-    assigned = [inst.strip() for inst in assignments.split(',') if inst.strip()]
-    target['assigned_instances'] = assigned
+    selected_instances = request.form.getlist('instances')
+    normalized = [inst.strip() for inst in selected_instances if inst.strip()]
+    target['assigned_instances'] = normalized
     save_users()
     flash('Assignments updated.')
     return redirect(url_for('access_management'))
@@ -580,6 +580,33 @@ def change_pass_instance(instance_id):
         flash(f'Password changed: {password}')
     else:
         flash('Error changing password')
+    return redirect(url_for('instance_detail', instance_id=instance_id))
+
+
+@app.route('/instance/<instance_id>/add-traffic', methods=['POST'])
+@login_required
+def add_traffic_instance(instance_id):
+    redirect_response = enforce_instance_access(instance_id)
+    if redirect_response:
+        return redirect_response
+    amount_raw = request.form.get('traffic_amount', '').strip()
+    if not amount_raw:
+        flash('Provide the amount of traffic to add.')
+        return redirect(url_for('instance_detail', instance_id=instance_id))
+    try:
+        amount = float(amount_raw)
+    except ValueError:
+        flash('Traffic amount must be a number.')
+        return redirect(url_for('instance_detail', instance_id=instance_id))
+    if amount <= 0:
+        flash('Traffic amount must be greater than zero.')
+        return redirect(url_for('instance_detail', instance_id=instance_id))
+
+    response = api_call('POST', f'/v1/instances/{instance_id}/add-traffic', data={'amount': amount})
+    if response.get('code') == 'OKAY':
+        flash('Traffic added successfully.')
+    else:
+        flash(f"Error adding traffic: {response.get('detail')}")
     return redirect(url_for('instance_detail', instance_id=instance_id))
 
 
