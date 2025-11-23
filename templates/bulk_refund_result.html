@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+
+{% block title %}Bulk Refund Results{% endblock %}
+
+{% block content %}
+<h1>Bulk Subscription Refund Results</h1>
+{% if refunds %}
+<table class="table">
+    <thead>
+        <tr>
+            <th>Instance ID</th>
+            <th>Used Days</th>
+            <th>Remaining Days</th>
+            <th>Refund Amount</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for refund in refunds %}
+        <tr>
+            <td>{{ refund.instanceId }}</td>
+            <td>{{ refund.usedDays }}</td>
+            <td>{{ refund.remainingDays }}</td>
+            <td>${{ refund.refundAmount }}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% else %}
+<p>No refunds found.</p>
+{% endif %}
+<a href="/bulk-subscription-refund" class="btn btn-secondary">Back</a>
+{% endblock %}

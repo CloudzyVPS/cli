@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+
+{% block title %}Products{% endblock %}
+
+{% block content %}
+<h1>Products</h1>
+<form method="post" class="mb-4">
+    <div class="input-group">
+        <select class="form-select" name="region_id" required>
+            <option value="">Select Region</option>
+            {% for region in regions %}
+            <option value="{{ region.id }}" {% if selected_region == region.id %}selected{% endif %}>{{ region.name }}</option>
+            {% endfor %}
+        </select>
+        <button type="submit" class="btn btn-primary">Load Products</button>
+    </div>
+</form>
+{% if products %}
+<div class="row">
+    {% for product in products %}
+    <div class="col-md-6 mb-4">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">{{ product.plan.specification.cpu }} CPU, {{ product.plan.specification.ram }} RAM</h5>
+                <p class="card-text">ID: {{ product.id }}</p>
+                <p class="card-text">Price: ${{ product.priceItems[0].hourlyPrice }}/hr</p>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% else %}
+<p>Select a region to view products.</p>
+{% endif %}
+{% endblock %}

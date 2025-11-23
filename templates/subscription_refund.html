@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+
+{% block title %}Subscription Refund{% endblock %}
+
+{% block content %}
+<h1>Subscription Refund for Instance {{ instance_id }}</h1>
+<div class="card">
+    <dl class="row">
+        <dt class="col-sm-3">Used Days</dt>
+        <dd class="col-sm-9">{{ refund.usedDays }}</dd>
+        <dt class="col-sm-3">Remaining Days</dt>
+        <dd class="col-sm-9">{{ refund.remainingDays }}</dd>
+        <dt class="col-sm-3">Refund Amount</dt>
+        <dd class="col-sm-9">${{ refund.refundAmount }}</dd>
+    </dl>
+</div>
+<a href="/instance/{{ instance_id }}" class="btn btn-secondary">Back to Instance</a>
+{% endblock %}

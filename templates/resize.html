@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+
+{% block title %}Resize Instance{% endblock %}
+
+{% block content %}
+<h1>Resize Instance: {{ instance.hostname }}</h1>
+<form method="post" class="card">
+    <div class="mb-3">
+        <label for="type" class="form-label">Resize Type</label>
+        <select class="form-select" id="type" name="type" required>
+            <option value="FIXED">Fixed Plan</option>
+            <option value="CUSTOM">Custom Configuration</option>
+        </select>
+    </div>
+    <div class="mb-3">
+        <h3>For Fixed Plan:</h3>
+        <label for="product_id" class="form-label">Product ID</label>
+        <input type="text" class="form-control" id="product_id" name="product_id" placeholder="Enter product ID">
+    </div>
+    <div class="mb-3">
+        <h3>For Custom Configuration:</h3>
+        <label for="region_id" class="form-label">Region ID</label>
+        <select class="form-select" id="region_id" name="region_id">
+            {% for region in regions %}
+            <option value="{{ region.id }}">{{ region.name }}</option>
+            {% endfor %}
+        </select>
+        <label for="cpu" class="form-label">CPU</label>
+        <input type="number" class="form-control" id="cpu" name="cpu">
+        <label for="ramInGB" class="form-label">RAM in GB</label>
+        <input type="number" class="form-control" id="ramInGB" name="ramInGB">
+        <label for="diskInGB" class="form-label">Disk in GB</label>
+        <input type="number" class="form-control" id="diskInGB" name="diskInGB">
+        <label for="bandwidthInTB" class="form-label">Bandwidth in TB</label>
+        <input type="number" class="form-control" id="bandwidthInTB" name="bandwidthInTB">
+    </div>
+    <button type="submit" class="btn btn-primary">Resize</button>
+</form>
+{% endblock %}

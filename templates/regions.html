@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+
+{% block title %}Regions{% endblock %}
+
+{% block content %}
+<h1>Available Regions</h1>
+{% if regions %}
+<div class="row">
+    {% for region in regions %}
+    <div class="col-md-4 mb-4">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">{{ region.name }}</h5>
+                <p class="card-text">Abbr: {{ region.abbr }}</p>
+                <p class="card-text">Active: {{ 'Yes' if region.isActive else 'No' }}</p>
+                <p class="card-text">Premium: {{ 'Yes' if region.isPremium else 'No' }}</p>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% else %}
+<p>No regions found.</p>
+{% endif %}
+{% endblock %}

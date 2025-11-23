@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+
+{% block title %}Instances{% endblock %}
+
+{% block content %}
+<h1>Instances</h1>
+{% if instances %}
+<table class="table">
+    <thead>
+        <tr>
+            <th>ID</th>
+            <th>Hostname</th>
+            <th>Status</th>
+            <th>Region</th>
+            <th>Main IP</th>
+            <th>Actions</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for instance in instances %}
+        <tr>
+            <td>{{ instance.id }}</td>
+            <td>{{ instance.hostname }}</td>
+            <td>{{ instance.status }}</td>
+            <td>{{ instance.region }}</td>
+            <td>{{ instance.mainIp }}</td>
+            <td>
+                <a href="/instance/{{ instance.id }}" class="btn btn-info btn-sm">Details</a>
+                <a href="/instance/{{ instance.id }}/resize" class="btn btn-warning btn-sm">Resize</a>
+                <a href="/instance/{{ instance.id }}/change-os" class="btn btn-secondary btn-sm">Change OS</a>
+                <a href="/instance/{{ instance.id }}/subscription-refund" class="btn btn-primary btn-sm">Refund</a>
+                <form method="post" action="/instance/{{ instance.id }}/change-pass" style="display:inline;">
+                    <button type="submit" class="btn btn-success btn-sm">Change Pass</button>
+                </form>
+                <form method="post" action="/instance/{{ instance.id }}/delete" style="display:inline;">
+                    <button type="submit" class="btn btn-danger btn-sm">Delete</button>
+                </form>
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% else %}
+<p>No instances found.</p>
+{% endif %}
+{% endblock %}
