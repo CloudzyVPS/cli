@@ -21,7 +21,7 @@ A cloud provider service built using the Cloudzy Developer API. This is a server
   - List products by region
   - List operating systems
   - List applications
-- **Design**: Warm minimal smooth flat design with smooth transitions and flat buttons.
+- **Design**: Professional, production-ready stylesheet with Digital Ocean color palette (blues, grays), smooth transitions, responsive grid system, and accessibility features.
 
 ## Setup
 
