@@ -4,28 +4,22 @@
 
 {% block content %}
 <header class="page-header">
-    <div>
-        <h1>Available Regions</h1>
-        <p>Select a region card to inspect the catalog of products offered there.</p>
-    </div>
+    <h1>Available Regions</h1>
+    <p>Select a region card to inspect the catalog of products offered there.</p>
 </header>
 
 {% if regions %}
 <section aria-labelledby="regions-heading" class="surface">
-    <header>
-        <h2 id="regions-heading">Regions</h2>
-        <p>Click any region to open <code>/products?region_id=&lt;id&gt;</code> with the relevant inventory.</p>
-    </header>
+    <h2 id="regions-heading">Regions</h2>
+    <p>Click any region to open <code>/products?region_id=&lt;id&gt;</code> with the relevant inventory.</p>
     <div class="region-grid" role="list">
         {% for region in regions %}
         <a class="region-card" role="listitem" href="{{ url_for('products', region_id=region.id) }}" data-active="{{ 'true' if region.isActive else 'false' }}">
-            <header>
-                <div class="region-heading">
-                    <h3>{{ region.name }}</h3>
-                    <span class="region-chip">{{ region.abbr }}</span>
-                </div>
-                <p class="region-subtitle">Region ID {{ region.id }}</p>
-            </header>
+            <div class="region-heading">
+                <h3>{{ region.name }}</h3>
+                <span class="region-chip">{{ region.abbr }}</span>
+            </div>
+            <p class="region-subtitle">Region ID {{ region.id }}</p>
             {% if region.description %}
             <p class="region-description">{{ region.description }}</p>
             {% endif %}

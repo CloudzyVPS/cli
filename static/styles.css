@@ -2176,3 +2176,119 @@ section[aria-labelledby="regions-heading"] > div[role="list"] > article > footer
     width: 100%;
   }
 }
+
+.warning-banner {
+  display: flex;
+  gap: 1rem;
+  padding: 1.5rem;
+  background: var(--danger-bg, #fef2f2);
+  border: 1px solid var(--danger-border, #fca5a5);
+  border-radius: 8px;
+  margin-bottom: 2rem;
+  color: var(--danger-text, #991b1b);
+}
+
+@media (prefers-color-scheme: dark) {
+  .warning-banner {
+    --danger-bg: #450a0a;
+    --danger-border: #7f1d1d;
+    --danger-text: #fca5a5;
+  }
+}
+
+.warning-banner svg {
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+}
+
+.warning-banner h2 {
+  margin: 0 0 0.5rem 0;
+  font-size: 1.125rem;
+  font-weight: 600;
+}
+
+.warning-banner p {
+  margin: 0;
+  font-size: 0.9375rem;
+  line-height: 1.5;
+}
+
+[data-delete-confirmation] dl {
+  display: grid;
+  gap: 0.75rem;
+}
+
+[data-delete-confirmation] dl > div {
+  display: grid;
+  grid-template-columns: 140px 1fr;
+  gap: 1rem;
+}
+
+[data-delete-confirmation] dt {
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+[data-delete-confirmation] dd {
+  margin: 0;
+  color: var(--text-primary);
+}
+
+[data-delete-confirmation] code {
+  font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', 'Consolas', monospace;
+  font-size: 0.875rem;
+  padding: 0.125rem 0.375rem;
+  background: var(--code-bg, #f3f4f6);
+  border-radius: 4px;
+}
+
+@media (prefers-color-scheme: dark) {
+  [data-delete-confirmation] code {
+    --code-bg: #1f2937;
+  }
+}
+
+.delete-form {
+  margin-top: 2rem;
+}
+
+.button-danger {
+  background: #dc2626;
+  color: white;
+  border: 1px solid #b91c1c;
+}
+
+.button-danger:hover {
+  background: #b91c1c;
+}
+
+.button-danger:active {
+  background: #991b1b;
+}
+
+.flash-messages {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin-bottom: var(--space-5);
+}
+
+.flash-message {
+  padding: var(--space-4);
+  border-radius: var(--border-radius);
+  background: var(--flash-bg, #dbeafe);
+  border: 1px solid var(--flash-border, #60a5fa);
+  color: var(--flash-text, #1e3a8a);
+  font-weight: 500;
+  box-shadow: var(--shadow-soft);
+  animation: fade-in-up 0.3s ease;
+}
+
+@media (prefers-color-scheme: dark) {
+  .flash-message {
+    --flash-bg: #1e3a8a;
+    --flash-border: #3b82f6;
+    --flash-text: #dbeafe;
+  }
+}

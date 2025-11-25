@@ -4,11 +4,9 @@
 
 {% block content %}
 <header class="page-header">
-    <div>
-        <p class="breadcrumb"><a href="{{ back_url }}">← Previous step</a></p>
-        <h1>Optional Extras</h1>
-        <p>Step 4 of 7 · Add extra resources to your plan</p>
-    </div>
+    <p class="breadcrumb"><a href="{{ back_url }}">← Previous step</a></p>
+    <h1>Optional Extras</h1>
+    <p>Step 4 of 7 · Add extra resources to your plan</p>
 </header>
 
 <form method="get" action="{{ url_for('create_step_5') }}" class="surface" novalidate>

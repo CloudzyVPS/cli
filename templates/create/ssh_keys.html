@@ -4,11 +4,9 @@
 
 {% block content %}
 <header class="page-header">
-    <div>
-        <p class="breadcrumb"><a href="{{ back_url }}">← Previous step</a></p>
-        <h1>SSH Keys</h1>
-        <p>Step 6 of 7 · Select SSH keys for instance access</p>
-    </div>
+    <p class="breadcrumb"><a href="{{ back_url }}">← Previous step</a></p>
+    <h1>SSH Keys</h1>
+    <p>Step 6 of 7 · Select SSH keys for instance access</p>
 </header>
 
 <form method="get" action="{{ url_for('create_step_7') }}" class="surface" novalidate>

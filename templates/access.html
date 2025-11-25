@@ -4,10 +4,8 @@
 
 {% block content %}
 <header class="page-header">
-    <div>
-        <h1>Admin Access Control</h1>
-        <p>Review current assignments and adjust which instances each admin can manage.</p>
-    </div>
+    <h1>Admin Access Control</h1>
+    <p>Review current assignments and adjust which instances each admin can manage.</p>
 </header>
 
 {% if admins %}
@@ -15,10 +13,8 @@
     {% for username, data in admins | dictsort %}
     {% set assigned_ids = data.get('assigned_instances', []) %}
     <section data-admin-panel role="listitem">
-        <header>
-            <h2>{{ username }}</h2>
-            <p>{{ assigned_ids | length }} assigned instance{{ '' if (assigned_ids | length) == 1 else 's' }}</p>
-        </header>
+        <h2>{{ username }}</h2>
+        <p>{{ assigned_ids | length }} assigned instance{{ '' if (assigned_ids | length) == 1 else 's' }}</p>
         <form action="{{ url_for('update_access', username=username) }}" method="post">
             <fieldset>
                 <legend>Select instances</legend>

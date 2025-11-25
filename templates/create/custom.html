@@ -4,11 +4,9 @@
 
 {% block content %}
 <header class="page-header">
-    <div>
-        <p class="breadcrumb"><a href="{{ back_to_start_url }}">← Previous step</a></p>
-        <h1>Define custom resources</h1>
-        <p>Step 3 of 7 · Enter the exact CPU, RAM, disk, and bandwidth for {{ region.name }}.</p>
-    </div>
+    <p class="breadcrumb"><a href="{{ back_to_start_url }}">← Previous step</a></p>
+    <h1>Define custom resources</h1>
+    <p>Step 3 of 7 · Enter the exact CPU, RAM, disk, and bandwidth for {{ region.name }}.</p>
 </header>
 
 <form method="get" action="{{ url_for('create_step_5') }}" class="surface" novalidate>
