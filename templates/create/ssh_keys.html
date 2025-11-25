@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+
+{% block title %}Create · Step 6{% endblock %}
+
+{% block content %}
+<header class="page-header">
+    <div>
+        <p class="breadcrumb"><a href="{{ back_url }}">← Back to step 5</a></p>
+        <h1>SSH Keys</h1>
+        <p>Step 6 of 7 · Select SSH keys for instance access</p>
+    </div>
+</header>
+
+<form method="get" action="{{ url_for('create_step_7') }}" class="surface" novalidate>
+    {% for host in base_state.hostnames %}
+    <input type="hidden" name="hostnames" value="{{ host }}">
+    {% endfor %}
+    <input type="hidden" name="region" value="{{ base_state.region }}">
+    <input type="hidden" name="instance_class" value="{{ base_state.instance_class }}">
+    <input type="hidden" name="plan_type" value="{{ base_state.plan_type }}">
+    <input type="hidden" name="assign_ipv4" value="{{ '1' if base_state.assign_ipv4 else '0' }}">
+    <input type="hidden" name="assign_ipv6" value="{{ '1' if base_state.assign_ipv6 else '0' }}">
+    <input type="hidden" name="floating_ip_count" value="{{ base_state.floating_ip_count|default(0, true) }}">
+    <input type="hidden" name="os_id" value="{{ base_state.os_id }}">
+    {% if base_state.plan_type == 'fixed' %}
+    <input type="hidden" name="product_id" value="{{ product_id }}">
+    <input type="hidden" name="extra_disk" value="{{ extra_disk }}">
+    <input type="hidden" name="extra_bandwidth" value="{{ extra_bandwidth }}">
+    {% else %}
+    <input type="hidden" name="cpu" value="{{ cpu }}">
+    <input type="hidden" name="ramInGB" value="{{ ramInGB }}">
+    <input type="hidden" name="diskInGB" value="{{ diskInGB }}">
+    {% if bandwidthInTB %}
+    <input type="hidden" name="bandwidthInTB" value="{{ bandwidthInTB }}">
+    {% endif %}
+    {% endif %}
+    <fieldset class="form-section">
+        <legend>SSH Keys</legend>
+        {% if ssh_keys %}
+            {% set selected_keys = selected_ssh_key_ids or [] %}
+            <div class="checkbox-group" data-ssh-key-select>
+                {% for key in ssh_keys %}
+                <label>
+                    <input type="checkbox" name="ssh_key_ids" value="{{ key.id }}" {% if key.id is not none and (key.id|string) in selected_keys %}checked{% endif %}>
+                    <span>
+                        {{ key.name }}{% if key.id %} · #{{ key.id }}{% endif %}
+                    </span>
+                </label>
+                {% endfor %}
+            </div>
+        {% else %}
+            <p class="help-text">No SSH keys are registered yet.</p>
+        {% endif %}
+        <p class="help-text">Selection is optional; continue without keys by leaving everything unchecked.</p>
+        <p class="help-text"><a href="{{ url_for('ssh_keys') }}">Manage SSH keys</a></p>
+    </fieldset>
+
+    <footer class="form-actions">
+        <a class="button-secondary" href="{{ back_url }}">Back</a>
+        <button type="submit">Continue</button>
+    </footer>
+</form>
+{% endblock %}
+

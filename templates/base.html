@@ -31,7 +31,7 @@
         <div class="nav-links" role="navigation">
             <a href="{{ url_for('instances') }}">Instances</a>
             {% if current_user.role == 'owner' %}
-            <a href="{{ url_for('create_start') }}">Create</a>
+            <a href="{{ url_for('create_step_1') }}">Create</a>
             <a href="{{ url_for('bulk_subscription_refund') }}">Bulk refunds</a>
             <a href="{{ url_for('regions') }}">Regions</a>
             <a href="{{ url_for('os_list') }}">OS</a>
@@ -47,12 +47,10 @@
     <main>
         {% with messages = get_flashed_messages() %}
         {% if messages %}
-        <section>
-            <ul>
-                {% for message in messages %}
-                <li>{{ message }}</li>
-                {% endfor %}
-            </ul>
+        <section class="flash-messages">
+            {% for message in messages %}
+            <div class="flash-message">{{ message }}</div>
+            {% endfor %}
         </section>
         {% endif %}
         {% endwith %}

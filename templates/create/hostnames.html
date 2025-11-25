@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+
+{% block title %}Create · Step 2{% endblock %}
+
+{% block content %}
+<header class="page-header">
+    <div>
+        <p class="breadcrumb"><a href="{{ back_url }}">← Back to step 1</a></p>
+        <h1>Hostnames and IP Assignment</h1>
+        <p>Step 2 of 7 · Define instance hostnames and network configuration</p>
+    </div>
+</header>
+
+{% if base_state is not defined %}
+{% set base_state = {'region': '', 'instance_class': 'default', 'plan_type': 'fixed'} %}
+{% endif %}
+
+<form method="get" action="{{ url_for('create_step_3') }}" class="surface" novalidate>
+    <input type="hidden" name="region" value="{{ base_state.region }}">
+    <input type="hidden" name="instance_class" value="{{ base_state.instance_class }}">
+    <input type="hidden" name="plan_type" value="{{ base_state.plan_type }}">
+    <fieldset class="form-section">
+        <legend>Hostnames</legend>
+        <label for="hostnames" class="form-label">Hostnames (comma-separated)</label>
+        <input type="text" id="hostnames" name="hostnames" value="{{ form_data.hostnames }}" required>
+        <p class="help-text">Up to 10 entries. Each hostname provisions a dedicated instance.</p>
+    </fieldset>
+
+    <fieldset class="form-section">
+        <legend class="form-label">IPv4 / IPv6 assignment</legend>
+        <div class="checkbox-group">
+            <label>
+                <input type="checkbox" name="assign_ipv4" value="on" {% if form_data.assign_ipv4 %}checked{% endif %}>
+                <span>Assign IPv4</span>
+            </label>
+            <label>
+                <input type="checkbox" name="assign_ipv6" value="on" {% if form_data.assign_ipv6 %}checked{% endif %}>
+                <span>Assign IPv6</span>
+            </label>
+        </div>
+        <p class="help-text">At least one of IPv4 or IPv6 must be assigned.</p>
+    </fieldset>
+
+    <fieldset class="form-section">
+        <legend class="form-label">Floating IPs</legend>
+        <label for="floating_ip_count">Floating IP count</label>
+        <input type="number" id="floating_ip_count" name="floating_ip_count" min="0" max="5" value="{{ form_data.floating_ip_count|default('0', true) }}">
+        <p class="help-text">Allocate up to five floating IPs during provisioning.</p>
+    </fieldset>
+
+    <footer class="form-actions">
+        <a class="button-secondary" href="{{ back_url }}">Back</a>
+        <button type="submit">Continue</button>
+    </footer>
+</form>
+{% endblock %}
+

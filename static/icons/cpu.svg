@@ -1,5 +1,10 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" role="img" aria-hidden="true">
-  <rect x="6" y="6" width="12" height="12" rx="2" fill="#0f172a" fill-opacity="0.85"/>
-  <rect x="8.5" y="8.5" width="7" height="7" rx="1.2" fill="#2563eb"/>
-  <path fill="#0f172a" d="M5 3h2v3H5zm4-1h2v3H9zm4 0h2v3h-2zm4 1h2v3h-2zM5 18h2v3H5zm4 0h2v3H9zm4 0h2v3h-2zm4 0h2v3h-2zM3 7h3v2H3zm0 4h3v2H3zm0 4h3v2H3zm15-8h3v2h-3zm0 4h3v2h-3zm0 4h3v2h-3z"/>
+  <style>
+    .cpu-bg { fill: var(--icon-color, currentColor); opacity: 0.85; }
+    .cpu-core { fill: var(--primary, #2563eb); }
+    .cpu-pins { fill: var(--icon-color, currentColor); }
+  </style>
+  <rect x="6" y="6" width="12" height="12" rx="2" class="cpu-bg"/>
+  <rect x="8.5" y="8.5" width="7" height="7" rx="1.2" class="cpu-core"/>
+  <path class="cpu-pins" d="M5 3h2v3H5zm4-1h2v3H9zm4 0h2v3h-2zm4 1h2v3h-2zM5 18h2v3H5zm4 0h2v3H9zm4 0h2v3h-2zm4 0h2v3h-2zM3 7h3v2H3zm0 4h3v2H3zm0 4h3v2H3zm15-8h3v2h-3zm0 4h3v2h-3zm0 4h3v2h-3z"/>
 </svg>
