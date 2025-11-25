@@ -8,23 +8,20 @@
     <p>Manage the public keys that are available during instance provisioning. Changes take effect immediately.</p>
 </header>
 
-<section class="surface" data-ssh-keys-panel>
+<section data-ssh-keys-panel>
     <h2>Registered keys</h2>
-    <p class="help-text">Delete keys that are no longer needed or keep them available for future deployments.</p>
+    <small>Delete keys that are no longer needed or keep them available for future deployments.</small>
     {% if customer_id %}
-    <p class="help-text">Viewing keys for customer ID: <code>{{ customer_id }}</code></p>
+    <small>Viewing keys for customer ID: <code>{{ customer_id }}</code></small>
     {% endif %}
     {% if not ssh_keys %}
-    <div class="empty-state">
-        <div class="icon" aria-hidden="true">🔑</div>
-        <p>No SSH keys are registered yet. Use the form below to add your first key.</p>
-    </div>
+    <p data-empty>🔑 No SSH keys are registered yet. Use the form below to add your first key.</p>
     {% else %}
     <div class="card-grid" data-ssh-keys-list>
         {% for key in ssh_keys %}
-        <article class="metric-card" data-ssh-key>
+        <article data-ssh-key>
             <h3>{{ key.name }}</h3>
-            <p class="help-text">ID #{{ key.id }}{% if key.customer_id %} · Customer {{ key.customer_id }}{% endif %}</p>
+            <small>ID #{{ key.id }}{% if key.customer_id %} · Customer {{ key.customer_id }}{% endif %}</small>
             {% if key.fingerprint %}
             <p><strong>Fingerprint:</strong> {{ key.fingerprint }}</p>
             {% endif %}
@@ -44,9 +41,9 @@
     {% endif %}
 </section>
 
-<section class="surface" data-ssh-key-form>
+<section data-ssh-key-form>
     <h2>Add a new SSH key</h2>
-    <p class="help-text">Provide the key name and the complete public key string (usually starting with <code>ssh-</code>).</p>
+    <small>Provide the key name and the complete public key string (usually starting with <code>ssh-</code>).</small>
     <form method="post" novalidate>
         <input type="hidden" name="action" value="create">
         <div class="fields-grid">

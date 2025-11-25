@@ -27,8 +27,8 @@
     {% for key_id in base_state.ssh_key_ids %}
     <input type="hidden" name="ssh_key_ids" value="{{ key_id }}">
     {% endfor %}
-    <fieldset class="form-section" aria-label="Product catalog">
-        <legend class="form-label">Plans for {{ region.name }}</legend>
+    <fieldset>
+        <legend>Plans for {{ region.name }}</legend>
         <div class="product-grid" role="list">
             {% for product in products %}
             <label class="product-card" role="listitem" data-product-card {% if selected_product_id == product.id %}data-selected="true"{% endif %}>

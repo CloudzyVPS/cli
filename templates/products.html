@@ -13,8 +13,8 @@
     {% endif %}
 </header>
 
-<section class="surface" aria-labelledby="products-region-picker">
-    <h2 id="products-region-picker">Select a region</h2>
+<section>
+    <h2>Select a region</h2>
     <p>Click one of the cards to filter the list. You can also bookmark the resulting URL.</p>
     {% if regions %}
     <div class="region-grid" role="list" data-region-picker>
@@ -56,12 +56,12 @@
         {% endfor %}
     </div>
     {% else %}
-    <p class="help-text">No regions are available at this time.</p>
+    <small>No regions are available at this time.</small>
     {% endif %}
 </section>
 
-<section class="surface" aria-labelledby="products-catalog">
-    <h2 id="products-catalog">Product catalog</h2>
+<section>
+    <h2>Product catalog</h2>
     {% if selected_region %}
     <p>Plans available in {{ selected_region.name }}. Pricing and specifications come directly from the API.</p>
     {% else %}
@@ -119,16 +119,10 @@
             {% endfor %}
         </div>
         {% else %}
-        <div class="empty-state">
-            <div class="icon" aria-hidden="true">📦</div>
-            <p>No products are currently returned for this region.</p>
-        </div>
+        <p data-empty>📦 No products are currently returned for this region.</p>
         {% endif %}
     {% elif requested_region %}
-        <div class="empty-state">
-            <div class="icon" aria-hidden="true">🌍</div>
-            <p>We could not find a region with ID {{ requested_region }}.</p>
-        </div>
+        <p data-empty>🌍 We could not find a region with ID {{ requested_region }}.</p>
     {% endif %}
 </section>
 {% endblock %}
