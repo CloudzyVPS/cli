@@ -21,6 +21,14 @@ logging.basicConfig(
     handlers=[logging.StreamHandler(sys.stdout)]
 )
 
+# List of API endpoints to ignore from logging (frequent/noisy requests)
+LOGGING_IGNORE_ENDPOINTS = [
+    '/v1/regions',
+    '/v1/products',
+    '/v1/os',
+    '/v1/ssh-keys',
+]
+
 app = Flask(__name__)
 app.secret_key = 'your_secret_key'  # Change this
 
@@ -134,7 +142,12 @@ def enforce_instance_access(instance_id):
 def api_call(method, endpoint, data=None, params=None):
     url = f"{API_BASE_URL}{endpoint}"
     headers = {'API-Token': API_TOKEN}
-    logging.info(f"API Request: {method} {url} - Params: {params} - Data: {data}")
+    
+    # Check if this endpoint should be logged
+    should_log = endpoint not in LOGGING_IGNORE_ENDPOINTS
+    
+    if should_log:
+        logging.info(f"API Request: {method} {url} - Params: {params} - Data: {data}")
     
     # SSL verification settings - can be disabled via environment variable for development
     verify_ssl = os.getenv('API_VERIFY_SSL', 'true').lower() == 'true'
@@ -159,13 +172,15 @@ def api_call(method, endpoint, data=None, params=None):
         payload = response.json()
     except ValueError:
         payload = {'raw': response.text}
-    logging.info(
-        "API Response: %s %s - Status: %s - Body: %s",
-        method,
-        url,
-        response.status_code,
-        payload
-    )
+    
+    if should_log:
+        logging.info(
+            "API Response: %s %s - Status: %s - Body: %s",
+            method,
+            url,
+            response.status_code,
+            payload
+        )
     return payload
 
 
@@ -1535,7 +1550,7 @@ def create_step_7():
             payload['extraResource'] = extras
 
         response = api_call('POST', '/v1/instances', data=payload)
-        if response.get('code') == 'OKAY':
+        if response.get('code') in ('OKAY', 'CREATED'):
             flash('Instance created successfully')
             return redirect(url_for('instances'))
         detail = response.get('detail') or 'An unknown error occurred while creating the instance.'
