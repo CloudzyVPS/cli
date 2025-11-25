@@ -4,10 +4,8 @@
 
 {% block content %}
 <header class="page-header">
-    <div>
-        <h1>Products</h1>
-        <p>Browse available compute plans per region. Cards below update the <code>region_id</code> query parameter.</p>
-    </div>
+    <h1>Products</h1>
+    <p>Browse available compute plans per region. Cards below update the <code>region_id</code> query parameter.</p>
     {% if selected_region %}
     <p class="page-status">Showing products for <strong>{{ selected_region.name }}</strong> (ID {{ selected_region.id }}).</p>
     {% elif requested_region %}
@@ -16,22 +14,18 @@
 </header>
 
 <section class="surface" aria-labelledby="products-region-picker">
-    <header>
-        <h2 id="products-region-picker">Select a region</h2>
-        <p>Click one of the cards to filter the list. You can also bookmark the resulting URL.</p>
-    </header>
+    <h2 id="products-region-picker">Select a region</h2>
+    <p>Click one of the cards to filter the list. You can also bookmark the resulting URL.</p>
     {% if regions %}
     <div class="region-grid" role="list" data-region-picker>
         {% for region in regions %}
         {% set is_selected = selected_region and (selected_region.id|string) == (region.id|string) %}
         <a class="region-card" role="listitem" href="{{ url_for('products', region_id=region.id) }}" data-active="{{ 'true' if region.isActive else 'false' }}" data-selected="{{ 'true' if is_selected else 'false' }}">
-            <header>
-                <div class="region-heading">
-                    <h3>{{ region.name }}</h3>
-                    <span class="region-chip">{{ region.abbr }}</span>
-                </div>
-                <p class="region-subtitle">Region ID {{ region.id }}</p>
-            </header>
+            <div class="region-heading">
+                <h3>{{ region.name }}</h3>
+                <span class="region-chip">{{ region.abbr }}</span>
+            </div>
+            <p class="region-subtitle">Region ID {{ region.id }}</p>
             {% if region.description %}
             <p class="region-description">{{ region.description }}</p>
             {% endif %}
@@ -67,14 +61,12 @@
 </section>
 
 <section class="surface" aria-labelledby="products-catalog">
-    <header>
-        <h2 id="products-catalog">Product catalog</h2>
-        {% if selected_region %}
-        <p>Plans available in {{ selected_region.name }}. Pricing and specifications come directly from the API.</p>
-        {% else %}
-        <p>Select a region above to load its product inventory.</p>
-        {% endif %}
-    </header>
+    <h2 id="products-catalog">Product catalog</h2>
+    {% if selected_region %}
+    <p>Plans available in {{ selected_region.name }}. Pricing and specifications come directly from the API.</p>
+    {% else %}
+    <p>Select a region above to load its product inventory.</p>
+    {% endif %}
 
     {% if selected_region %}
         {% if products %}
@@ -82,8 +74,7 @@
             {% for product in products %}
             <article class="product-card" role="listitem" data-product-card data-view-only="true">
                 <div class="product-card-body">
-                    <header>
-                        <h2 data-product-headline>
+                    <h2 data-product-headline>
                             {% for metric in product.metrics %}
                             <span data-metric="{{ metric.type }}"{% if metric.variant %} data-variant="{{ metric.variant }}"{% endif %} title="{{ metric.label }}" aria-label="{{ metric.label }}">
                                 {% if metric.icon %}<img src="{{ url_for('static', filename='icons/' ~ metric.icon) }}" alt="" aria-hidden="true">{% endif %}
@@ -91,11 +82,10 @@
                             </span>
                             {% endfor %}
                         </h2>
-                        {% if product.plan_name %}
-                        <p data-product-plan>{{ product.plan_name }}</p>
-                        {% endif %}
-                        <p class="product-meta">Product #{{ product.id }}</p>
-                    </header>
+                    {% if product.plan_name %}
+                    <p data-product-plan>{{ product.plan_name }}</p>
+                    {% endif %}
+                    <p class="product-meta">Product #{{ product.id }}</p>
                     {% if product.description %}
                     <p data-product-note>{{ product.description }}</p>
                     {% endif %}

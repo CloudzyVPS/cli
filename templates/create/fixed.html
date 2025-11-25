@@ -4,11 +4,9 @@
 
 {% block content %}
 <header class="page-header">
-    <div>
-        <p class="breadcrumb"><a href="{{ back_to_start_url }}">← Previous step</a></p>
-        <h1>Select a product</h1>
-        <p>Step 3 of 7 · Choose a plan for {{ region.name }}</p>
-    </div>
+    <p class="breadcrumb"><a href="{{ back_to_start_url }}">← Previous step</a></p>
+    <h1>Select a product</h1>
+    <p>Step 3 of 7 · Choose a plan for {{ region.name }}</p>
 </header>
 
 {% if not products %}
@@ -36,8 +34,7 @@
             <label class="product-card" role="listitem" data-product-card {% if selected_product_id == product.id %}data-selected="true"{% endif %}>
                 <input type="radio" name="product_id" value="{{ product.id }}" {% if selected_product_id == product.id %}checked{% endif %}>
                 <div class="product-card-body">
-                <header>
-                    <h2 data-product-headline>
+                <h2 data-product-headline>
                         {% for metric in product.metrics %}
                         <span data-metric="{{ metric.type }}"{% if metric.variant %} data-variant="{{ metric.variant }}"{% endif %} title="{{ metric.label }}" aria-label="{{ metric.label }}">
                             <img src="{{ url_for('static', filename='icons/' ~ metric.icon) }}" alt="" aria-hidden="true">
@@ -48,7 +45,6 @@
                     {% if product.plan_name %}
                     <p data-product-plan>{{ product.plan_name }}</p>
                     {% endif %}
-                </header>
                 {% if product.description %}
                 <p data-product-note>{{ product.description }}</p>
                 {% endif %}

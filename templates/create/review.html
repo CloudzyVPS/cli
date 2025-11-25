@@ -4,11 +4,9 @@
 
 {% block content %}
 <header class="page-header">
-    <div>
-        <p class="breadcrumb"><a href="{{ back_url }}">← Previous step</a></p>
-        <h1>Review and confirm</h1>
-        <p>Step 7 of 7 · Verify all details before provisioning</p>
-    </div>
+    <p class="breadcrumb"><a href="{{ back_url }}">← Previous step</a></p>
+    <h1>Review and confirm</h1>
+    <p>Step 7 of 7 · Verify all details before provisioning</p>
 </header>
 
 <form method="post" class="surface" novalidate>
@@ -37,11 +35,9 @@
     {% endif %}
     <section class="invoice" aria-labelledby="invoice-heading">
         <header>
-            <div>
-                <p class="invoice-tag">Provision summary</p>
-                <h2 id="invoice-heading">{{ region.name }} · {{ wizard.plan_type|capitalize }} plan</h2>
-                <p class="invoice-code">Hostnames: {{ wizard.hostnames|join(', ') }}</p>
-            </div>
+            <p class="invoice-tag">Provision summary</p>
+            <h2 id="invoice-heading">{{ region.name }} · {{ wizard.plan_type|capitalize }} plan</h2>
+            <p class="invoice-code">Hostnames: {{ wizard.hostnames|join(', ') }}</p>
             {% if metrics %}
             <div class="invoice-metrics">
                 {% for metric in metrics %}

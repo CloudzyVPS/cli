@@ -4,11 +4,9 @@
 
 {% block content %}
 <header class="page-header">
-    <div>
-        <p class="breadcrumb"><a href="{{ back_url }}">← Previous step</a></p>
-        <h1>Operating System Selection</h1>
-        <p>Step 5 of 7 · Choose the operating system to install</p>
-    </div>
+    <p class="breadcrumb"><a href="{{ back_url }}">← Previous step</a></p>
+    <h1>Operating System Selection</h1>
+    <p>Step 5 of 7 · Choose the operating system to install</p>
 </header>
 
 <form method="get" action="{{ url_for('create_step_6') }}" class="surface" novalidate>
@@ -47,14 +45,12 @@
                         <label class="product-card" role="listitem" data-product-card {% if selected_os_id == os_item.id %}data-selected="true"{% endif %}>
                             <input type="radio" name="os_id" value="{{ os_item.id }}" {% if selected_os_id == os_item.id %}checked{% endif %} required>
                             <div class="product-card-body">
-                                <header>
-                                    <h2 data-product-headline>
-                                        <span>{{ os_item.name }}</span>
-                                    </h2>
-                                    {% if os_item.family or os_item.arch %}
-                                        <p data-product-plan>{% if os_item.family %}{{ os_item.family }}{% endif %}{% if os_item.family and os_item.arch %} · {% endif %}{% if os_item.arch %}{{ os_item.arch }}{% endif %}</p>
-                                    {% endif %}
-                                </header>
+                                <h2 data-product-headline>
+                                    <span>{{ os_item.name }}</span>
+                                </h2>
+                                {% if os_item.family or os_item.arch %}
+                                    <p data-product-plan>{% if os_item.family %}{{ os_item.family }}{% endif %}{% if os_item.family and os_item.arch %} · {% endif %}{% if os_item.arch %}{{ os_item.arch }}{% endif %}</p>
+                                {% endif %}
                                 {% if os_item.minRam %}
                                     <dl data-product-facts>
                                         <div>
