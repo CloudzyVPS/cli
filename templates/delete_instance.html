@@ -21,9 +21,9 @@
     </div>
 </div>
 
-<section class="surface" data-delete-confirmation>
-    <section class="form-section">
-        <h3>Instance details</h3>
+<section data-delete-confirmation>
+    <fieldset>
+        <legend>Instance details</legend>
         <dl>
             <div>
                 <dt>Hostname</dt>
@@ -50,9 +50,9 @@
                 <dd>{{ instance.vcpuCount }} vCPU · {{ instance.ram }} MB RAM · {{ instance.disk }} GB Disk</dd>
             </div>
         </dl>
-    </section>
+    </fieldset>
 
-    <form method="post" class="delete-form">
+    <form method="post">
         <footer class="form-actions">
             <a class="button-secondary" href="{{ url_for('instance_detail', instance_id=instance.id) }}">Cancel</a>
             <button type="submit" class="button-danger">Permanently delete instance</button>

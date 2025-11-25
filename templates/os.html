@@ -8,8 +8,8 @@
     <p>Images available for provisioning. Review architecture, family, and requirements at a glance.</p>
 </header>
 
-<section class="surface" aria-labelledby="os-catalog">
-    <h2 id="os-catalog">OS catalog</h2>
+<section>
+    <h2>OS catalog</h2>
     <p>Select an image during provisioning or change-OS workflows.</p>
     {% if os_list %}
     <div class="data-grid" data-os-grid>
@@ -46,10 +46,7 @@
         {% endfor %}
     </div>
     {% else %}
-    <div class="empty-state">
-        <div class="icon" aria-hidden="true">💿</div>
-        <p>No operating systems were returned by the API.</p>
-    </div>
+    <p data-empty>💿 No operating systems were returned by the API.</p>
     {% endif %}
 </section>
 {% endblock %}

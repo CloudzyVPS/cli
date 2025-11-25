@@ -8,27 +8,27 @@
 </head>
 <body>
     {% if current_user %}
-    <nav class="site-nav">
+    <nav>
         {% set user_initial = (current_user.username or '')[:1]|upper %}
-        <div class="nav-header">
-            <div class="brand-cluster">
-                <div class="brand-mark" aria-label="Zyffiliate">
+        <header>
+            <div>
+                <b aria-label="Zyffiliate">
                     <span>ZY</span>
-                </div>
-                <p class="brand-name">Zyffiliate Control</p>
+                </b>
+                <p>Zyffiliate Control</p>
             </div>
-            <div class="nav-account" data-user-account>
-                <div class="account-avatar" aria-hidden="true">{{ user_initial if user_initial else 'U' }}</div>
-                <div class="account-details">
-                    <span class="account-name">{{ current_user.username }}</span>
-                    <span class="account-role">{{ current_user.role|title }}</span>
-                </div>
-                <form method="post" action="{{ url_for('logout') }}" class="account-action">
+            <div>
+                <i aria-hidden="true">{{ user_initial if user_initial else 'U' }}</i>
+                <aside>
+                    <span>{{ current_user.username }}</span>
+                    <span>{{ current_user.role|title }}</span>
+                </aside>
+                <form method="post" action="{{ url_for('logout') }}">
                     <button type="submit">Logout</button>
                 </form>
             </div>
-        </div>
-        <div class="nav-links" role="navigation">
+        </header>
+        <div role="navigation">
             <a href="{{ url_for('instances') }}">Instances</a>
             {% if current_user.role == 'owner' %}
             <a href="{{ url_for('create_step_1') }}">Create</a>
@@ -41,9 +41,9 @@
             <a href="{{ url_for('access_management') }}">Assignments</a>
             {% endif %}
         </div>
-        <div class="nav-footer">
-            <span class="api-hostname">{{ api_hostname }}</span>
-        </div>
+        <footer>
+            <span>{{ api_hostname }}</span>
+        </footer>
     </nav>
     {% endif %}
 

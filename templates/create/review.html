@@ -33,10 +33,10 @@
     <input type="hidden" name="diskInGB" value="{{ plan_state.diskInGB }}">
     <input type="hidden" name="bandwidthInTB" value="{{ plan_state.bandwidthInTB }}">
     {% endif %}
-    <section class="invoice" aria-labelledby="invoice-heading">
+    <section class="invoice">
         <header>
             <p class="invoice-tag">Provision summary</p>
-            <h2 id="invoice-heading">{{ region.name }} · {{ wizard.plan_type|capitalize }} plan</h2>
+            <h2>{{ region.name }} · {{ wizard.plan_type|capitalize }} plan</h2>
             <p class="invoice-code">Hostnames: {{ wizard.hostnames|join(', ') }}</p>
             {% if metrics %}
             <div class="invoice-metrics">
