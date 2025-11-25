@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+
+{% block title %}Create · Step 4{% endblock %}
+
+{% block content %}
+<header class="page-header">
+    <div>
+        <p class="breadcrumb"><a href="{{ back_url }}">← Back to step 3</a></p>
+        <h1>Optional Extras</h1>
+        <p>Step 4 of 7 · Add extra resources to your plan</p>
+    </div>
+</header>
+
+<form method="get" action="{{ url_for('create_step_5') }}" class="surface" novalidate>
+    {% for host in base_state.hostnames %}
+    <input type="hidden" name="hostnames" value="{{ host }}">
+    {% endfor %}
+    <input type="hidden" name="region" value="{{ base_state.region }}">
+    <input type="hidden" name="instance_class" value="{{ base_state.instance_class }}">
+    <input type="hidden" name="plan_type" value="{{ base_state.plan_type }}">
+    <input type="hidden" name="assign_ipv4" value="{{ '1' if base_state.assign_ipv4 else '0' }}">
+    <input type="hidden" name="assign_ipv6" value="{{ '1' if base_state.assign_ipv6 else '0' }}">
+    <input type="hidden" name="floating_ip_count" value="{{ base_state.floating_ip_count|default(0, true) }}">
+    {% for key_id in base_state.ssh_key_ids %}
+    <input type="hidden" name="ssh_key_ids" value="{{ key_id }}">
+    {% endfor %}
+    <input type="hidden" name="product_id" value="{{ product_id }}">
+
+    <fieldset class="form-section">
+        <legend class="form-label">Optional extras</legend>
+        <p class="help-text">Add extra resources beyond the base product. Leave at zero if not needed.</p>
+        <div class="fields-grid compact">
+            <div>
+                <label for="extra_disk">Extra Disk (GB)</label>
+                <input type="number" id="extra_disk" name="extra_disk" min="0" value="{{ extras.extra_disk }}">
+                <p class="help-text">Additional storage beyond the plan's included disk.</p>
+            </div>
+            <div>
+                <label for="extra_bandwidth">Extra Bandwidth (TB)</label>
+                <input type="number" id="extra_bandwidth" name="extra_bandwidth" min="0" value="{{ extras.extra_bandwidth }}">
+                <p class="help-text">Additional bandwidth beyond the plan's included amount.</p>
+            </div>
+        </div>
+    </fieldset>
+
+    <footer class="form-actions">
+        <a class="button-secondary" href="{{ back_url }}">Back</a>
+        <button type="submit">Continue</button>
+    </footer>
+</form>
+{% endblock %}

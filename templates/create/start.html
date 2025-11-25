@@ -6,18 +6,11 @@
 <header class="page-header">
     <div>
         <h1>Provision New Instance</h1>
-        <p>Step 1 · Describe the instance group, select a region, and choose how you want to size resources.</p>
+        <p>Step 1 of 7 · Select region, instance class, and plan type</p>
     </div>
 </header>
 
-<form method="post" class="surface" novalidate>
-    <fieldset class="form-section">
-        <legend>Hostnames</legend>
-        <label for="hostnames" class="form-label">Hostnames (comma-separated)</label>
-        <input type="text" id="hostnames" name="hostnames" value="{{ form_data.hostnames }}" required>
-        <p class="help-text">Up to 10 entries. Each hostname provisions a dedicated instance.</p>
-    </fieldset>
-
+<form method="get" action="{{ url_for('create_step_2') }}" class="surface" novalidate>
     <div class="fields-grid">
         <fieldset class="form-section">
             <legend class="form-label">Region</legend>
@@ -27,7 +20,7 @@
                 <option value="{{ region.id }}" {% if form_data.region == region.id %}selected{% endif %}>{{ region.name }}</option>
                 {% endfor %}
             </select>
-            <p class="help-text">Only active regions are listed. Switch regions to load tailored plans later.</p>
+            <p class="help-text">Only active regions are listed.</p>
         </fieldset>
         <fieldset class="form-section">
             <legend class="form-label">Instance class</legend>
@@ -40,51 +33,6 @@
             <p class="help-text">Use custom class types for specialised workloads.</p>
         </fieldset>
     </div>
-
-    <fieldset class="form-section">
-        <legend class="form-label">Networking & access</legend>
-        <div class="fields-grid compact">
-            <div>
-                <label for="floating_ip_count">Floating IP count</label>
-                <input type="number" id="floating_ip_count" name="floating_ip_count" min="0" max="5" value="{{ form_data.floating_ip_count|default('0', true) }}">
-                <p class="help-text">Allocate up to five floating IPs during provisioning.</p>
-            </div>
-            <div>
-                <span class="form-label">SSH keys</span>
-                {% if ssh_keys %}
-                {% set selected_keys = form_data.selected_ssh_keys or [] %}
-                <div class="checkbox-group" data-ssh-key-select>
-                    {% for key in ssh_keys %}
-                    <label>
-                        <input type="checkbox" name="ssh_key_ids" value="{{ key.id }}" {% if key.id is not none and (key.id|string) in selected_keys %}checked{% endif %}>
-                        <span>
-                            {{ key.name }}{% if key.id %} · #{{ key.id }}{% endif %}
-                        </span>
-                    </label>
-                    {% endfor %}
-                </div>
-                {% else %}
-                <p class="help-text">No SSH keys are registered yet.</p>
-                {% endif %}
-                <p class="help-text">Selection is optional; continue without keys by leaving everything unchecked.</p>
-                <p class="help-text"><a href="{{ url_for('ssh_keys') }}">Manage SSH keys</a></p>
-            </div>
-        </div>
-    </fieldset>
-
-    <fieldset class="form-section">
-        <legend class="form-label">IPv4 / IPv6 assignment</legend>
-        <div class="checkbox-group">
-            <label>
-                <input type="checkbox" name="assign_ipv4" value="on" {% if form_data.assign_ipv4 %}checked{% endif %}>
-                <span>Assign IPv4</span>
-            </label>
-            <label>
-                <input type="checkbox" name="assign_ipv6" value="on" {% if form_data.assign_ipv6 %}checked{% endif %}>
-                <span>Assign IPv6</span>
-            </label>
-        </div>
-    </fieldset>
 
     <fieldset class="form-section">
         <legend class="form-label">Plan type</legend>
@@ -102,7 +50,7 @@
     </fieldset>
 
     <footer class="form-actions">
-        <button type="submit">Continue to step 2</button>
+        <button type="submit">Continue</button>
     </footer>
 </form>
 {% endblock %}

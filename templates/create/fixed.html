@@ -1,22 +1,22 @@
 {% extends "base.html" %}
 
-{% block title %}Create · Step 2 (Product){% endblock %}
+{% block title %}Create · Step 3{% endblock %}
 
 {% block content %}
 <header class="page-header">
     <div>
-        <p class="breadcrumb"><a href="{{ back_to_start_url }}">← Back to step 1</a></p>
+        <p class="breadcrumb"><a href="{{ back_to_start_url }}">← Back to step 2</a></p>
         <h1>Select a product</h1>
-        <p>Step 2 · Choose a plan for {{ region.name }}. Extras default to zero and remain optional.</p>
+        <p>Step 3 of 7 · Choose a plan for {{ region.name }}</p>
     </div>
 </header>
 
 {% if not products %}
 <section class="surface">
-    <p>No products were returned for the selected region. <a href="{{ url_for('create_start') }}">Go back</a> to pick another region.</p>
+    <p>No products were returned for the selected region. <a href="{{ url_for('create_step_1') }}">Go back</a> to pick another region.</p>
 </section>
 {% else %}
-<form method="post" class="surface" novalidate>
+<form method="get" action="{{ url_for('create_step_4') }}" class="surface" novalidate>
     {% for host in base_state.hostnames %}
     <input type="hidden" name="hostnames" value="{{ host }}">
     {% endfor %}
@@ -83,24 +83,9 @@
         </div>
     </fieldset>
 
-    <fieldset class="form-section compact">
-        <legend class="form-label">Optional extras</legend>
-        <div class="fields-grid compact">
-            <div>
-                <label for="extra_disk">Extra Disk (GB)</label>
-                <input type="number" id="extra_disk" name="extra_disk" min="0" value="{{ extras.extra_disk }}">
-            </div>
-            <div>
-                <label for="extra_bandwidth">Extra Bandwidth (TB)</label>
-                <input type="number" id="extra_bandwidth" name="extra_bandwidth" min="0" value="{{ extras.extra_bandwidth }}">
-            </div>
-        </div>
-        <p class="help-text">Extras stay at zero unless you provide a value. They are billed in addition to the base product.</p>
-    </fieldset>
-
     <footer class="form-actions">
         <a class="button-secondary" href="{{ back_to_start_url }}">Back</a>
-        <button type="submit">Continue to review</button>
+        <button type="submit">Continue</button>
     </footer>
 </form>
 {% endif %}

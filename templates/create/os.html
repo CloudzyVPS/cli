@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+
+{% block title %}Create · Step 5{% endblock %}
+
+{% block content %}
+<header class="page-header">
+    <div>
+        <p class="breadcrumb"><a href="{{ back_url }}">← Back to previous step</a></p>
+        <h1>Operating System Selection</h1>
+        <p>Step 5 of 7 · Choose the operating system to install</p>
+    </div>
+</header>
+
+<form method="get" action="{{ url_for('create_step_6') }}" class="surface" novalidate>
+    {% for host in base_state.hostnames %}
+    <input type="hidden" name="hostnames" value="{{ host }}">
+    {% endfor %}
+    <input type="hidden" name="region" value="{{ base_state.region }}">
+    <input type="hidden" name="instance_class" value="{{ base_state.instance_class }}">
+    <input type="hidden" name="plan_type" value="{{ base_state.plan_type }}">
+    <input type="hidden" name="assign_ipv4" value="{{ '1' if base_state.assign_ipv4 else '0' }}">
+    <input type="hidden" name="assign_ipv6" value="{{ '1' if base_state.assign_ipv6 else '0' }}">
+    <input type="hidden" name="floating_ip_count" value="{{ base_state.floating_ip_count|default(0, true) }}">
+    {% for key_id in base_state.ssh_key_ids %}
+    <input type="hidden" name="ssh_key_ids" value="{{ key_id }}">
+    {% endfor %}
+    {% if base_state.plan_type == 'fixed' %}
+    <input type="hidden" name="product_id" value="{{ product_id }}">
+    <input type="hidden" name="extra_disk" value="{{ extra_disk }}">
+    <input type="hidden" name="extra_bandwidth" value="{{ extra_bandwidth }}">
+    {% else %}
+    <input type="hidden" name="cpu" value="{{ cpu }}">
+    <input type="hidden" name="ramInGB" value="{{ ramInGB }}">
+    <input type="hidden" name="diskInGB" value="{{ diskInGB }}">
+    {% if bandwidthInTB %}
+    <input type="hidden" name="bandwidthInTB" value="{{ bandwidthInTB }}">
+    {% endif %}
+    {% endif %}
+    <fieldset class="form-section" aria-label="Operating System catalog">
+        <legend class="form-label">Operating System</legend>
+        {% if not os_list %}
+            <p class="form-help error">No operating systems are available for this plan.</p>
+        {% else %}
+            <div class="product-grid" role="list">
+                {% for os_item in os_list %}
+                    {% if os_item.isActive %}
+                        <label class="product-card" role="listitem" data-product-card {% if selected_os_id == os_item.id %}data-selected="true"{% endif %}>
+                            <input type="radio" name="os_id" value="{{ os_item.id }}" {% if selected_os_id == os_item.id %}checked{% endif %} required>
+                            <div class="product-card-body">
+                                <header>
+                                    <h2 data-product-headline>
+                                        <span>{{ os_item.name }}</span>
+                                    </h2>
+                                    {% if os_item.family or os_item.arch %}
+                                        <p data-product-plan>{% if os_item.family %}{{ os_item.family }}{% endif %}{% if os_item.family and os_item.arch %} · {% endif %}{% if os_item.arch %}{{ os_item.arch }}{% endif %}</p>
+                                    {% endif %}
+                                </header>
+                                {% if os_item.minRam %}
+                                    <dl data-product-facts>
+                                        <div>
+                                            <dt>Min RAM</dt>
+                                            <dd>{{ (os_item.minRam | int / 1024) | round(1) }} GB</dd>
+                                        </div>
+                                    </dl>
+                                {% endif %}
+                                {% if os_item.isDefault %}
+                                    <footer>
+                                        <p data-product-tags>Default</p>
+                                    </footer>
+                                {% endif %}
+                            </div>
+                        </label>
+                    {% endif %}
+                {% endfor %}
+            </div>
+            <p class="help-text">Select the operating system to install on your instance.</p>
+        {% endif %}
+    </fieldset>
+
+    <footer class="form-actions">
+        <a class="button-secondary" href="{{ back_url }}">Back</a>
+        <button type="submit">Continue</button>
+    </footer>
+</form>
+{% endblock %}
+

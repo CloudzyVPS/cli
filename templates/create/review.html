@@ -1,13 +1,13 @@
 {% extends "base.html" %}
 
-{% block title %}Create · Review{% endblock %}
+{% block title %}Create · Step 7{% endblock %}
 
 {% block content %}
 <header class="page-header">
     <div>
-        <p class="breadcrumb"><a href="{{ back_url }}">← Back to step 2</a></p>
+        <p class="breadcrumb"><a href="{{ back_url }}">← Back to step 6</a></p>
         <h1>Review and confirm</h1>
-        <p>Step 3 · Verify resources, networking, and billing details before provisioning.</p>
+        <p>Step 7 of 7 · Verify all details before provisioning</p>
     </div>
 </header>
 
@@ -21,6 +21,7 @@
     <input type="hidden" name="assign_ipv4" value="{{ '1' if base_state.assign_ipv4 else '0' }}">
     <input type="hidden" name="assign_ipv6" value="{{ '1' if base_state.assign_ipv6 else '0' }}">
     <input type="hidden" name="floating_ip_count" value="{{ base_state.floating_ip_count|default(0, true) }}">
+    <input type="hidden" name="os_id" value="{{ base_state.os_id }}">
     {% for key_id in base_state.ssh_key_ids %}
     <input type="hidden" name="ssh_key_ids" value="{{ key_id }}">
     {% endfor %}
@@ -79,6 +80,15 @@
                 </dl>
             </section>
             {% endif %}
+            <section>
+                <h3>Operating System</h3>
+                <dl>
+                    <div>
+                        <dt>OS</dt>
+                        <dd>{%- if selected_os_display -%}{{ selected_os_display.name }}{% if selected_os_display.family %} ({{ selected_os_display.family }}){% endif %}{%- else -%}Not selected{%- endif -%}</dd>
+                    </div>
+                </dl>
+            </section>
             <section>
                 <h3>Networking</h3>
                 <dl>

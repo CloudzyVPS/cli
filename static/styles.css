@@ -1,6 +1,8 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
 
 :root {
+  color-scheme: light dark;
+  
   /* Primary color palette */
   --canvas-bg: #ffffff;
   --primary: #0073bb;
@@ -18,6 +20,12 @@
   --gray-800: #212529;
   --gray-900: #000000;
   --white: #ffffff;
+  --text-primary: #000000;
+  --text-secondary: #343a40;
+  --text-muted: #6c757d;
+  --input-bg: #ffffff;
+  --placeholder: rgba(108, 117, 125, 0.6);
+  --placeholder-focus: rgba(108, 117, 125, 0.4);
   --shadow-soft: 0 1px 3px rgba(0, 0, 0, 0.12), 0 1px 2px rgba(0, 0, 0, 0.24);
   --shadow-card: 0 4px 6px rgba(0, 0, 0, 0.07), 0 1px 3px rgba(0, 0, 0, 0.1);
   --shadow-focus: 0 0 0 3px rgba(0, 115, 187, 0.3);
@@ -34,6 +42,37 @@
   --transition-slow: 0.3s ease-in-out;
 }
 
+@media (prefers-color-scheme: dark) {
+  :root {
+    --canvas-bg: #0d1117;
+    --primary: #58a6ff;
+    --primary-light: #79c0ff;
+    --primary-dark: #388bfd;
+    --primary-darker: #1f6feb;
+    --gray-50: #21262d;
+    --gray-100: #30363d;
+    --gray-200: #373e47;
+    --gray-300: #444c56;
+    --gray-400: #545d68;
+    --gray-500: #768390;
+    --gray-600: #8b949e;
+    --gray-700: #adbac7;
+    --gray-800: #cdd9e5;
+    --gray-900: #f0f6fc;
+    --white: #161b22;
+    --text-primary: #f0f6fc;
+    --text-secondary: #cdd9e5;
+    --text-muted: #8b949e;
+    --input-bg: #0d1117;
+    --placeholder: rgba(139, 148, 158, 0.6);
+    --placeholder-focus: rgba(139, 148, 158, 0.4);
+    --shadow-soft: 0 1px 3px rgba(0, 0, 0, 0.5), 0 1px 2px rgba(0, 0, 0, 0.6);
+    --shadow-card: 0 4px 6px rgba(0, 0, 0, 0.4), 0 1px 3px rgba(0, 0, 0, 0.5);
+    --shadow-focus: 0 0 0 3px rgba(88, 166, 255, 0.4);
+    --border-color: #30363d;
+  }
+}
+
 *, *::before, *::after {
   box-sizing: border-box;
 }
@@ -44,7 +83,7 @@ body {
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   font-size: 0.875rem;
   line-height: 1.5;
-  color: var(--gray-900);
+  color: var(--text-primary);
   background-color: var(--canvas-bg);
   display: flex;
   flex-direction: column;
@@ -298,7 +337,7 @@ header.page-header {
 
 header.page-header p {
   margin: 0;
-  color: var(--gray-500);
+  color: var(--text-muted);
 }
 
 h1, h2, h3, h4, h5, h6 {
@@ -306,7 +345,7 @@ h1, h2, h3, h4, h5, h6 {
   font-weight: 600;
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   line-height: 1.3;
-  color: var(--gray-900);
+  color: var(--text-primary);
 }
 
 h1 { font-size: 2rem; }
@@ -322,13 +361,13 @@ h2 {
 
 p {
   margin: 0 0 var(--space-3);
-  color: var(--gray-700);
+  color: var(--text-secondary);
 }
 
 ul, ol {
   padding-left: var(--space-5);
   margin: 0 0 var(--space-3);
-  color: var(--gray-700);
+  color: var(--text-secondary);
 }
 
 li + li {
@@ -339,7 +378,7 @@ li + li {
 section,
 article,
 aside {
-  background: var(--white);
+  background: var(--canvas-bg);
   border: 1px solid var(--border-color);
   border-radius: var(--border-radius);
   padding: var(--space-5);
@@ -645,8 +684,8 @@ aside > form {
   position: relative;
   padding: var(--space-5);
   border-radius: var(--radius-lg);
-  background: rgba(255, 255, 255, 0.9);
-  border: 1px solid var(--glass-border);
+  background: var(--canvas-bg);
+  border: 1px solid var(--border-color);
   box-shadow: var(--shadow-soft);
   backdrop-filter: blur(24px) saturate(160%);
   -webkit-backdrop-filter: blur(24px) saturate(160%);
@@ -676,7 +715,7 @@ aside > form > * {
 
 label {
   font-weight: 500;
-  color: var(--gray-700);
+  color: var(--text-secondary);
 }
 
 input,
@@ -686,7 +725,8 @@ textarea {
   padding: var(--space-3);
   border-radius: var(--border-radius);
   border: 1px solid var(--border-color);
-  background: var(--white);
+  background: var(--input-bg);
+  color: var(--text-primary);
   font-size: 1rem;
   transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
 }
@@ -722,13 +762,13 @@ textarea {
 
 input::placeholder,
 textarea::placeholder {
-  color: rgba(0, 115, 187, 0.45);
+  color: var(--placeholder);
   transition: color var(--transition-fast);
 }
 
 input:focus::placeholder,
 textarea:focus::placeholder {
-  color: rgba(0, 115, 187, 0.25);
+  color: var(--placeholder-focus);
 }
 
 input[type="checkbox"],
@@ -1055,13 +1095,13 @@ footer {
   gap: var(--space-2);
   padding: var(--space-4);
   border-radius: var(--radius-md);
-  background: rgba(255, 255, 255, 0.7);
-  border: 1px solid rgba(148, 163, 184, 0.25);
+  background: var(--canvas-bg);
+  border: 1px solid var(--border-color);
 }
 
 .form-label {
   font-weight: 600;
-  color: var(--gray-700);
+  color: var(--text-secondary);
 }
 
 .fields-grid {
@@ -1106,8 +1146,8 @@ footer {
   padding-left: calc(var(--space-4) + 22px);
   border-radius: var(--radius-lg);
   border: 1px solid var(--border-color);
-  background: var(--white);
-  color: var(--gray-700);
+  background: var(--input-bg);
+  color: var(--text-secondary);
   font-weight: 500;
   transition: background var(--transition-slow), border-color var(--transition-slow), color var(--transition-slow), box-shadow var(--transition-slow);
 }
@@ -1120,8 +1160,8 @@ footer {
   top: 50%;
   width: 18px;
   height: 18px;
-  border: 2px solid var(--gray-400);
-  background: var(--white);
+  border: 2px solid var(--border-color);
+  background: var(--input-bg);
   box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.05);
   transform: translateY(-50%);
   transition: background var(--transition-fast), border-color var(--transition-fast), box-shadow var(--transition-fast);
@@ -1212,7 +1252,7 @@ footer {
 .breadcrumb {
   margin: 0 0 var(--space-2);
   font-size: 0.85rem;
-  color: var(--gray-500);
+  color: var(--text-muted);
 }
 
 .breadcrumb a {
@@ -1266,7 +1306,7 @@ footer {
   position: relative;
   border-radius: var(--border-radius);
   border: 1px solid var(--border-color);
-  background: var(--white);
+  background: var(--canvas-bg);
   box-shadow: var(--shadow-soft);
   overflow: hidden;
   cursor: pointer;
@@ -1533,7 +1573,7 @@ footer {
 .help-text {
   margin: 0;
   font-size: 0.85rem;
-  color: var(--gray-500);
+  color: var(--text-muted);
 }
 
 div[data-admin-grid] {

@@ -87,7 +87,7 @@ def get_current_user():
 def resolve_default_endpoint(user):
     if not user:
         return 'login'
-    return 'create_start' if user.get('role') == 'owner' else 'instances'
+    return 'create_step_1' if user.get('role') == 'owner' else 'instances'
 
 
 def login_required(view):
@@ -135,14 +135,26 @@ def api_call(method, endpoint, data=None, params=None):
     url = f"{API_BASE_URL}{endpoint}"
     headers = {'API-Token': API_TOKEN}
     logging.info(f"API Request: {method} {url} - Params: {params} - Data: {data}")
-    if method == 'GET':
-        response = requests.get(url, headers=headers, params=params)
-    elif method == 'POST':
-        response = requests.post(url, headers=headers, json=data)
-    elif method == 'DELETE':
-        response = requests.delete(url, headers=headers)
-    else:
-        raise ValueError('Unsupported HTTP method')
+    
+    # SSL verification settings - can be disabled via environment variable for development
+    verify_ssl = os.getenv('API_VERIFY_SSL', 'true').lower() == 'true'
+    
+    try:
+        if method == 'GET':
+            response = requests.get(url, headers=headers, params=params, verify=verify_ssl, timeout=30)
+        elif method == 'POST':
+            response = requests.post(url, headers=headers, json=data, verify=verify_ssl, timeout=30)
+        elif method == 'DELETE':
+            response = requests.delete(url, headers=headers, verify=verify_ssl, timeout=30)
+        else:
+            raise ValueError('Unsupported HTTP method')
+    except requests.exceptions.SSLError as e:
+        logging.error(f"SSL Error: {method} {url} - {str(e)}")
+        return {'code': 'FAILED', 'detail': 'SSL connection error. Please check your connection or set API_VERIFY_SSL=false for development.', 'data': {}}
+    except requests.exceptions.RequestException as e:
+        logging.error(f"Request Error: {method} {url} - {str(e)}")
+        return {'code': 'FAILED', 'detail': f'Network error: {str(e)}', 'data': {}}
+    
     try:
         payload = response.json()
     except ValueError:
@@ -288,6 +300,7 @@ def parse_wizard_base(source):
     if floating_ip_count is None:
         floating_ip_count = 0
     ssh_key_ids = parse_int_list(source.getlist('ssh_key_ids'))
+    os_id = (source.get('os_id') or '').strip()
 
     return {
         'hostnames': hostnames,
@@ -298,6 +311,7 @@ def parse_wizard_base(source):
         'assign_ipv6': assign_ipv6,
         'floating_ip_count': floating_ip_count,
         'ssh_key_ids': ssh_key_ids,
+        'os_id': os_id,
     }
 
 
@@ -316,6 +330,8 @@ def build_base_query_pairs(state):
         pairs.append(('floating_ip_count', str(floating)))
     for key_id in state.get('ssh_key_ids', []):
         pairs.append(('ssh_key_ids', str(key_id)))
+    if state.get('os_id'):
+        pairs.append(('os_id', state['os_id']))
     return pairs
 
 
@@ -327,11 +343,39 @@ def build_query_string(pairs):
 def load_regions():
     response = api_call('GET', '/v1/regions')
     raw_regions = response.get('data', []) if response.get('code') == 'OKAY' else []
+    # Only return active regions - filter out inactive ones
     active = [region for region in raw_regions if region.get('isActive')]
-    regions = active or raw_regions
+    regions = active  # Always use active regions, even if empty
     lookup = {region.get('id'): region for region in regions if region.get('id')}
     configs = {identifier: region.get('config', {}) or {} for identifier, region in lookup.items()}
     return regions, lookup, configs
+
+
+def load_os_list(min_ram_in_mb: int = None, only_actives: bool = True):
+    """Load OS list from the backend with optional filters."""
+    params = {'action': 'CREATE'}
+    if min_ram_in_mb is not None:
+        params['minRam'] = min_ram_in_mb
+    if only_actives:
+        params['onlyActives'] = True
+    
+    response = api_call('GET', '/v1/os', params=params)
+    payload = response.get('data', {}).get('os', []) if response.get('code') == 'OKAY' else []
+    
+    normalized = []
+    for item in payload or []:
+        if not isinstance(item, dict):
+            continue
+        normalized.append({
+            'id': item.get('id') or '',
+            'name': item.get('name') or '',
+            'family': item.get('family') or '',
+            'arch': item.get('arch') or '',
+            'minRam': item.get('minRam') or 0,
+            'isActive': item.get('isActive', False),
+            'isDefault': item.get('isDefault', False),
+        })
+    return normalized
 
 
 def load_ssh_keys(customer_id: str = None):
@@ -750,108 +794,31 @@ def instances():
 
 @app.route('/create', methods=['GET', 'POST'])
 @owner_required
-def create_start():
+def create_redirect():
+    """Legacy route - redirects to step-1"""
+    return redirect(url_for('create_step_1'))
+
+
+@app.route('/create/step-1', methods=['GET'])
+@owner_required
+def create_step_1():
+    """Page 1: Region selection, instance class, plan type"""
     if request.args.get('reset') == '1':
-        return redirect(url_for('create_start'))
+        return redirect(url_for('create_step_1'))
 
     regions, region_lookup, _ = load_regions()
     if not regions:
         flash('No regions were returned by the developer API.')
-    customer_id = (request.args.get('customer_id') or determine_customer_context())
-    ssh_keys = load_ssh_keys(customer_id=customer_id)
-    available_ssh_key_ids = {str(key['id']) for key in ssh_keys if key.get('id') is not None}
 
     base_state = parse_wizard_base(request.args)
     if not base_state['region'] and regions:
         base_state['region'] = regions[0].get('id')
 
     form_data = {
-        'hostnames': ', '.join(base_state['hostnames']),
         'region': base_state['region'] or '',
         'instance_class': base_state['instance_class'],
-        'assign_ipv4': base_state['assign_ipv4'],
-        'assign_ipv6': base_state['assign_ipv6'],
         'plan_type': base_state['plan_type'],
-        'floating_ip_count': str(base_state['floating_ip_count']),
-        'selected_ssh_keys': [str(item) for item in base_state['ssh_key_ids']],
     }
-
-    if request.method == 'POST':
-        hostnames_raw = request.form.get('hostnames', '')
-        hostnames = [h.strip() for h in hostnames_raw.split(',') if h.strip()]
-        selected_region = request.form.get('region', '').strip()
-        instance_class = request.form.get('instance_class', 'default').strip() or 'default'
-        plan_type = request.form.get('plan_type', 'fixed')
-        if plan_type not in {'fixed', 'custom'}:
-            plan_type = 'fixed'
-        assign_ipv4 = 'assign_ipv4' in request.form
-        assign_ipv6 = 'assign_ipv6' in request.form
-        floating_ip_raw = request.form.get('floating_ip_count', '').strip()
-        selected_key_values = [value.strip() for value in request.form.getlist('ssh_key_ids') if value.strip()]
-
-        errors = []
-
-        if not hostnames:
-            errors.append('Provide at least one hostname (comma-separated).')
-        if len(hostnames) > 10:
-            errors.append('You can provision at most ten hostnames per request.')
-        if not selected_region or (region_lookup and selected_region not in region_lookup):
-            errors.append('Select a deployment region.')
-
-        floating_ip_count = 0
-        if floating_ip_raw:
-            try:
-                floating_ip_count = int(floating_ip_raw)
-            except ValueError:
-                errors.append('Floating IP count must be a number between 0 and 5.')
-                floating_ip_count = 0
-            else:
-                if floating_ip_count < 0 or floating_ip_count > 5:
-                    errors.append('Floating IP count must be a number between 0 and 5.')
-
-        ssh_key_ids = []
-        for token in selected_key_values:
-            if not token.isdigit():
-                errors.append('Invalid SSH key selection detected.')
-                ssh_key_ids = []
-                break
-            if available_ssh_key_ids and token not in available_ssh_key_ids:
-                errors.append('Selected SSH key is no longer available.')
-                ssh_key_ids = []
-                break
-            ssh_key_ids.append(int(token))
-
-        if errors:
-            for message in errors:
-                flash(message)
-        else:
-            base_state = {
-                'hostnames': hostnames,
-                'region': selected_region,
-                'instance_class': instance_class,
-                'plan_type': plan_type,
-                'assign_ipv4': assign_ipv4,
-                'assign_ipv6': assign_ipv6,
-                'floating_ip_count': floating_ip_count,
-                'ssh_key_ids': ssh_key_ids,
-            }
-            query_pairs = build_base_query_pairs(base_state)
-            query_string = build_query_string(query_pairs)
-            target = url_for('create_fixed') if plan_type == 'fixed' else url_for('create_custom')
-            if query_string:
-                target = f"{target}?{query_string}"
-            return redirect(target)
-
-        form_data.update({
-            'hostnames': hostnames_raw,
-            'region': selected_region or base_state['region'] or form_data['region'],
-            'instance_class': instance_class,
-            'plan_type': plan_type,
-            'assign_ipv4': assign_ipv4,
-            'assign_ipv6': assign_ipv6,
-            'floating_ip_count': floating_ip_raw if floating_ip_raw else '0',
-            'selected_ssh_keys': selected_key_values,
-        })
 
     if regions and not form_data['region']:
         form_data['region'] = regions[0]['id']
@@ -860,34 +827,171 @@ def create_start():
         'create/start.html',
         regions=regions,
         form_data=form_data,
-        ssh_keys=ssh_keys,
     )
 
 
-@app.route('/create/fixed', methods=['GET', 'POST'])
+@app.route('/create/step-2', methods=['GET'])
 @owner_required
-def create_fixed():
-    source = request.form if request.method == 'POST' else request.args
+def create_step_2():
+    """Page 2: Hostnames and IP Assignment"""
+    source = request.args
+    base_state = parse_wizard_base(source)
+    base_pairs = build_base_query_pairs(base_state)
+
+    if not base_state['region']:
+        flash('Please start the wizard from step 1 to select a region.')
+        return redirect(url_for('create_step_1'))
+
+    regions, region_lookup, _ = load_regions()
+    region = region_lookup.get(base_state['region'])
+    if not region:
+        flash('Selected region is no longer available.')
+        return redirect(url_for('create_step_1'))
+
+    form_data = {
+        'hostnames': ', '.join(base_state['hostnames']),
+        'assign_ipv4': base_state['assign_ipv4'],
+        'assign_ipv6': base_state['assign_ipv6'],
+        'floating_ip_count': str(base_state['floating_ip_count']),
+    }
+
+    back_query = build_query_string(base_pairs)
+    back_url = url_for('create_step_1')
+    if back_query:
+        back_url = f"{back_url}?{back_query}"
+
+    return render_template(
+        'create/hostnames.html',
+        form_data=form_data,
+        region=region,
+        back_url=back_url,
+        base_state=base_state,
+    )
+
+
+@app.route('/create/step-3', methods=['GET'])
+@owner_required
+def create_step_3():
+    """Page 3: Resource Requirements / Product Selection"""
+    source = request.args
     base_state = parse_wizard_base(source)
     base_pairs = build_base_query_pairs(base_state)
 
     if not base_state['hostnames'] or not base_state['region']:
-        flash('Start the wizard from step 1.')
+        flash('Please start the wizard from step 1.')
         query = build_query_string(base_pairs)
-        target = url_for('create_start')
+        target = url_for('create_step_1')
         if query:
             target = f"{target}?{query}"
         return redirect(target)
 
-    if base_state['plan_type'] != 'fixed':
+    regions, region_lookup, region_configs = load_regions()
+    region = region_lookup.get(base_state['region'])
+    if not region:
+        flash('Selected region is no longer available.')
         query = build_query_string(base_pairs)
-        if base_state['plan_type'] == 'custom':
-            target = url_for('create_custom')
-            if query:
-                target = f"{target}?{query}"
-            return redirect(target)
-        flash('Choose a plan type before selecting a product.')
-        target = url_for('create_start')
+        target = url_for('create_step_1')
+        if query:
+            target = f"{target}?{query}"
+        return redirect(target)
+
+    plan_type = base_state['plan_type']
+    if plan_type == 'fixed':
+        # Fixed plan - show products
+        products_response = api_call('GET', '/v1/products', params={'regionId': region.get('id')})
+        products_raw = products_response.get('data', []) if products_response.get('code') == 'OKAY' else []
+        products = [build_product_view(item, region_lookup) for item in products_raw]
+
+        selected_product_id = source.get('product_id', '').strip()
+
+        back_query = build_query_string(base_pairs)
+        back_url = url_for('create_step_2')
+        if back_query:
+            back_url = f"{back_url}?{back_query}"
+
+        return render_template(
+            'create/fixed.html',
+            region=region,
+            products=products,
+            selected_product_id=selected_product_id,
+            base_state=base_state,
+            back_to_start_url=back_url,
+        )
+    else:
+        # Custom plan - show resource inputs
+        config = region_configs.get(region.get('id'), {}) or {}
+
+        def threshold(raw_value, fallback):
+            try:
+                numeric = int(raw_value)
+                return max(numeric, fallback)
+            except (TypeError, ValueError):
+                return fallback
+
+        minimums = {
+            'ram': threshold(config.get('ramThresholdInGB'), 1),
+            'disk': threshold(config.get('diskThresholdInGB'), 1),
+        }
+        requirements = []
+        if config.get('ramThresholdInGB'):
+            requirements.append(f"RAM ≥ {config['ramThresholdInGB']} GB")
+        if config.get('diskThresholdInGB'):
+            requirements.append(f"Disk ≥ {config['diskThresholdInGB']} GB")
+
+        form_values = {
+            'cpu': source.get('cpu', '').strip(),
+            'ramInGB': source.get('ramInGB', '').strip(),
+            'diskInGB': source.get('diskInGB', '').strip(),
+            'bandwidthInTB': source.get('bandwidthInTB', '').strip(),
+        }
+
+        back_query = build_query_string(base_pairs)
+        back_url = url_for('create_step_2')
+        if back_query:
+            back_url = f"{back_url}?{back_query}"
+
+        return render_template(
+            'create/custom.html',
+            region=region,
+            requirements=requirements,
+            minimums=minimums,
+            form_values=form_values,
+            base_state=base_state,
+            back_to_start_url=back_url,
+        )
+
+
+@app.route('/create/step-4', methods=['GET'])
+@owner_required
+def create_step_4():
+    """Page 4: Extras (Fixed Plans Only)"""
+    source = request.args
+    base_state = parse_wizard_base(source)
+    base_pairs = build_base_query_pairs(base_state)
+
+    if not base_state['hostnames'] or not base_state['region']:
+        flash('Please start the wizard from step 1.')
+        query = build_query_string(base_pairs)
+        target = url_for('create_step_1')
+        if query:
+            target = f"{target}?{query}"
+        return redirect(target)
+
+    plan_type = base_state['plan_type']
+    
+    # Only fixed plans have extras - custom plans skip to step 5
+    if plan_type != 'fixed':
+        query = build_query_string(base_pairs)
+        target = url_for('create_step_5')
+        if query:
+            target = f"{target}?{query}"
+        return redirect(target)
+
+    product_id = source.get('product_id', '').strip()
+    if not product_id:
+        flash('Select a product before continuing.')
+        query = build_query_string(base_pairs)
+        target = url_for('create_step_3')
         if query:
             target = f"{target}?{query}"
         return redirect(target)
@@ -897,237 +1001,246 @@ def create_fixed():
     if not region:
         flash('Selected region is no longer available.')
         query = build_query_string(base_pairs)
-        target = url_for('create_start')
+        target = url_for('create_step_1')
         if query:
             target = f"{target}?{query}"
         return redirect(target)
 
-    products_response = api_call('GET', '/v1/products', params={'regionId': region.get('id')})
-    products_raw = products_response.get('data', []) if products_response.get('code') == 'OKAY' else []
-    products = [build_product_view(item, region_lookup) for item in products_raw]
-    product_ids = {product['id'] for product in products}
-
-    selected_product_id = source.get('product_id', '').strip()
     extras_defaults = {
         'extra_disk': source.get('extra_disk', '0').strip() or '0',
         'extra_bandwidth': source.get('extra_bandwidth', '0').strip() or '0',
     }
 
-    if request.method == 'POST':
-        selected_product_id = request.form.get('product_id', '').strip()
-        disk_raw = request.form.get('extra_disk', '0').strip()
-        bandwidth_raw = request.form.get('extra_bandwidth', '0').strip()
+    back_pairs = base_pairs + [('product_id', product_id)]
+    back_query = build_query_string(back_pairs)
+    back_url = url_for('create_step_3')
+    if back_query:
+        back_url = f"{back_url}?{back_query}"
 
-        errors = []
-        if not products:
-            errors.append('No products are available for this region.')
-        if not selected_product_id:
-            errors.append('Select a product before continuing.')
-        elif selected_product_id not in product_ids:
-            errors.append('Selected product is no longer available for this region.')
+    return render_template(
+        'create/extras.html',
+        extras=extras_defaults,
+        product_id=product_id,
+        base_state=base_state,
+        back_url=back_url,
+    )
 
-        def parse_non_negative(raw_value, label):
-            if raw_value == '':
-                return 0
-            try:
-                value = int(raw_value)
-            except ValueError:
-                errors.append(f'{label} must be a non-negative number.')
-                return 0
-            if value < 0:
-                errors.append(f'{label} must be a non-negative number.')
-                return 0
-            return value
 
-        extra_disk = parse_non_negative(disk_raw, 'Extra disk (GB)')
-        extra_bandwidth = parse_non_negative(bandwidth_raw, 'Extra bandwidth (TB)')
+@app.route('/create/step-5', methods=['GET'])
+@owner_required
+def create_step_5():
+    """Page 5: OS Selection"""
+    source = request.args
+    base_state = parse_wizard_base(source)
+    base_pairs = build_base_query_pairs(base_state)
 
-        extras_defaults['extra_disk'] = disk_raw or '0'
-        extras_defaults['extra_bandwidth'] = bandwidth_raw or '0'
+    if not base_state['hostnames'] or not base_state['region']:
+        flash('Please start the wizard from step 1.')
+        query = build_query_string(base_pairs)
+        target = url_for('create_step_1')
+        if query:
+            target = f"{target}?{query}"
+        return redirect(target)
 
-        if errors:
-            for message in errors:
-                flash(message)
-        else:
-            query_pairs = base_pairs + [
-                ('product_id', selected_product_id),
-                ('extra_disk', str(extra_disk)),
-                ('extra_bandwidth', str(extra_bandwidth)),
-            ]
-            query = build_query_string(query_pairs)
-            target = url_for('create_review')
+    regions, region_lookup, _ = load_regions()
+    region = region_lookup.get(base_state['region'])
+    if not region:
+        flash('Selected region is no longer available.')
+        query = build_query_string(base_pairs)
+        target = url_for('create_step_1')
+        if query:
+            target = f"{target}?{query}"
+        return redirect(target)
+
+    plan_type = base_state['plan_type']
+    
+    # Calculate RAM in MB for OS filtering
+    if plan_type == 'fixed':
+        product_id = source.get('product_id', '').strip()
+        if not product_id:
+            flash('Select a product before selecting OS.')
+            query = build_query_string(base_pairs)
+            target = url_for('create_step_3')
+            if query:
+                target = f"{target}?{query}"
+            return redirect(target)
+        
+        products_response = api_call('GET', '/v1/products', params={'regionId': region.get('id')})
+        products_raw = products_response.get('data', []) if products_response.get('code') == 'OKAY' else []
+        product_lookup = {str(item.get('id')): item for item in products_raw}
+        product_raw = product_lookup.get(str(product_id))
+        
+        if not product_raw:
+            flash('Selected product is no longer available.')
+            query = build_query_string(base_pairs)
+            target = url_for('create_step_3')
+            if query:
+                target = f"{target}?{query}"
+            return redirect(target)
+        
+        plan_spec = product_raw.get('plan', {}).get('specification', {})
+        ram_in_mb = int((plan_spec.get('ram') or plan_spec.get('ramInMB') or 1024) * 1024)
+    else:
+        ram_value_raw = source.get('ramInGB', '').strip()
+        if not ram_value_raw:
+            flash('Define RAM before selecting OS.')
+            query = build_query_string(base_pairs)
+            target = url_for('create_step_3')
+            if query:
+                target = f"{target}?{query}"
+            return redirect(target)
+        try:
+            ram_value = int(ram_value_raw)
+            ram_in_mb = int(ram_value * 1024)
+        except ValueError:
+            flash('Invalid RAM value.')
+            query = build_query_string(base_pairs)
+            target = url_for('create_step_3')
             if query:
                 target = f"{target}?{query}"
             return redirect(target)
 
-    back_query = build_query_string(base_pairs)
-    back_to_start_url = url_for('create_start')
-    if back_query:
-        back_to_start_url = f"{back_to_start_url}?{back_query}"
+    # Load OS list
+    os_list = load_os_list(min_ram_in_mb=ram_in_mb, only_actives=True)
+    os_id = source.get('os_id', '').strip()
+    
+    # Auto-select default OS if available
+    if not os_id and os_list:
+        default_os = next((os for os in os_list if os.get('isDefault')), None)
+        if default_os:
+            os_id = default_os.get('id', '')
 
-    return render_template(
-        'create/fixed.html',
-        region=region,
-        products=products,
-        selected_product_id=selected_product_id,
-        extras=extras_defaults,
-        base_state=base_state,
-        back_to_start_url=back_to_start_url,
-    )
+    back_query = build_query_string(base_pairs)
+    if plan_type == 'fixed':
+        # Fixed plans come from step 4 (extras)
+        back_url = url_for('create_step_4')
+    else:
+        # Custom plans come from step 3 (resource definition)
+        back_url = url_for('create_step_3')
+    if back_query:
+        back_url = f"{back_url}?{back_query}"
+
+    # Prepare template variables
+    template_vars = {
+        'os_list': os_list,
+        'selected_os_id': os_id,
+        'base_state': base_state,
+        'back_url': back_url,
+    }
+    
+    # Add plan-specific variables
+    if plan_type == 'fixed':
+        template_vars['product_id'] = source.get('product_id', '')
+        template_vars['extra_disk'] = source.get('extra_disk', '0')
+        template_vars['extra_bandwidth'] = source.get('extra_bandwidth', '0')
+    else:
+        template_vars['cpu'] = source.get('cpu', '')
+        template_vars['ramInGB'] = source.get('ramInGB', '')
+        template_vars['diskInGB'] = source.get('diskInGB', '')
+        template_vars['bandwidthInTB'] = source.get('bandwidthInTB', '')
+
+    return render_template('create/os.html', **template_vars)
+
+
+@app.route('/create/step-6', methods=['GET'])
+@owner_required
+def create_step_6():
+    """Page 6: SSH Keys"""
+    source = request.args
+    base_state = parse_wizard_base(source)
+    base_pairs = build_base_query_pairs(base_state)
+
+    if not base_state['hostnames'] or not base_state['region']:
+        flash('Please start the wizard from step 1.')
+        query = build_query_string(base_pairs)
+        target = url_for('create_step_1')
+        if query:
+            target = f"{target}?{query}"
+        return redirect(target)
+
+    if not base_state.get('os_id'):
+        flash('Select an OS before continuing.')
+        query = build_query_string(base_pairs)
+        target = url_for('create_step_4')
+        if query:
+            target = f"{target}?{query}"
+        return redirect(target)
+
+    customer_id = (request.args.get('customer_id') or determine_customer_context())
+    ssh_keys = load_ssh_keys(customer_id=customer_id)
+    available_ssh_key_ids = {str(key['id']) for key in ssh_keys if key.get('id') is not None}
+    
+    selected_ssh_key_ids = [str(item) for item in base_state['ssh_key_ids']]
+
+    back_query = build_query_string(base_pairs)
+    back_url = url_for('create_step_5')
+    if back_query:
+        back_url = f"{back_url}?{back_query}"
+
+    # Prepare template variables
+    template_vars = {
+        'ssh_keys': ssh_keys,
+        'selected_ssh_key_ids': selected_ssh_key_ids,
+        'base_state': base_state,
+        'back_url': back_url,
+    }
+    
+    # Add plan-specific variables
+    plan_type = base_state['plan_type']
+    if plan_type == 'fixed':
+        template_vars['product_id'] = source.get('product_id', '')
+        template_vars['extra_disk'] = source.get('extra_disk', '0')
+        template_vars['extra_bandwidth'] = source.get('extra_bandwidth', '0')
+    else:
+        template_vars['cpu'] = source.get('cpu', '')
+        template_vars['ramInGB'] = source.get('ramInGB', '')
+        template_vars['diskInGB'] = source.get('diskInGB', '')
+        template_vars['bandwidthInTB'] = source.get('bandwidthInTB', '')
+
+    return render_template('create/ssh_keys.html', **template_vars)
+
+
+@app.route('/create/fixed', methods=['GET', 'POST'])
+@owner_required
+def create_fixed():
+    """Legacy route - redirects to step-3"""
+    source = request.form if request.method == 'POST' else request.args
+    base_state = parse_wizard_base(source)
+    base_state['plan_type'] = 'fixed'
+    query_pairs = build_base_query_pairs(base_state)
+    query_string = build_query_string(query_pairs)
+    target = url_for('create_step_3')
+    if query_string:
+        target = f"{target}?{query_string}"
+    return redirect(target)
 
 
 @app.route('/create/custom', methods=['GET', 'POST'])
 @owner_required
 def create_custom():
+    """Legacy route - redirects to step-3"""
     source = request.form if request.method == 'POST' else request.args
     base_state = parse_wizard_base(source)
-    base_pairs = build_base_query_pairs(base_state)
-
-    if not base_state['hostnames'] or not base_state['region']:
-        flash('Start the wizard from step 1.')
-        query = build_query_string(base_pairs)
-        target = url_for('create_start')
-        if query:
-            target = f"{target}?{query}"
-        return redirect(target)
-
-    if base_state['plan_type'] != 'custom':
-        query = build_query_string(base_pairs)
-        if base_state['plan_type'] == 'fixed':
-            target = url_for('create_fixed')
-            if query:
-                target = f"{target}?{query}"
-            return redirect(target)
-        flash('Choose a plan type before defining custom resources.')
-        target = url_for('create_start')
-        if query:
-            target = f"{target}?{query}"
-        return redirect(target)
-
-    regions, region_lookup, region_configs = load_regions()
-    region = region_lookup.get(base_state['region'])
-    if not region:
-        flash('Selected region is no longer available.')
-        query = build_query_string(base_pairs)
-        target = url_for('create_start')
-        if query:
-            target = f"{target}?{query}"
-        return redirect(target)
-
-    config = region_configs.get(region.get('id'), {}) or {}
-
-    def threshold(raw_value, fallback):
-        try:
-            numeric = int(raw_value)
-            return max(numeric, fallback)
-        except (TypeError, ValueError):
-            return fallback
-
-    minimums = {
-        'ram': threshold(config.get('ramThresholdInGB'), 1),
-        'disk': threshold(config.get('diskThresholdInGB'), 1),
-    }
-    requirements = []
-    if config.get('ramThresholdInGB'):
-        requirements.append(f"RAM ≥ {config['ramThresholdInGB']} GB")
-    if config.get('diskThresholdInGB'):
-        requirements.append(f"Disk ≥ {config['diskThresholdInGB']} GB")
-
-    form_values = {
-        'cpu': source.get('cpu', '').strip(),
-        'ramInGB': source.get('ramInGB', '').strip(),
-        'diskInGB': source.get('diskInGB', '').strip(),
-        'bandwidthInTB': source.get('bandwidthInTB', '').strip(),
-    }
-
-    if request.method == 'POST':
-        errors = []
-
-        def parse_required_int(field, label, minimum):
-            raw_value = request.form.get(field, '').strip()
-            if not raw_value:
-                errors.append(f'{label} is required.')
-                return None
-            try:
-                value = int(raw_value)
-            except ValueError:
-                errors.append(f'{label} must be a whole number.')
-                return None
-            if value < minimum:
-                errors.append(f'{label} must be at least {minimum}.')
-                return None
-            return value
-
-        def parse_optional_int(field, label, minimum):
-            raw_value = request.form.get(field, '').strip()
-            if not raw_value:
-                return None
-            try:
-                value = int(raw_value)
-            except ValueError:
-                errors.append(f'{label} must be a whole number.')
-                return None
-            if value < minimum:
-                errors.append(f'{label} must be at least {minimum}.')
-                return None
-            return value
-
-        cpu_value = parse_required_int('cpu', 'CPU', 1)
-        ram_value = parse_required_int('ramInGB', 'RAM (GB)', minimums['ram'])
-        disk_value = parse_required_int('diskInGB', 'Disk (GB)', minimums['disk'])
-        bandwidth_value = parse_optional_int('bandwidthInTB', 'Bandwidth (TB)', 1)
-
-        form_values.update({
-            'cpu': request.form.get('cpu', '').strip(),
-            'ramInGB': request.form.get('ramInGB', '').strip(),
-            'diskInGB': request.form.get('diskInGB', '').strip(),
-            'bandwidthInTB': request.form.get('bandwidthInTB', '').strip(),
-        })
-
-        if errors:
-            for message in errors:
-                flash(message)
-        else:
-            query_pairs = base_pairs + [
-                ('cpu', str(cpu_value)),
-                ('ramInGB', str(ram_value)),
-                ('diskInGB', str(disk_value)),
-            ]
-            if bandwidth_value is not None:
-                query_pairs.append(('bandwidthInTB', str(bandwidth_value)))
-            query = build_query_string(query_pairs)
-            target = url_for('create_review')
-            if query:
-                target = f"{target}?{query}"
-            return redirect(target)
-
-    back_query = build_query_string(base_pairs)
-    back_to_start_url = url_for('create_start')
-    if back_query:
-        back_to_start_url = f"{back_to_start_url}?{back_query}"
-
-    return render_template(
-        'create/custom.html',
-        region=region,
-        requirements=requirements,
-        minimums=minimums,
-        form_values=form_values,
-        base_state=base_state,
-        back_to_start_url=back_to_start_url,
-    )
+    base_state['plan_type'] = 'custom'
+    query_pairs = build_base_query_pairs(base_state)
+    query_string = build_query_string(query_pairs)
+    target = url_for('create_step_3')
+    if query_string:
+        target = f"{target}?{query_string}"
+    return redirect(target)
 
 
-@app.route('/create/review', methods=['GET', 'POST'])
+@app.route('/create/step-7', methods=['GET', 'POST'])
 @owner_required
-def create_review():
+def create_step_7():
     source = request.form if request.method == 'POST' else request.args
     base_state = parse_wizard_base(source)
     base_pairs = build_base_query_pairs(base_state)
 
     if not base_state['hostnames'] or not base_state['region']:
-        flash('Start the wizard from step 1.')
+        flash('Please start the wizard from step 1.')
         query = build_query_string(base_pairs)
-        target = url_for('create_start')
+        target = url_for('create_step_1')
         if query:
             target = f"{target}?{query}"
         return redirect(target)
@@ -1136,7 +1249,7 @@ def create_review():
     if plan_type not in {'fixed', 'custom'}:
         flash('Choose a plan type before reviewing.')
         query = build_query_string(base_pairs)
-        target = url_for('create_start')
+        target = url_for('create_step_1')
         if query:
             target = f"{target}?{query}"
         return redirect(target)
@@ -1146,7 +1259,7 @@ def create_review():
     if not region:
         flash('Selected region is no longer available.')
         query = build_query_string(base_pairs)
-        target = url_for('create_start')
+        target = url_for('create_step_1')
         if query:
             target = f"{target}?{query}"
         return redirect(target)
@@ -1157,7 +1270,7 @@ def create_review():
     footnote = ''
     plan_state = {}
     plan_numbers = {}
-    back_target = 'create_fixed' if plan_type == 'fixed' else 'create_custom'
+    back_target = 'create_step_6'  # SSH keys is always the previous step
 
     if plan_type == 'fixed':
         products_response = api_call('GET', '/v1/products', params={'regionId': region.get('id')})
@@ -1183,7 +1296,7 @@ def create_review():
         if not product_id:
             flash('Select a product before reviewing.')
             query = build_query_string(fixed_pairs)
-            target = url_for('create_fixed')
+            target = url_for('create_step_3')
             if query:
                 target = f"{target}?{query}"
             return redirect(target)
@@ -1192,7 +1305,7 @@ def create_review():
         if not product_raw:
             flash('The selected product is no longer available for this region.')
             query = build_query_string(fixed_pairs)
-            target = url_for('create_fixed')
+            target = url_for('create_step_3')
             if query:
                 target = f"{target}?{query}"
             return redirect(target)
@@ -1221,6 +1334,10 @@ def create_review():
         price_entries = product_view['price_entries']
         footnote = product_view['description'] or (f"Tags: {product_view['tags']}" if product_view['tags'] else '')
 
+        # Calculate RAM in MB for OS filtering (base RAM from product)
+        plan_spec = product_raw.get('plan', {}).get('specification', {})
+        ram_in_mb = int((plan_spec.get('ram') or plan_spec.get('ramInMB') or 1024) * 1024)
+        
         back_query = build_query_string(fixed_pairs)
     else:
         custom_raw = {
@@ -1244,7 +1361,7 @@ def create_review():
             if not raw_value:
                 flash(f'{label} is required before reviewing.')
                 query = build_query_string(custom_pairs)
-                target = url_for('create_custom')
+                target = url_for('create_step_3')
                 if query:
                     target = f"{target}?{query}"
                 return None, target
@@ -1253,14 +1370,14 @@ def create_review():
             except ValueError:
                 flash(f'{label} must be a whole number.')
                 query = build_query_string(custom_pairs)
-                target = url_for('create_custom')
+                target = url_for('create_step_3')
                 if query:
                     target = f"{target}?{query}"
                 return None, target
             if value < 1:
                 flash(f'{label} must be at least 1.')
                 query = build_query_string(custom_pairs)
-                target = url_for('create_custom')
+                target = url_for('create_step_3')
                 if query:
                     target = f"{target}?{query}"
                 return None, target
@@ -1283,14 +1400,14 @@ def create_review():
             except ValueError:
                 flash('Bandwidth (TB) must be a whole number.')
                 query = build_query_string(custom_pairs)
-                target = url_for('create_custom')
+                target = url_for('create_step_3')
                 if query:
                     target = f"{target}?{query}"
                 return redirect(target)
             if parsed_bandwidth < 1:
                 flash('Bandwidth (TB) must be at least 1.')
                 query = build_query_string(custom_pairs)
-                target = url_for('create_custom')
+                target = url_for('create_step_3')
                 if query:
                     target = f"{target}?{query}"
                 return redirect(target)
@@ -1317,12 +1434,30 @@ def create_review():
         if bandwidth_value:
             plan_summary.append({'term': 'Bandwidth', 'value': f"{tidy_numeric(bandwidth_value)} TB"})
         footnote = 'Custom plan will be provisioned exactly as requested.'
+        
+        # Calculate RAM in MB for OS filtering
+        ram_in_mb = int(ram_value * 1024)
 
         back_query = build_query_string(custom_pairs)
 
     back_url = url_for(back_target)
     if back_query:
         back_url = f"{back_url}?{back_query}"
+
+    # Validate OS is selected
+    os_id = base_state.get('os_id', '').strip()
+    if not os_id:
+        flash('Select an OS before reviewing.')
+        query = build_query_string(base_pairs)
+        target = url_for('create_step_5')
+        if query:
+            target = f"{target}?{query}"
+        return redirect(target)
+
+    # Load OS details for display
+    os_list = load_os_list(min_ram_in_mb=ram_in_mb, only_actives=False)
+    os_lookup = {os_item.get('id'): os_item for os_item in os_list}
+    selected_os_display = os_lookup.get(os_id)
 
     customer_id = (request.args.get('customer_id') or determine_customer_context())
     ssh_keys_catalog = load_ssh_keys(customer_id=customer_id)
@@ -1352,12 +1487,22 @@ def create_review():
     }
 
     if request.method == 'POST':
+        # Validate OS selection
+        if not base_state.get('os_id'):
+            flash('Please select an operating system.')
+            query = build_query_string(base_pairs)
+            target = url_for('create_step_5')
+            if query:
+                target = f"{target}?{query}"
+            return redirect(target)
+        
         payload = {
             'hostnames': base_state['hostnames'],
             'region': base_state['region'],
             'class': base_state.get('instance_class', 'default'),
             'assignIpv4': bool(base_state.get('assign_ipv4', False)),
             'assignIpv6': bool(base_state.get('assign_ipv6', False)),
+            'osId': base_state['os_id'],
         }
         floating_ip_count = base_state.get('floating_ip_count')
         if floating_ip_count is not None:
@@ -1407,6 +1552,7 @@ def create_review():
         back_url=back_url,
         base_state=base_state,
         plan_state=plan_state,
+        selected_os_display=selected_os_display,
     )
 
 
@@ -1552,7 +1698,9 @@ def resize_instance(instance_id):
     instance_response = api_call('GET', f'/v1/instances/{instance_id}')
     instance = instance_response.get('data') if instance_response.get('code') == 'OKAY' else None
     regions_response = api_call('GET', '/v1/regions')
-    regions = regions_response.get('data', []) if regions_response.get('code') == 'OKAY' else []
+    raw_regions = regions_response.get('data', []) if regions_response.get('code') == 'OKAY' else []
+    # Only show active regions for resizing
+    regions = [region for region in raw_regions if region.get('isActive')]
     return render_template('resize.html', instance=instance, regions=regions)
 
 
