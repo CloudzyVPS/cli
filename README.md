@@ -34,6 +34,9 @@ A cloud provider service built using the Cloudzy Developer API. This is a server
    ```
    API_BASE_URL=https://api.cloudzy.com/developers
    API_TOKEN=your_api_token_here
+  # Optional: when using an admin token that needs a specific customer context
+  # to list or manage SSH keys, provide that customer's ID here:
+  API_DEFAULT_CUSTOMER_ID=00000000-0000-0000-0000-000000000000
    ```
 
 3. Run the application:
