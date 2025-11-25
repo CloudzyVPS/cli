@@ -579,7 +579,12 @@ def build_product_view(product, region_lookup):
 
 @app.context_processor
 def inject_user():
-    return {'current_user': get_current_user()}
+    from urllib.parse import urlparse
+    api_hostname = urlparse(API_BASE_URL).netloc if API_BASE_URL else 'N/A'
+    return {
+        'current_user': get_current_user(),
+        'api_hostname': api_hostname
+    }
 
 
 @app.route('/login', methods=['GET', 'POST'])
@@ -1794,7 +1799,16 @@ def os_list():
 @owner_required
 def applications():
     response = api_call('GET', '/v1/applications')
-    apps = response.get('data', []) if response.get('code') == 'OKAY' else []
+    # Handle different possible response structures
+    if response.get('code') == 'OKAY':
+        data = response.get('data', [])
+        # Check if data is nested in another key
+        if isinstance(data, dict):
+            apps = data.get('applications', []) or data.get('apps', []) or []
+        else:
+            apps = data if isinstance(data, list) else []
+    else:
+        apps = []
     return render_template('applications.html', apps=apps)
 
 

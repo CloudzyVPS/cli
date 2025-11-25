@@ -86,7 +86,7 @@ body {
   color: var(--text-primary);
   background-color: var(--canvas-bg);
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
 }
 
 body::before,
@@ -114,7 +114,7 @@ a:focus-visible {
 
 .site-nav {
   background: var(--white);
-  border-bottom: 1px solid var(--border-color);
+  border-right: 1px solid var(--border-color);
   color: var(--gray-900);
   padding: var(--space-4) var(--space-5);
   position: sticky;
@@ -123,7 +123,11 @@ a:focus-visible {
   display: flex;
   flex-direction: column;
   gap: var(--space-4);
-  overflow: hidden;
+  height: 100vh;
+  width: 280px;
+  flex-shrink: 0;
+  overflow-y: auto;
+  transition: border-color var(--transition-fast);
 }
 
 .site-nav::after {
@@ -278,9 +282,37 @@ a:focus-visible {
   border-color: var(--primary);
 }
 
+.site-nav .nav-footer {
+  margin-top: auto;
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--border-color);
+  transition: border-color var(--transition-fast);
+}
+
+.site-nav .api-hostname {
+  display: block;
+  font-size: 0.75rem;
+  color: var(--gray-500);
+  font-family: var(--font-mono);
+  text-align: center;
+  padding: var(--space-2);
+  background: var(--gray-50);
+  border-radius: var(--border-radius);
+  word-break: break-all;
+}
+
 @media (max-width: 720px) {
+  body {
+    flex-direction: column;
+  }
+
   .site-nav {
     padding: var(--space-4) var(--space-4);
+    width: 100%;
+    height: auto;
+    position: relative;
+    border-right: none;
+    border-bottom: 1px solid var(--border-color);
   }
 
   .site-nav .nav-header {
@@ -311,16 +343,22 @@ a:focus-visible {
   .site-nav .account-action button {
     width: auto;
   }
+
+  .site-nav .nav-footer {
+    margin-top: var(--space-4);
+  }
 }
 
 main {
   flex: 1;
-  width: min(1200px, 100%);
+  max-width: 1200px;
   margin: 0 auto;
   padding: var(--space-6) var(--space-4) var(--space-7);
   display: flex;
   flex-direction: column;
   gap: var(--space-6);
+  width: 100%;
+  min-height: 100vh;
 }
 
 header.page-header {
@@ -404,7 +442,7 @@ aside {
   border: 1px solid var(--border-color);
   border-radius: var(--border-radius);
   padding: var(--space-5);
-  box-shadow: var(--shadow-soft);
+  transition: border-color var(--transition-fast);
 }
 
 .surface::before {
@@ -1791,8 +1829,8 @@ section[data-instance-actions] > h2 {
 
 div[data-action-grid] {
   display: grid;
-  gap: var(--space-3);
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: var(--space-2);
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
 }
 
 div[data-action-grid] form,
@@ -1802,23 +1840,25 @@ div[data-action-grid] a {
   justify-content: center;
 }
 
+div[data-action-grid] form button,
 div[data-action-grid] a {
+  width: 100%;
   border-radius: var(--border-radius);
-  padding: var(--space-3) var(--space-4);
-  font-weight: 600;
+  padding: var(--space-2) var(--space-3);
+  font-weight: 500;
+  font-size: 0.875rem;
   text-align: center;
   text-decoration: none;
-  color: var(--white);
-  background: var(--primary);
-  box-shadow: var(--shadow-soft);
+  border: 1px solid transparent;
   transition: transform var(--transition-fast), box-shadow var(--transition-fast), background var(--transition-fast);
 }
 
+div[data-action-grid] form button:hover,
+div[data-action-grid] form button:focus-visible,
 div[data-action-grid] a:hover,
 div[data-action-grid] a:focus-visible {
-  transform: translateY(-2px);
-  box-shadow: var(--shadow-card);
-  background: var(--primary-dark);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-soft);
 }
 
 form[data-add-traffic] {
