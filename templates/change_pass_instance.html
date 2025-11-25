@@ -1,12 +1,12 @@
 {% extends "base.html" %}
 
-{% block title %}Subscription Refund{% endblock %}
+{% block title %}Change Password{% endblock %}
 
 {% block content %}
 <header class="page-header">
     <p class="breadcrumb"><a href="{{ url_for('instance_detail', instance_id=instance.id) }}">← Back to instance</a></p>
-    <h1>Subscription refund</h1>
-    <p>Review and confirm the refund details for this instance.</p>
+    <h1>Change root password</h1>
+    <p>Generate a new root password for this instance.</p>
 </header>
 
 <section>
@@ -21,31 +21,23 @@
                 <dt>Instance ID</dt>
                 <dd><code>{{ instance.id }}</code></dd>
             </div>
-        </dl>
-    </fieldset>
-
-    <fieldset>
-        <legend>Refund calculation</legend>
-        <dl>
             <div>
-                <dt>Used days</dt>
-                <dd>{{ refund.usedDays }}</dd>
+                <dt>Operating system</dt>
+                <dd>{{ instance.os.name if instance.os else 'N/A' }}</dd>
             </div>
             <div>
-                <dt>Remaining days</dt>
-                <dd>{{ refund.remainingDays }}</dd>
-            </div>
-            <div>
-                <dt>Refund amount</dt>
-                <dd><strong>${{ refund.refundAmount }}</strong></dd>
+                <dt>Current status</dt>
+                <dd>{{ instance.status }}</dd>
             </div>
         </dl>
     </fieldset>
 
     <form method="post">
+        <p><small>A new random password will be generated and displayed after confirmation. Make sure to save it securely.</small></p>
+        
         <footer class="form-actions">
             <a class="button-secondary" href="{{ url_for('instance_detail', instance_id=instance.id) }}">Cancel</a>
-            <button type="submit">Confirm refund</button>
+            <button type="submit">Change password</button>
         </footer>
     </form>
 </section>

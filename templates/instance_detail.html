@@ -73,18 +73,10 @@
 <section>
     <h2>Actions</h2>
     <div>
-        <form method="post" action="{{ url_for('poweron_instance', instance_id=instance.id) }}">
-            <button type="submit" class="button-secondary">Power On</button>
-        </form>
-        <form method="post" action="{{ url_for('poweroff_instance', instance_id=instance.id) }}">
-            <button type="submit" class="button-secondary">Power Off</button>
-        </form>
-        <form method="post" action="{{ url_for('reset_instance', instance_id=instance.id) }}">
-            <button type="submit" class="button-secondary">Reset</button>
-        </form>
-        <form method="post" action="{{ url_for('change_pass_instance', instance_id=instance.id) }}">
-            <button type="submit" class="button-secondary">Change Password</button>
-        </form>
+        <a href="{{ url_for('poweron_instance', instance_id=instance.id) }}" class="button-secondary">Power On</a>
+        <a href="{{ url_for('poweroff_instance', instance_id=instance.id) }}" class="button-secondary">Power Off</a>
+        <a href="{{ url_for('reset_instance', instance_id=instance.id) }}" class="button-secondary">Reset</a>
+        <a href="{{ url_for('change_pass_instance', instance_id=instance.id) }}" class="button-secondary">Change Password</a>
         <a href="{{ url_for('resize_instance', instance_id=instance.id) }}" class="button-secondary">Resize</a>
         <a href="{{ url_for('change_os_instance', instance_id=instance.id) }}" class="button-secondary">Change OS</a>
         <a href="{{ url_for('subscription_refund', instance_id=instance.id) }}" class="button-secondary">Subscription Refund</a>

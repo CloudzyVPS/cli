@@ -1,12 +1,12 @@
 {% extends "base.html" %}
 
-{% block title %}Subscription Refund{% endblock %}
+{% block title %}Power On Instance{% endblock %}
 
 {% block content %}
 <header class="page-header">
     <p class="breadcrumb"><a href="{{ url_for('instance_detail', instance_id=instance.id) }}">← Back to instance</a></p>
-    <h1>Subscription refund</h1>
-    <p>Review and confirm the refund details for this instance.</p>
+    <h1>Power on instance</h1>
+    <p>Start this instance and boot the operating system.</p>
 </header>
 
 <section>
@@ -21,23 +21,13 @@
                 <dt>Instance ID</dt>
                 <dd><code>{{ instance.id }}</code></dd>
             </div>
-        </dl>
-    </fieldset>
-
-    <fieldset>
-        <legend>Refund calculation</legend>
-        <dl>
             <div>
-                <dt>Used days</dt>
-                <dd>{{ refund.usedDays }}</dd>
+                <dt>Current status</dt>
+                <dd>{{ instance.status }}</dd>
             </div>
             <div>
-                <dt>Remaining days</dt>
-                <dd>{{ refund.remainingDays }}</dd>
-            </div>
-            <div>
-                <dt>Refund amount</dt>
-                <dd><strong>${{ refund.refundAmount }}</strong></dd>
+                <dt>Region</dt>
+                <dd>{{ instance.region }}</dd>
             </div>
         </dl>
     </fieldset>
@@ -45,7 +35,7 @@
     <form method="post">
         <footer class="form-actions">
             <a class="button-secondary" href="{{ url_for('instance_detail', instance_id=instance.id) }}">Cancel</a>
-            <button type="submit">Confirm refund</button>
+            <button type="submit">Power on instance</button>
         </footer>
     </form>
 </section>

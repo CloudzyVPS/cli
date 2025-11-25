@@ -1580,45 +1580,81 @@ def delete_instance(instance_id):
     return redirect(url_for('instances'))
 
 
-@app.route('/instance/<instance_id>/poweron', methods=['POST'])
+@app.route('/instance/<instance_id>/poweron', methods=['GET', 'POST'])
 @login_required
 def poweron_instance(instance_id):
     redirect_response = enforce_instance_access(instance_id)
     if redirect_response:
         return redirect_response
+    
+    if request.method == 'GET':
+        response = api_call('GET', f'/v1/instances/{instance_id}')
+        if response.get('code') == 'OKAY':
+            instance = response['data']
+            return render_template('poweron_instance.html', instance=instance)
+        flash('Instance not found')
+        return redirect(url_for('instances'))
+    
     response = api_call('POST', f'/v1/instances/{instance_id}/poweron')
     flash('Power on request sent' if response.get('code') == 'OKAY' else 'Error')
     return redirect(url_for('instance_detail', instance_id=instance_id))
 
 
-@app.route('/instance/<instance_id>/poweroff', methods=['POST'])
+@app.route('/instance/<instance_id>/poweroff', methods=['GET', 'POST'])
 @login_required
 def poweroff_instance(instance_id):
     redirect_response = enforce_instance_access(instance_id)
     if redirect_response:
         return redirect_response
+    
+    if request.method == 'GET':
+        response = api_call('GET', f'/v1/instances/{instance_id}')
+        if response.get('code') == 'OKAY':
+            instance = response['data']
+            return render_template('poweroff_instance.html', instance=instance)
+        flash('Instance not found')
+        return redirect(url_for('instances'))
+    
     response = api_call('POST', f'/v1/instances/{instance_id}/poweroff')
     flash('Power off request sent' if response.get('code') == 'OKAY' else 'Error')
     return redirect(url_for('instance_detail', instance_id=instance_id))
 
 
-@app.route('/instance/<instance_id>/reset', methods=['POST'])
+@app.route('/instance/<instance_id>/reset', methods=['GET', 'POST'])
 @login_required
 def reset_instance(instance_id):
     redirect_response = enforce_instance_access(instance_id)
     if redirect_response:
         return redirect_response
+    
+    if request.method == 'GET':
+        response = api_call('GET', f'/v1/instances/{instance_id}')
+        if response.get('code') == 'OKAY':
+            instance = response['data']
+            return render_template('reset_instance.html', instance=instance)
+        flash('Instance not found')
+        return redirect(url_for('instances'))
+    
     response = api_call('POST', f'/v1/instances/{instance_id}/reset')
     flash('Reset request sent' if response.get('code') == 'OKAY' else 'Error')
     return redirect(url_for('instance_detail', instance_id=instance_id))
 
 
-@app.route('/instance/<instance_id>/change-pass', methods=['POST'])
+@app.route('/instance/<instance_id>/change-pass', methods=['GET', 'POST'])
 @login_required
 def change_pass_instance(instance_id):
     redirect_response = enforce_instance_access(instance_id)
     if redirect_response:
         return redirect_response
+    
+    if request.method == 'GET':
+        response = api_call('GET', f'/v1/instances/{instance_id}')
+        if response.get('code') == 'OKAY':
+            instance = response['data']
+            return render_template('change_pass_instance.html', instance=instance)
+        flash('Instance not found')
+        return redirect(url_for('instances'))
+    
     response = api_call('POST', f'/v1/instances/{instance_id}/change-pass')
     if response.get('code') == 'OKAY':
         password = response['data']['password']

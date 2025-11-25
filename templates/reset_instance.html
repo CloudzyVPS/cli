@@ -1,12 +1,12 @@
 {% extends "base.html" %}
 
-{% block title %}Change OS{% endblock %}
+{% block title %}Reset Instance{% endblock %}
 
 {% block content %}
 <header class="page-header">
     <p class="breadcrumb"><a href="{{ url_for('instance_detail', instance_id=instance.id) }}">← Back to instance</a></p>
-    <h1>Change operating system</h1>
-    <p>Select a new operating system for this instance.</p>
+    <h1>Reset instance</h1>
+    <p>Force restart this instance immediately.</p>
 </header>
 
 <div class="warning-banner">
@@ -16,8 +16,8 @@
         <line x1="12" y1="17" x2="12.01" y2="17"></line>
     </svg>
     <div>
-        <h2>Warning: Data will be erased</h2>
-        <p>Changing the operating system will erase all data on this instance. Make sure you have backups before proceeding.</p>
+        <h2>Warning: Forced restart</h2>
+        <p>Resetting the instance is equivalent to unplugging the power. This may cause data loss or corruption. Use power off for a graceful shutdown.</p>
     </div>
 </div>
 
@@ -34,28 +34,20 @@
                 <dd><code>{{ instance.id }}</code></dd>
             </div>
             <div>
-                <dt>Current OS</dt>
-                <dd>{{ instance.os.name if instance.os else 'N/A' }}</dd>
+                <dt>Current status</dt>
+                <dd>{{ instance.status }}</dd>
+            </div>
+            <div>
+                <dt>Region</dt>
+                <dd>{{ instance.region }}</dd>
             </div>
         </dl>
     </fieldset>
 
     <form method="post">
-        <fieldset>
-            <legend>Select new operating system</legend>
-            <label for="os_id">Operating system</label>
-            <select id="os_id" name="os_id" required>
-                <option value="">Choose an operating system...</option>
-                {% for os in os_list %}
-                <option value="{{ os.id }}">{{ os.name }} ({{ os.family }})</option>
-                {% endfor %}
-            </select>
-            <small>Select the operating system you want to install on this instance.</small>
-        </fieldset>
-
         <footer class="form-actions">
             <a class="button-secondary" href="{{ url_for('instance_detail', instance_id=instance.id) }}">Cancel</a>
-            <button type="submit">Change operating system</button>
+            <button type="submit" class="button-danger">Reset instance</button>
         </footer>
     </form>
 </section>
