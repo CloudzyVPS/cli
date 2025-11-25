@@ -553,13 +553,13 @@ section li {
 }
 
 
-.region-card[data-selected="true"] {
+.region-card[aria-current="true"] {
   border-color: var(--primary);
   box-shadow: var(--shadow-card);
 }
 
-.region-card[data-active="false"] {
-  opacity: 0.75;
+.region-card:not([aria-current]) {
+  opacity: 1;
 }
 
 .region-card header,
@@ -993,19 +993,7 @@ td a + form {
   background: currentColor;
 }
 
-section > div:empty::before,
-section > p[data-empty] {
-  text-align: center;
-  padding: var(--space-6) var(--space-4);
-  color: var(--gray-500);
-  border: 1px dashed rgba(148, 163, 184, 0.45);
-  border-radius: var(--radius-lg);
-  display: block;
-}
 
-section > div:empty::before {
-  content: attr(data-empty-message);
-}
 
 figure {
   margin: 0;
@@ -1362,7 +1350,7 @@ form > footer {
   gap: var(--space-1);
 }
 
-[data-product-headline] {
+.product-card h2 {
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-2);
@@ -1370,7 +1358,7 @@ form > footer {
   margin: 0;
 }
 
-[data-metric] {
+.metric {
   display: inline-flex;
   align-items: center;
   gap: var(--space-1);
@@ -1384,19 +1372,19 @@ form > footer {
   min-height: 32px;
 }
 
-[data-metric="region"] {
+.invoice-metrics .metric {
   background: var(--primary);
   color: var(--white);
 }
 
-[data-metric] img {
+.metric img {
   width: 24px;
   height: 24px;
   flex: 0 0 24px;
   display: block;
 }
 
-[data-metric] img {
+.invoice-metrics .metric img {
   width: 22px;
   height: 22px;
   flex: 0 0 22px;
@@ -1442,7 +1430,7 @@ form > footer {
   color: var(--gray-900);
 }
 
-.product-card-body [data-product-pricing] > div {
+.product-card-body .pricing > div {
   background: var(--gray-50);
   border-color: var(--border-color);
 }
@@ -1585,7 +1573,7 @@ div[data-admin-grid] {
   grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
 }
 
-section[data-admin-panel] {
+section[role="listitem"] {
   background: var(--white);
   border: 1px solid var(--border-color);
   border-radius: var(--border-radius);
@@ -1596,30 +1584,24 @@ section[data-admin-panel] {
   gap: var(--space-4);
 }
 
-section[data-admin-panel] > header {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
-}
-
-section[data-admin-panel] > header > h2 {
+section[role="listitem"] > h2 {
   margin: 0;
   font-size: 1.4rem;
   color: var(--gray-900);
 }
 
-section[data-admin-panel] > header > p {
+section[role="listitem"] > p {
   margin: 0;
   color: var(--gray-600);
 }
 
-section[data-admin-panel] form {
+section[role="listitem"] form {
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
 }
 
-section[data-admin-panel] fieldset {
+section[role="listitem"] fieldset {
   margin: 0;
   padding: 0;
   border: none;
@@ -1628,18 +1610,18 @@ section[data-admin-panel] fieldset {
   gap: var(--space-3);
 }
 
-section[data-admin-panel] fieldset > legend {
+section[role="listitem"] fieldset > legend {
   font-weight: 600;
   color: var(--gray-700);
 }
 
-div[data-instance-grid] {
+section[role="listitem"] > div[role="list"] {> div[role="list"] {
   display: grid;
   gap: var(--space-3);
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
 }
 
-div[data-instance-grid] > label {
+section[role="listitem"] label[role="listitem"] {
   position: relative;
   display: flex;
   flex-direction: column;
@@ -1653,66 +1635,45 @@ div[data-instance-grid] > label {
   transition: transform var(--transition-slow), box-shadow var(--transition-slow), border-color var(--transition-slow), background-color var(--transition-slow);
 }
 
-div[data-instance-grid] > label::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  background: var(--primary);
-  opacity: 0;
-  transition: opacity var(--transition-slow);
-  pointer-events: none;
-  mix-blend-mode: soft-light;
-}
-
-div[data-instance-grid] > label input {
+section[role="listitem"] label[role="listitem"] input {
   position: absolute;
   opacity: 0;
   pointer-events: none;
 }
 
-div[data-instance-grid] > label span:first-of-type {
+section[role="listitem"] label[role="listitem"] span:first-of-type {
   font-weight: 600;
   color: var(--gray-900);
   transition: color var(--transition-slow);
 }
 
-div[data-instance-grid] > label span:not(:first-of-type) {
+section[role="listitem"] label[role="listitem"] span:not(:first-of-type) {
   font-size: 0.9rem;
   color: var(--gray-600);
   transition: color var(--transition-slow);
 }
 
-div[data-instance-grid] > label:hover,
-div[data-instance-grid] > label:focus-within {
+section[role="listitem"] label[role="listitem"]:hover,
+section[role="listitem"] label[role="listitem"]:focus-within {
   transform: translateY(-4px);
   box-shadow: var(--shadow-card);
 }
 
-div[data-instance-grid] > label:hover::after,
-div[data-instance-grid] > label:focus-within::after {
-  opacity: 0.05;
-}
-
-div[data-instance-grid] > label[data-selected="true"] {
+section[role="listitem"] label[role="listitem"][aria-current="true"] {
   border-color: var(--primary);
   box-shadow: var(--shadow-card);
   background: rgba(88, 166, 255, 0.08);
 }
 
-div[data-instance-grid] > label[data-selected="true"]::after {
-  opacity: 0.1;
-}
-
-div[data-instance-grid] > label[data-selected="true"] span:first-of-type {
+section[role="listitem"] label[role="listitem"][aria-current="true"] span:first-of-type {
   color: var(--primary-dark);
 }
 
-div[data-instance-grid] > label[data-selected="true"] span:not(:first-of-type) {
+section[role="listitem"] label[role="listitem"][aria-current="true"] span:not(:first-of-type) {
   color: var(--primary);
 }
 
-section[data-admin-panel] footer {
+section[role="listitem"] footer {
   display: flex;
   justify-content: flex-end;
 }
@@ -1726,14 +1687,14 @@ section[data-instance-overview] {
   box-shadow: var(--shadow-soft);
 }
 
-section[data-instance-overview] dl {
+section dl {
   margin: 0;
   display: grid;
   gap: var(--space-3);
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
 }
 
-section[data-instance-overview] dl > div {
+section dl > div {
   background: var(--gray-50);
   border: 1px solid var(--border-color);
   border-radius: var(--border-radius);
@@ -1770,14 +1731,14 @@ section[data-instance-actions] > h2 {
   color: var(--gray-900);
 }
 
-div[data-action-grid] {
+section > div {
   display: grid;
   gap: var(--space-2);
   grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
 }
 
-div[data-action-grid] form,
-div[data-action-grid] a {
+section > div form,
+section > div a {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1804,7 +1765,7 @@ div[data-action-grid] a:focus-visible {
   box-shadow: var(--shadow-soft);
 }
 
-form[data-add-traffic] {
+section > form {
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
@@ -1815,22 +1776,22 @@ form[data-add-traffic] {
   box-shadow: var(--shadow-soft);
 }
 
-form[data-add-traffic] > label {
+section > form > label {
   font-weight: 600;
   color: var(--gray-700);
 }
 
-form[data-add-traffic] > div {
+section > form > div {
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-2);
 }
 
-form[data-add-traffic] input {
+section > form input {
   flex: 1 1 160px;
 }
 
-form[data-add-traffic] p {
+section > form p {
   margin: 0;
   font-size: 0.85rem;
   color: var(--gray-500);
@@ -2156,28 +2117,23 @@ section[aria-labelledby="regions-heading"] > div[role="list"] > article > footer
   line-height: 1.5;
 }
 
-[data-delete-confirmation] dl {
-  display: grid;
-  gap: 0.75rem;
-}
-
-[data-delete-confirmation] dl > div {
+section dl > div {
   display: grid;
   grid-template-columns: 140px 1fr;
   gap: 1rem;
 }
 
-[data-delete-confirmation] dt {
+dt {
   font-weight: 500;
   color: var(--text-secondary);
 }
 
-[data-delete-confirmation] dd {
+dd {
   margin: 0;
   color: var(--text-primary);
 }
 
-[data-delete-confirmation] code {
+code {
   font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', 'Consolas', monospace;
   font-size: 0.875rem;
   padding: 0.125rem 0.375rem;

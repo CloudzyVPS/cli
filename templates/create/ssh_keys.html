@@ -36,7 +36,7 @@
         <legend>SSH Keys</legend>
         {% if ssh_keys %}
             {% set selected_keys = selected_ssh_key_ids or [] %}
-            <div class="checkbox-group" data-ssh-key-select>
+            <div class="checkbox-group">
                 {% for key in ssh_keys %}
                 <label>
                     <input type="checkbox" name="ssh_key_ids" value="{{ key.id }}" {% if key.id is not none and (key.id|string) in selected_keys %}checked{% endif %}>

@@ -42,17 +42,17 @@
             <div class="product-grid" role="list">
                 {% for os_item in os_list %}
                     {% if os_item.isActive %}
-                        <label class="product-card" role="listitem" data-product-card {% if selected_os_id == os_item.id %}data-selected="true"{% endif %}>
+                        <label class="product-card" role="listitem" {% if selected_os_id == os_item.id %}aria-current="true"{% endif %}>
                             <input type="radio" name="os_id" value="{{ os_item.id }}" {% if selected_os_id == os_item.id %}checked{% endif %} required>
                             <div class="product-card-body">
-                                <h2 data-product-headline>
+                                <h2>
                                     <span>{{ os_item.name }}</span>
                                 </h2>
                                 {% if os_item.family or os_item.arch %}
-                                    <p data-product-plan>{% if os_item.family %}{{ os_item.family }}{% endif %}{% if os_item.family and os_item.arch %} · {% endif %}{% if os_item.arch %}{{ os_item.arch }}{% endif %}</p>
+                                    <p class="product-plan">{% if os_item.family %}{{ os_item.family }}{% endif %}{% if os_item.family and os_item.arch %} · {% endif %}{% if os_item.arch %}{{ os_item.arch }}{% endif %}</p>
                                 {% endif %}
                                 {% if os_item.minRam %}
-                                    <dl data-product-facts>
+                                    <dl>
                                         <div>
                                             <dt>Min RAM</dt>
                                             <dd>{{ (os_item.minRam | int / 1024) | round(1) }} GB</dd>
@@ -61,7 +61,7 @@
                                 {% endif %}
                                 {% if os_item.isDefault %}
                                     <footer>
-                                        <p data-product-tags>Default</p>
+                                        <p>Default</p>
                                     </footer>
                                 {% endif %}
                             </div>

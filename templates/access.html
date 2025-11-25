@@ -9,21 +9,21 @@
 </header>
 
 {% if admins %}
-<div data-admin-grid role="list">
+<div role="list">
     {% for username, data in admins | dictsort %}
     {% set assigned_ids = data.get('assigned_instances', []) %}
-    <section data-admin-panel role="listitem">
+    <section role="listitem">
         <h2>{{ username }}</h2>
         <p>{{ assigned_ids | length }} assigned instance{{ '' if (assigned_ids | length) == 1 else 's' }}</p>
         <form action="{{ url_for('update_access', username=username) }}" method="post">
             <fieldset>
                 <legend>Select instances</legend>
                 {% if instance_map %}
-                <div data-instance-grid role="list">
+                <div role="list">
                     {% for instance_id, instance in instance_map | dictsort %}
                     {% set instance_data = instance %}
                     {% set is_assigned = instance_id in assigned_ids %}
-                    <label role="listitem" data-instance-card="{{ instance_id }}"{% if is_assigned %} data-selected="true"{% endif %}>
+                    <label role="listitem" {% if is_assigned %}aria-current="true"{% endif %}>
                         <input type="checkbox" name="instances" value="{{ instance_id }}" {% if is_assigned %}checked{% endif %}>
                         <span>{{ instance_data.get('hostname', 'Unnamed Instance') }}</span>
                         <span>ID: {{ instance_id }}</span>
@@ -48,7 +48,7 @@
     {% endfor %}
 </div>
 {% else %}
-<section data-admin-panel>
+<section>
     <p>No admin users found. Create an admin account first.</p>
 </section>
 {% endif %}

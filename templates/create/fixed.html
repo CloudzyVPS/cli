@@ -31,25 +31,25 @@
         <legend>Plans for {{ region.name }}</legend>
         <div class="product-grid" role="list">
             {% for product in products %}
-            <label class="product-card" role="listitem" data-product-card {% if selected_product_id == product.id %}data-selected="true"{% endif %}>
+            <label class="product-card" role="listitem" {% if selected_product_id == product.id %}aria-current="true"{% endif %}>
                 <input type="radio" name="product_id" value="{{ product.id }}" {% if selected_product_id == product.id %}checked{% endif %}>
                 <div class="product-card-body">
-                <h2 data-product-headline>
-                        {% for metric in product.metrics %}
-                        <span data-metric="{{ metric.type }}"{% if metric.variant %} data-variant="{{ metric.variant }}"{% endif %} title="{{ metric.label }}" aria-label="{{ metric.label }}">
+                <h2>
+                    {% for metric in product.metrics %}
+                        <span class="metric" title="{{ metric.label }}" aria-label="{{ metric.label }}">
                             <img src="{{ url_for('static', filename='icons/' ~ metric.icon) }}" alt="" aria-hidden="true">
                             <span>{{ metric.value }}</span>
                         </span>
                         {% endfor %}
                     </h2>
                     {% if product.plan_name %}
-                    <p data-product-plan>{{ product.plan_name }}</p>
+                    <p class="product-plan">{{ product.plan_name }}</p>
                     {% endif %}
                 {% if product.description %}
-                <p data-product-note>{{ product.description }}</p>
+                <p>{{ product.description }}</p>
                 {% endif %}
                 {% if product.spec_entries %}
-                <dl data-product-facts>
+                <dl>
                     {% for entry in product.spec_entries %}
                     <div>
                         <dt>{{ entry.term }}</dt>
@@ -59,7 +59,7 @@
                 </dl>
                 {% endif %}
                 {% if product.price_entries %}
-                <dl data-product-pricing>
+                <dl class="pricing">
                     {% for entry in product.price_entries %}
                     <div>
                         <dt>{{ entry.term }}</dt>
@@ -70,7 +70,7 @@
                 {% endif %}
                 {% if product.tags %}
                 <footer>
-                    <p data-product-tags>{{ product.tags }}</p>
+                    <p>{{ product.tags }}</p>
                 </footer>
                 {% endif %}
                 </div>

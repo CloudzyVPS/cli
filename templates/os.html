@@ -12,9 +12,9 @@
     <h2>OS catalog</h2>
     <p>Select an image during provisioning or change-OS workflows.</p>
     {% if os_list %}
-    <div class="data-grid" data-os-grid>
+    <div class="data-grid">
         {% for os in os_list %}
-        <article class="data-card" data-os-card>
+        <article class="data-card">
             <h3>{{ os.name }}</h3>
             <p class="os-family">{{ os.family | default('Unknown family', true) }}</p>
             <dl class="os-attributes">
@@ -46,7 +46,7 @@
         {% endfor %}
     </div>
     {% else %}
-    <p data-empty>💿 No operating systems were returned by the API.</p>
+    <p>💿 No operating systems were returned by the API.</p>
     {% endif %}
 </section>
 {% endblock %}
