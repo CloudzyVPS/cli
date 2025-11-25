@@ -255,11 +255,9 @@ nav form button:focus-visible {
 
 nav > div {
   display: flex;
+  flex-direction: column;
   gap: var(--space-2);
-  flex-wrap: wrap;
-  align-items: center;
-  overflow-x: auto;
-  padding-bottom: var(--space-1);
+  overflow-y: auto;
 }
 
 nav > div > a {
@@ -721,7 +719,7 @@ article > form {
   overflow: hidden;
 }
 
-form fieldset {
+fieldset {
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
@@ -729,9 +727,10 @@ form fieldset {
   border-radius: var(--radius-md);
   background: var(--canvas-bg);
   border: 1px solid var(--border-color);
+  box-shadow: none;
 }
 
-form legend {
+legend {
   font-weight: 600;
   color: var(--text-secondary);
 }
