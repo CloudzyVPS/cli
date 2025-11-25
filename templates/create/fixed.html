@@ -5,7 +5,7 @@
 {% block content %}
 <header class="page-header">
     <div>
-        <p class="breadcrumb"><a href="{{ back_to_start_url }}">← Back to step 2</a></p>
+        <p class="breadcrumb"><a href="{{ back_to_start_url }}">← Previous step</a></p>
         <h1>Select a product</h1>
         <p>Step 3 of 7 · Choose a plan for {{ region.name }}</p>
     </div>
@@ -84,7 +84,6 @@
     </fieldset>
 
     <footer class="form-actions">
-        <a class="button-secondary" href="{{ back_to_start_url }}">Back</a>
         <button type="submit">Continue</button>
     </footer>
 </form>

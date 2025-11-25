@@ -26,15 +26,6 @@
             <td>{{ instance.mainIp }}</td>
             <td>
                 <a href="/instance/{{ instance.id }}">Details</a>
-                <a href="/instance/{{ instance.id }}/resize">Resize</a>
-                <a href="/instance/{{ instance.id }}/change-os">Change OS</a>
-                <a href="/instance/{{ instance.id }}/subscription-refund">Refund</a>
-                <form method="post" action="/instance/{{ instance.id }}/change-pass">
-                    <button type="submit">Change Pass</button>
-                </form>
-                <form method="post" action="/instance/{{ instance.id }}/delete">
-                    <button type="submit">Delete</button>
-                </form>
             </td>
         </tr>
         {% endfor %}

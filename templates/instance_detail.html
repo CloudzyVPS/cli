@@ -76,20 +76,21 @@
     <h2>Actions</h2>
     <div data-action-grid>
         <form method="post" action="{{ url_for('poweron_instance', instance_id=instance.id) }}">
-            <button type="submit">Power On</button>
+            <button type="submit" class="button-secondary">Power On</button>
         </form>
         <form method="post" action="{{ url_for('poweroff_instance', instance_id=instance.id) }}">
-            <button type="submit">Power Off</button>
+            <button type="submit" class="button-secondary">Power Off</button>
         </form>
         <form method="post" action="{{ url_for('reset_instance', instance_id=instance.id) }}">
-            <button type="submit">Reset</button>
+            <button type="submit" class="button-secondary">Reset</button>
         </form>
         <form method="post" action="{{ url_for('change_pass_instance', instance_id=instance.id) }}">
-            <button type="submit">Change Password</button>
+            <button type="submit" class="button-secondary">Change Password</button>
         </form>
-        <a href="{{ url_for('resize_instance', instance_id=instance.id) }}">Resize</a>
-        <a href="{{ url_for('change_os_instance', instance_id=instance.id) }}">Change OS</a>
-        <a href="{{ url_for('subscription_refund', instance_id=instance.id) }}">Subscription Refund</a>
+        <a href="{{ url_for('resize_instance', instance_id=instance.id) }}" class="button-secondary">Resize</a>
+        <a href="{{ url_for('change_os_instance', instance_id=instance.id) }}" class="button-secondary">Change OS</a>
+        <a href="{{ url_for('subscription_refund', instance_id=instance.id) }}" class="button-secondary">Subscription Refund</a>
+        <a href="{{ url_for('delete_instance', instance_id=instance.id) }}" class="button-danger">Delete Instance</a>
     </div>
 
     <form method="post" action="{{ url_for('add_traffic_instance', instance_id=instance.id) }}" data-add-traffic>

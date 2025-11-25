@@ -807,13 +807,6 @@ def instances():
     return render_template('instances.html', instances=instances)
 
 
-@app.route('/create', methods=['GET', 'POST'])
-@owner_required
-def create_redirect():
-    """Legacy route - redirects to step-1"""
-    return redirect(url_for('create_step_1'))
-
-
 @app.route('/create/step-1', methods=['GET'])
 @owner_required
 def create_step_1():
@@ -913,9 +906,11 @@ def create_step_3():
     plan_type = base_state['plan_type']
     if plan_type == 'fixed':
         # Fixed plan - show products
-        products_response = api_call('GET', '/v1/products', params={'regionId': region.get('id')})
-        products_raw = products_response.get('data', []) if products_response.get('code') == 'OKAY' else []
-        products = [build_product_view(item, region_lookup) for item in products_raw]
+        region_id = region.get('id')
+        products_response = api_call('GET', '/v1/products', params={'regionId': region_id})
+        products = products_response.get('data', []) if products_response.get('code') == 'OKAY' else []
+        
+        products = [build_product_view(item, region_lookup) for item in products]
 
         selected_product_id = source.get('product_id', '').strip()
 
@@ -1213,36 +1208,6 @@ def create_step_6():
         template_vars['bandwidthInTB'] = source.get('bandwidthInTB', '')
 
     return render_template('create/ssh_keys.html', **template_vars)
-
-
-@app.route('/create/fixed', methods=['GET', 'POST'])
-@owner_required
-def create_fixed():
-    """Legacy route - redirects to step-3"""
-    source = request.form if request.method == 'POST' else request.args
-    base_state = parse_wizard_base(source)
-    base_state['plan_type'] = 'fixed'
-    query_pairs = build_base_query_pairs(base_state)
-    query_string = build_query_string(query_pairs)
-    target = url_for('create_step_3')
-    if query_string:
-        target = f"{target}?{query_string}"
-    return redirect(target)
-
-
-@app.route('/create/custom', methods=['GET', 'POST'])
-@owner_required
-def create_custom():
-    """Legacy route - redirects to step-3"""
-    source = request.form if request.method == 'POST' else request.args
-    base_state = parse_wizard_base(source)
-    base_state['plan_type'] = 'custom'
-    query_pairs = build_base_query_pairs(base_state)
-    query_string = build_query_string(query_pairs)
-    target = url_for('create_step_3')
-    if query_string:
-        target = f"{target}?{query_string}"
-    return redirect(target)
 
 
 @app.route('/create/step-7', methods=['GET', 'POST'])
@@ -1585,12 +1550,23 @@ def instance_detail(instance_id):
     return redirect(url_for('instances'))
 
 
-@app.route('/instance/<instance_id>/delete', methods=['POST'])
+@app.route('/instance/<instance_id>/delete', methods=['GET', 'POST'])
 @login_required
 def delete_instance(instance_id):
     redirect_response = enforce_instance_access(instance_id)
     if redirect_response:
         return redirect_response
+    
+    if request.method == 'GET':
+        # Show confirmation page
+        response = api_call('GET', f'/v1/instances/{instance_id}')
+        if response.get('code') == 'OKAY':
+            instance = response['data']
+            return render_template('delete_instance.html', instance=instance)
+        flash('Instance not found')
+        return redirect(url_for('instances'))
+    
+    # POST: Actually delete the instance
     response = api_call('DELETE', f'/v1/instances/{instance_id}')
     if response.get('code') == 'OKAY':
         flash('Instance deleted')
@@ -1771,20 +1747,6 @@ def regions():
     response = api_call('GET', '/v1/regions')
     regions = response.get('data', []) if response.get('code') == 'OKAY' else []
     return render_template('regions.html', regions=regions)
-
-
-@app.route('/api/regions/<region_id>/products')
-@owner_required
-def region_products(region_id):
-    if not region_id:
-        return jsonify({'products': [], 'detail': 'Region ID is required.'}), 400
-
-    response = api_call('GET', '/v1/products', params={'regionId': region_id})
-    if response.get('code') == 'OKAY':
-        return jsonify({'products': response.get('data', [])})
-
-    detail = response.get('detail') or 'Unable to load products.'
-    return jsonify({'products': [], 'detail': detail}), 502
 
 
 @app.route('/products')
