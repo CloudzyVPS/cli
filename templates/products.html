@@ -17,10 +17,10 @@
     <h2>Select a region</h2>
     <p>Click one of the cards to filter the list. You can also bookmark the resulting URL.</p>
     {% if regions %}
-    <div class="region-grid" role="list" data-region-picker>
+    <div class="region-grid" role="list">
         {% for region in regions %}
         {% set is_selected = selected_region and (selected_region.id|string) == (region.id|string) %}
-        <a class="region-card" role="listitem" href="{{ url_for('products', region_id=region.id) }}" data-active="{{ 'true' if region.isActive else 'false' }}" data-selected="{{ 'true' if is_selected else 'false' }}">
+        <a class="region-card" role="listitem" href="{{ url_for('products', region_id=region.id) }}" {% if is_selected %}aria-current="true"{% endif %}>
             <div class="region-heading">
                 <h3>{{ region.name }}</h3>
                 <span class="region-chip">{{ region.abbr }}</span>
@@ -70,27 +70,27 @@
 
     {% if selected_region %}
         {% if products %}
-        <div class="product-grid" role="list" data-product-grid>
+        <div class="product-grid" role="list">
             {% for product in products %}
-            <article class="product-card" role="listitem" data-product-card data-view-only="true">
+            <article class="product-card" role="listitem">
                 <div class="product-card-body">
-                    <h2 data-product-headline>
-                            {% for metric in product.metrics %}
-                            <span data-metric="{{ metric.type }}"{% if metric.variant %} data-variant="{{ metric.variant }}"{% endif %} title="{{ metric.label }}" aria-label="{{ metric.label }}">
+                    <h2>
+                        {% for metric in metrics %}
+                            <span class="metric" title="{{ metric.label }}" aria-label="{{ metric.label }}">
                                 {% if metric.icon %}<img src="{{ url_for('static', filename='icons/' ~ metric.icon) }}" alt="" aria-hidden="true">{% endif %}
                                 <span>{{ metric.value }}</span>
                             </span>
                             {% endfor %}
                         </h2>
                     {% if product.plan_name %}
-                    <p data-product-plan>{{ product.plan_name }}</p>
+                    <p class="product-plan">{{ product.plan_name }}</p>
                     {% endif %}
                     <p class="product-meta">Product #{{ product.id }}</p>
                     {% if product.description %}
-                    <p data-product-note>{{ product.description }}</p>
+                    <p>{{ product.description }}</p>
                     {% endif %}
                     {% if product.spec_entries %}
-                    <dl data-product-facts>
+                    <dl>
                         {% for entry in product.spec_entries %}
                         <div>
                             <dt>{{ entry.term }}</dt>
@@ -100,7 +100,7 @@
                     </dl>
                     {% endif %}
                     {% if product.price_entries %}
-                    <dl data-product-pricing>
+                    <dl class="pricing">
                         {% for entry in product.price_entries %}
                         <div>
                             <dt>{{ entry.term }}</dt>
@@ -111,7 +111,7 @@
                     {% endif %}
                     {% if product.tags %}
                     <footer>
-                        <p data-product-tags>{{ product.tags }}</p>
+                        <p>{{ product.tags }}</p>
                     </footer>
                     {% endif %}
                 </div>
@@ -119,10 +119,10 @@
             {% endfor %}
         </div>
         {% else %}
-        <p data-empty>📦 No products are currently returned for this region.</p>
+        <p>📦 No products are currently returned for this region.</p>
         {% endif %}
     {% elif requested_region %}
-        <p data-empty>🌍 We could not find a region with ID {{ requested_region }}.</p>
+        <p>🌍 We could not find a region with ID {{ requested_region }}.</p>
     {% endif %}
 </section>
 {% endblock %}

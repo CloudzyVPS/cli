@@ -8,18 +8,18 @@
     <p>Manage the public keys that are available during instance provisioning. Changes take effect immediately.</p>
 </header>
 
-<section data-ssh-keys-panel>
+<section>
     <h2>Registered keys</h2>
     <small>Delete keys that are no longer needed or keep them available for future deployments.</small>
     {% if customer_id %}
     <small>Viewing keys for customer ID: <code>{{ customer_id }}</code></small>
     {% endif %}
     {% if not ssh_keys %}
-    <p data-empty>🔑 No SSH keys are registered yet. Use the form below to add your first key.</p>
+    <p>🔑 No SSH keys are registered yet. Use the form below to add your first key.</p>
     {% else %}
-    <div class="card-grid" data-ssh-keys-list>
+    <div class="card-grid">
         {% for key in ssh_keys %}
-        <article data-ssh-key>
+        <article>
             <h3>{{ key.name }}</h3>
             <small>ID #{{ key.id }}{% if key.customer_id %} · Customer {{ key.customer_id }}{% endif %}</small>
             {% if key.fingerprint %}
@@ -41,7 +41,7 @@
     {% endif %}
 </section>
 
-<section data-ssh-key-form>
+<section>
     <h2>Add a new SSH key</h2>
     <small>Provide the key name and the complete public key string (usually starting with <code>ssh-</code>).</small>
     <form method="post" novalidate>

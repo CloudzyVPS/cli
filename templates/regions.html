@@ -14,7 +14,7 @@
     <p>Click any region to open <code>/products?region_id=&lt;id&gt;</code> with the relevant inventory.</p>
     <div class="region-grid" role="list">
         {% for region in regions %}
-        <a class="region-card" role="listitem" href="{{ url_for('products', region_id=region.id) }}" data-active="{{ 'true' if region.isActive else 'false' }}">
+        <a class="region-card" role="listitem" href="{{ url_for('products', region_id=region.id) }}">
             <div class="region-heading">
                 <h3>{{ region.name }}</h3>
                 <span class="region-chip">{{ region.abbr }}</span>

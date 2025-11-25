@@ -41,7 +41,7 @@
             {% if metrics %}
             <div class="invoice-metrics">
                 {% for metric in metrics %}
-                <span data-metric="{{ metric.type }}"{% if metric.variant %} data-variant="{{ metric.variant }}"{% endif %} title="{{ metric.label }}" aria-label="{{ metric.label }}">
+                <span class="metric" title="{{ metric.label }}" aria-label="{{ metric.label }}">
                     <img src="{{ url_for('static', filename='icons/' ~ metric.icon) }}" alt="" aria-hidden="true">
                     <span>{{ metric.value }}</span>
                 </span>
