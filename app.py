@@ -26,6 +26,8 @@ app.secret_key = 'your_secret_key'  # Change this
 
 API_BASE_URL = os.getenv('API_BASE_URL')
 API_TOKEN = os.getenv('API_TOKEN')
+# Optional default customer id to use for API calls when the configured API token requires it
+API_DEFAULT_CUSTOMER_ID = os.getenv('API_DEFAULT_CUSTOMER_ID')
 USERS_FILE = Path('users.json')
 
 
@@ -332,9 +334,28 @@ def load_regions():
     return regions, lookup, configs
 
 
-def load_ssh_keys():
-    response = api_call('GET', '/v1/ssh-keys')
+def load_ssh_keys(customer_id: str = None):
+    """Load SSH keys from the backend. If the API token is an admin token and the developer
+    gateway requires an explicit customer id, this function will optionally use `customer_id`
+    (either passed in, or via env var API_DEFAULT_CUSTOMER_ID) to retrieve the list.
+    """
+    params = None
+    if customer_id:
+        params = {'customerId': customer_id}
+    response = api_call('GET', '/v1/ssh-keys', params=params)
     payload = response.get('data', []) if response.get('code') == 'OKAY' else []
+    # If the API responded with an error that suggests a customer id is required for this
+    # token (likely the token is an admin/developer token), try using the configured
+    # API_DEFAULT_CUSTOMER_ID environment variable to request the keys for a specific
+    # customer.
+    if response.get('code') != 'OKAY' or isinstance(payload, dict) and not payload:
+        detail = response.get('detail') or ''
+        req_customer_id_needed = 'Customer id should be provided' in str(detail) or 'customer id' in str(detail).lower()
+        if not customer_id and API_DEFAULT_CUSTOMER_ID and req_customer_id_needed:
+            params = {'customerId': API_DEFAULT_CUSTOMER_ID}
+            response = api_call('GET', '/v1/ssh-keys', params=params)
+            payload = response.get('data', []) if response.get('code') == 'OKAY' else []
+
     if isinstance(payload, dict):
         candidates = (
             payload.get('sshKeys')
@@ -359,6 +380,22 @@ def load_ssh_keys():
             'customer_id': item.get('customerId') or item.get('userId') or item.get('customer_id'),
         })
     return normalized
+
+
+def determine_customer_context():
+    """Return a customer_id to use for API calls.
+    Precedence:
+      1) request.args.get('customer_id') if present
+      2) API_DEFAULT_CUSTOMER_ID environment variable
+      3) None
+    """
+    from flask import request
+    cid = (request.args.get('customer_id') or '').strip()
+    if cid:
+        return cid
+    if API_DEFAULT_CUSTOMER_ID:
+        return API_DEFAULT_CUSTOMER_ID
+    return None
 
 
 def is_high_frequency(product):
@@ -638,6 +675,7 @@ def ssh_keys():
         'public_key': '',
     }
 
+    customer_id = (request.args.get('customer_id') or determine_customer_context())
     if request.method == 'POST':
         action = (request.form.get('action') or 'create').strip().lower()
 
@@ -647,6 +685,8 @@ def ssh_keys():
                 flash('Invalid SSH key identifier provided.')
             else:
                 response = api_call('DELETE', f"/v1/ssh-keys/{key_id_raw}")
+                if response.get('code') != 'OKAY' and API_DEFAULT_CUSTOMER_ID and response.get('detail') and 'customer id' in response.get('detail').lower():
+                    response = api_call('DELETE', f"/v1/ssh-keys/{key_id_raw}", params={'customerId': API_DEFAULT_CUSTOMER_ID})
                 if response.get('code') == 'OKAY':
                     flash('SSH key removed.')
                 else:
@@ -670,14 +710,18 @@ def ssh_keys():
         else:
             payload = {'name': name, 'publicKey': public_key}
             response = api_call('POST', '/v1/ssh-keys', data=payload)
+            if response.get('code') != 'OKAY' and API_DEFAULT_CUSTOMER_ID and response.get('detail') and 'customer id' in response.get('detail').lower():
+                payload['customerId'] = API_DEFAULT_CUSTOMER_ID
+                response = api_call('POST', '/v1/ssh-keys', data=payload)
             if response.get('code') == 'OKAY':
                 flash('SSH key added successfully.')
                 return redirect(url_for('ssh_keys'))
             detail = response.get('detail') or 'Unable to add SSH key.'
             flash(f'Error: {detail}')
 
-    ssh_keys_list = load_ssh_keys()
-    return render_template('ssh_keys.html', ssh_keys=ssh_keys_list, form_values=form_values)
+    customer_id = (request.args.get('customer_id') or determine_customer_context())
+    ssh_keys_list = load_ssh_keys(customer_id=customer_id)
+    return render_template('ssh_keys.html', ssh_keys=ssh_keys_list, form_values=form_values, customer_id=customer_id)
 
 
 @app.route('/')
@@ -713,7 +757,8 @@ def create_start():
     regions, region_lookup, _ = load_regions()
     if not regions:
         flash('No regions were returned by the developer API.')
-    ssh_keys = load_ssh_keys()
+    customer_id = (request.args.get('customer_id') or determine_customer_context())
+    ssh_keys = load_ssh_keys(customer_id=customer_id)
     available_ssh_key_ids = {str(key['id']) for key in ssh_keys if key.get('id') is not None}
 
     base_state = parse_wizard_base(request.args)
@@ -1279,7 +1324,8 @@ def create_review():
     if back_query:
         back_url = f"{back_url}?{back_query}"
 
-    ssh_keys_catalog = load_ssh_keys()
+    customer_id = (request.args.get('customer_id') or determine_customer_context())
+    ssh_keys_catalog = load_ssh_keys(customer_id=customer_id)
     ssh_key_lookup = {str(item['id']): item for item in ssh_keys_catalog if item.get('id') is not None}
     ssh_keys_display = []
     for key_id in base_state['ssh_key_ids']:

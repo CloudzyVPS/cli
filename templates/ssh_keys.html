@@ -14,6 +14,9 @@
     <header>
         <h2>Registered keys</h2>
         <p class="help-text">Delete keys that are no longer needed or keep them available for future deployments.</p>
+        {% if customer_id %}
+        <p class="help-text">Viewing keys for customer ID: <code>{{ customer_id }}</code></p>
+        {% endif %}
     </header>
     {% if not ssh_keys %}
     <div class="empty-state">
