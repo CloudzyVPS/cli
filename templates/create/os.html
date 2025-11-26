@@ -9,67 +9,69 @@
     <p>Step 5 of 7 · Choose the operating system to install</p>
 </header>
 
-<form method="get" action="{{ url_for('create_step_6') }}" class="surface" novalidate>
+<form method="get" action="{{ submit_url }}" class="surface" novalidate>
     {% for host in base_state.hostnames %}
     <input type="hidden" name="hostnames" value="{{ host }}">
     {% endfor %}
     <input type="hidden" name="region" value="{{ base_state.region }}">
     <input type="hidden" name="instance_class" value="{{ base_state.instance_class }}">
     <input type="hidden" name="plan_type" value="{{ base_state.plan_type }}">
-    <input type="hidden" name="assign_ipv4" value="{{ '1' if base_state.assign_ipv4 else '0' }}">
-    <input type="hidden" name="assign_ipv6" value="{{ '1' if base_state.assign_ipv6 else '0' }}">
-    <input type="hidden" name="floating_ip_count" value="{{ base_state.floating_ip_count|default(0, true) }}">
+    <input type="hidden" name="assign_ipv4" value="{% if base_state.assign_ipv4 %}1{% else %}0{% endif %}">
+    <input type="hidden" name="assign_ipv6" value="{% if base_state.assign_ipv6 %}1{% else %}0{% endif %}">
+    <input type="hidden" name="floating_ip_count" value="{{ floating_ip_count }}">
     {% for key_id in base_state.ssh_key_ids %}
     <input type="hidden" name="ssh_key_ids" value="{{ key_id }}">
     {% endfor %}
-    {% if base_state.plan_type == 'fixed' %}
+    {% if base_state.plan_type == "fixed" %}
     <input type="hidden" name="product_id" value="{{ product_id }}">
     <input type="hidden" name="extra_disk" value="{{ extra_disk }}">
     <input type="hidden" name="extra_bandwidth" value="{{ extra_bandwidth }}">
     {% else %}
-    <input type="hidden" name="cpu" value="{{ cpu }}">
-    <input type="hidden" name="ramInGB" value="{{ ramInGB }}">
-    <input type="hidden" name="diskInGB" value="{{ diskInGB }}">
-    {% if bandwidthInTB %}
-    <input type="hidden" name="bandwidthInTB" value="{{ bandwidthInTB }}">
-    {% endif %}
+    <input type="hidden" name="cpu" value="{{ custom_plan.cpu }}">
+    <input type="hidden" name="ramInGB" value="{{ custom_plan.ram_in_gb }}">
+    <input type="hidden" name="diskInGB" value="{{ custom_plan.disk_in_gb }}">
+    <input type="hidden" name="bandwidthInTB" value="{{ custom_plan.bandwidth_in_tb }}">
     {% endif %}
     <fieldset>
         <legend>Operating System</legend>
-        {% if not os_list %}
-            <p class="form-help error">No operating systems are available for this plan.</p>
-        {% else %}
-            <div class="product-grid" role="list">
-                {% for os_item in os_list %}
-                    {% if os_item.isActive %}
-                        <label class="product-card" role="listitem" {% if selected_os_id == os_item.id %}aria-current="true"{% endif %}>
-                            <input type="radio" name="os_id" value="{{ os_item.id }}" {% if selected_os_id == os_item.id %}checked{% endif %} required>
-                            <div class="product-card-body">
-                                <h2>
-                                    <span>{{ os_item.name }}</span>
-                                </h2>
-                                {% if os_item.family or os_item.arch %}
-                                    <p class="product-plan">{% if os_item.family %}{{ os_item.family }}{% endif %}{% if os_item.family and os_item.arch %} · {% endif %}{% if os_item.arch %}{{ os_item.arch }}{% endif %}</p>
-                                {% endif %}
-                                {% if os_item.minRam %}
-                                    <dl>
-                                        <div>
-                                            <dt>Min RAM</dt>
-                                            <dd>{{ (os_item.minRam | int / 1024) | round(1) }} GB</dd>
-                                        </div>
-                                    </dl>
-                                {% endif %}
-                                {% if os_item.isDefault %}
-                                    <footer>
-                                        <p>Default</p>
-                                    </footer>
-                                {% endif %}
-                            </div>
-                        </label>
+        {% if !os_list.is_empty() %}
+        <div class="product-grid" role="list">
+            {% for os_item in os_list %}
+            <label class="product-card" role="listitem" {% if selected_os_id == os_item.id %}aria-current="true"{% endif %}>
+                <input type="radio" name="os_id" value="{{ os_item.id }}" {% if selected_os_id == os_item.id %}checked{% endif %} required>
+                <div class="product-card-body">
+                    <h2>{{ os_item.name }}</h2>
+                    {% if !os_item.family.is_empty() %}
+                    <p class="product-plan">
+                        {{ os_item.family }}{% if let Some(arch) = os_item.arch.as_ref() %} · {{ arch }}{% endif %}
+                    </p>
+                    {% else %}
+                        {% if let Some(arch) = os_item.arch.as_ref() %}
+                        <p class="product-plan">
+                            {{ arch }}
+                        </p>
+                        {% endif %}
                     {% endif %}
-                {% endfor %}
-            </div>
-            <p class="help-text">Select the operating system to install on your instance.</p>
+                    {% if let Some(min_ram) = os_item.min_ram.as_ref() %}
+                    <dl>
+                        <div>
+                            <dt>Min RAM</dt>
+                            <dd>{{ min_ram }}</dd>
+                        </div>
+                    </dl>
+                    {% endif %}
+                    {% if os_item.is_default %}
+                    <footer>
+                        <p>Default</p>
+                    </footer>
+                    {% endif %}
+                </div>
+            </label>
+            {% endfor %}
+        </div>
+        <p class="help-text">Select the operating system to install on your instance.</p>
+        {% else %}
+        <p class="form-help error">No operating systems are available for this plan.</p>
         {% endif %}
     </fieldset>
 

@@ -4,75 +4,61 @@
 
 {% block content %}
 <header class="page-header">
-    <p class="breadcrumb"><a href="{{ back_to_start_url }}">← Previous step</a></p>
+    <p class="breadcrumb"><a href="{{ back_url }}">← Previous step</a></p>
     <h1>Select a product</h1>
-    <p>Step 3 of 7 · Choose a plan for {{ region.name }}</p>
+    <p>Step 3 of 7 · Choose a plan for {{ region_name }}</p>
 </header>
 
-{% if not products %}
-<section class="surface">
-    <p>No products were returned for the selected region. <a href="{{ url_for('create_step_1') }}">Go back</a> to pick another region.</p>
-</section>
-{% else %}
-<form method="get" action="{{ url_for('create_step_4') }}" class="surface" novalidate>
+{% if has_products %}
+<form method="get" action="{{ submit_url }}" class="surface" novalidate>
     {% for host in base_state.hostnames %}
     <input type="hidden" name="hostnames" value="{{ host }}">
     {% endfor %}
     <input type="hidden" name="region" value="{{ base_state.region }}">
     <input type="hidden" name="instance_class" value="{{ base_state.instance_class }}">
     <input type="hidden" name="plan_type" value="{{ base_state.plan_type }}">
-    <input type="hidden" name="assign_ipv4" value="{{ '1' if base_state.assign_ipv4 else '0' }}">
-    <input type="hidden" name="assign_ipv6" value="{{ '1' if base_state.assign_ipv6 else '0' }}">
-    <input type="hidden" name="floating_ip_count" value="{{ base_state.floating_ip_count|default(0, true) }}">
+    <input type="hidden" name="assign_ipv4" value="{% if base_state.assign_ipv4 %}1{% else %}0{% endif %}">
+    <input type="hidden" name="assign_ipv6" value="{% if base_state.assign_ipv6 %}1{% else %}0{% endif %}">
+    <input type="hidden" name="floating_ip_count" value="{{ floating_ip_count }}">
     {% for key_id in base_state.ssh_key_ids %}
     <input type="hidden" name="ssh_key_ids" value="{{ key_id }}">
     {% endfor %}
     <fieldset>
-        <legend>Plans for {{ region.name }}</legend>
+        <legend>Plans for {{ region_name }}</legend>
         <div class="product-grid" role="list">
             {% for product in products %}
             <label class="product-card" role="listitem" {% if selected_product_id == product.id %}aria-current="true"{% endif %}>
                 <input type="radio" name="product_id" value="{{ product.id }}" {% if selected_product_id == product.id %}checked{% endif %}>
                 <div class="product-card-body">
-                <h2>
-                    {% for metric in product.metrics %}
-                        <span class="metric" title="{{ metric.label }}" aria-label="{{ metric.label }}">
-                            <img src="{{ url_for('static', filename='icons/' ~ metric.icon) }}" alt="" aria-hidden="true">
-                            <span>{{ metric.value }}</span>
-                        </span>
-                        {% endfor %}
-                    </h2>
-                    {% if product.plan_name %}
-                    <p class="product-plan">{{ product.plan_name }}</p>
+                    <h2>{{ product.name }}</h2>
+                    {% if !product.description.is_empty() %}
+                    <p>{{ product.description }}</p>
                     {% endif %}
-                {% if product.description %}
-                <p>{{ product.description }}</p>
-                {% endif %}
-                {% if product.spec_entries %}
-                <dl>
-                    {% for entry in product.spec_entries %}
-                    <div>
-                        <dt>{{ entry.term }}</dt>
-                        <dd>{{ entry.value }}</dd>
-                    </div>
-                    {% endfor %}
-                </dl>
-                {% endif %}
-                {% if product.price_entries %}
-                <dl class="pricing">
-                    {% for entry in product.price_entries %}
-                    <div>
-                        <dt>{{ entry.term }}</dt>
-                        <dd>{{ entry.value }}</dd>
-                    </div>
-                    {% endfor %}
-                </dl>
-                {% endif %}
-                {% if product.tags %}
-                <footer>
-                    <p>{{ product.tags }}</p>
-                </footer>
-                {% endif %}
+                    {% if !product.spec_entries.is_empty() %}
+                    <dl>
+                        {% for entry in product.spec_entries %}
+                        <div>
+                            <dt>{{ entry.term }}</dt>
+                            <dd>{{ entry.value }}</dd>
+                        </div>
+                        {% endfor %}
+                    </dl>
+                    {% endif %}
+                    {% if !product.price_entries.is_empty() %}
+                    <dl class="pricing">
+                        {% for entry in product.price_entries %}
+                        <div>
+                            <dt>{{ entry.term }}</dt>
+                            <dd>{{ entry.value }}</dd>
+                        </div>
+                        {% endfor %}
+                    </dl>
+                    {% endif %}
+                    {% if !product.tags.is_empty() %}
+                    <footer>
+                        <p>{{ product.tags }}</p>
+                    </footer>
+                    {% endif %}
                 </div>
             </label>
             {% endfor %}
@@ -83,5 +69,9 @@
         <button type="submit">Continue</button>
     </footer>
 </form>
+{% else %}
+<section class="surface">
+    <p>No products were returned for the selected region. <a href="{{ restart_url }}">Go back</a> to pick another region.</p>
+</section>
 {% endif %}
 {% endblock %}

@@ -40,7 +40,9 @@ struct AppState {
     sessions: Arc<Mutex<HashMap<String, String>>>, // session_id -> username
     api_base_url: String,
     api_token: String,
+    public_base_url: String,
     default_customer_cache: Arc<Mutex<Option<String>>>,
+    flash_store: Arc<Mutex<HashMap<String, Vec<String>>>>, // session_id -> flashes
     client: Client,
 }
 
@@ -115,39 +117,14 @@ struct LoginForm {
 }
 
 #[derive(Template)]
-#[template(
-    source = r#"<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Zyffiliate Login</title>
-    <link rel="stylesheet" href="/static/styles.css" />
-</head>
-<body>
-    <main class="auth">
-        <section>
-            <h1>Sign in</h1>
-            {% if let Some(msg) = error %}
-            <p class="error">{{ msg }}</p>
-            {% endif %}
-            <form method="post" action="/login">
-                <label>Username
-                    <input type="text" name="username" required />
-                </label>
-                <label>Password
-                    <input type="password" name="password" required />
-                </label>
-                <button type="submit">Login</button>
-            </form>
-        </section>
-    </main>
-</body>
-</html>"#,
-    ext = "html"
-)]
-struct LoginTemplate<'a> {
-    error: Option<&'a str>,
+#[template(path = "login.html")]
+struct LoginTemplate {
+    current_user: Option<CurrentUser>,
+    api_hostname: String,
+    base_url: String,
+    flash_messages: Vec<String>,
+    has_flash_messages: bool,
+    error: Option<String>,
 }
 
 async fn login_get(State(state): State<AppState>, jar: CookieJar) -> impl IntoResponse {
@@ -155,10 +132,26 @@ async fn login_get(State(state): State<AppState>, jar: CookieJar) -> impl IntoRe
         let target = resolve_default_endpoint(&state, &username);
         return Redirect::to(&target).into_response();
     }
+    let TemplateGlobals {
+        current_user,
+        api_hostname,
+        base_url,
+        flash_messages,
+        has_flash_messages,
+    } = build_template_globals(&state, &jar);
     inject_context(
         &state,
         &jar,
-        LoginTemplate { error: None }.render().unwrap(),
+        LoginTemplate {
+            current_user,
+            api_hostname,
+            base_url: base_url.clone(),
+            flash_messages,
+            has_flash_messages,
+            error: None,
+        }
+        .render()
+        .unwrap(),
     )
 }
 
@@ -185,11 +178,24 @@ async fn login_post(
             return (jar.add(cookie), Redirect::to(&target)).into_response();
         }
     }
+    drop(users);
+    let TemplateGlobals {
+        current_user,
+        api_hostname,
+        base_url,
+        flash_messages,
+        has_flash_messages,
+    } = build_template_globals(&state, &jar);
     inject_context(
         &state,
         &jar,
         LoginTemplate {
-            error: Some("Invalid credentials"),
+            current_user,
+            api_hostname,
+            base_url,
+            flash_messages,
+            has_flash_messages,
+            error: Some("Invalid credentials".into()),
         }
         .render()
         .unwrap(),
@@ -214,8 +220,32 @@ impl IntoResponseWithJar for Redirect {
 }
 
 fn current_username_from_jar(state: &AppState, jar: &CookieJar) -> Option<String> {
-    let sid = jar.get("session_id")?.value().to_string();
+    let sid = session_id_from_jar(jar)?;
     state.sessions.lock().unwrap().get(&sid).cloned()
+}
+
+fn session_id_from_jar(jar: &CookieJar) -> Option<String> {
+    jar.get("session_id").map(|c| c.value().to_string())
+}
+
+fn take_flash_messages(state: &AppState, jar: &CookieJar) -> Vec<String> {
+    let Some(session_id) = session_id_from_jar(jar) else {
+        return Vec::new();
+    };
+    state
+        .flash_store
+        .lock()
+        .unwrap()
+        .remove(&session_id)
+        .unwrap_or_default()
+}
+
+fn push_flash_message(state: &AppState, jar: &CookieJar, message: impl Into<String>) {
+    let Some(session_id) = session_id_from_jar(jar) else {
+        return;
+    };
+    let mut store = state.flash_store.lock().unwrap();
+    store.entry(session_id).or_default().push(message.into());
 }
 
 fn resolve_default_endpoint(state: &AppState, username: &str) -> String {
@@ -227,6 +257,32 @@ fn resolve_default_endpoint(state: &AppState, username: &str) -> String {
         return "/instances".to_string();
     }
     "/login".to_string()
+}
+
+fn sanitize_base_url(raw: &str) -> String {
+    let trimmed = raw.trim().trim_end_matches('/');
+    if trimmed.is_empty() {
+        "http://localhost:5000".to_string()
+    } else {
+        trimmed.to_string()
+    }
+}
+
+fn absolute_url(state: &AppState, path: &str) -> String {
+    if path.starts_with("http://") || path.starts_with("https://") {
+        return path.to_string();
+    }
+    let mut base = state.public_base_url.clone();
+    if !path.starts_with('/') {
+        base.push('/');
+        base.push_str(path);
+        return base;
+    }
+    let trimmed = path.trim_start_matches('/');
+    if trimmed.is_empty() {
+        return base;
+    }
+    format!("{}/{}", base, trimmed)
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -245,12 +301,33 @@ fn build_current_user(state: &AppState, jar: &CookieJar) -> Option<CurrentUser> 
     })
 }
 
+#[derive(Default)]
+struct TemplateGlobals {
+    current_user: Option<CurrentUser>,
+    api_hostname: String,
+    base_url: String,
+    flash_messages: Vec<String>,
+    has_flash_messages: bool,
+}
+
+fn build_template_globals(state: &AppState, jar: &CookieJar) -> TemplateGlobals {
+    let flash_messages = take_flash_messages(state, jar);
+    TemplateGlobals {
+        current_user: build_current_user(state, jar),
+        api_hostname: state.api_base_url.clone(),
+        base_url: state.public_base_url.clone(),
+        has_flash_messages: !flash_messages.is_empty(),
+        flash_messages,
+    }
+}
+
 fn inject_context(state: &AppState, jar: &CookieJar, mut html: String) -> Response {
     let current = build_current_user(state, jar);
     let api_hostname = state.api_base_url.clone();
     // Insert a hidden context div right after opening <body>
-    let ctx_div = format!("<div id='ctx' data-api-hostname='{}' data-current-username='{}' data-current-role='{}' style='display:none'></div>",
+    let ctx_div = format!("<div id='ctx' data-api-hostname='{}' data-base-url='{}' data-current-username='{}' data-current-role='{}' style='display:none'></div>",
                           api_hostname,
+                          state.public_base_url,
                           current.as_ref().map(|c| c.username.clone()).unwrap_or_default(),
                           current.as_ref().map(|c| c.role.clone()).unwrap_or_default());
     if let Some(pos) = html.find("<body>") {
@@ -502,55 +579,23 @@ async fn load_regions(state: &AppState) -> (Vec<Region>, HashMap<String, Region>
 }
 
 // ---------- Wizard Step 1 Template ----------
+#[derive(Clone, Default)]
+struct Step1FormData {
+    region: String,
+    instance_class: String,
+    plan_type: String,
+}
+
 #[derive(Template)]
-#[template(
-    source = r#"<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Create - Step 1</title>
-    <link rel="stylesheet" href="/static/styles.css" />
-</head>
-<body>
-    <header class="page-header">
-        <p><a href="/instances">&larr; Back to dashboard</a></p>
-        <h1>Select region and plan</h1>
-        <p>Choose region, class, and billing model to kick off provisioning.</p>
-    </header>
-    <section>
-        <form method="get" action="/create/step-2">
-            <label>Region
-                <select name="region">
-                    {% for region in regions %}
-                    <option value="{{ region.id }}" {% if region.id == form_region %}selected{% endif %}>{{ region.name }}</option>
-                    {% endfor %}
-                </select>
-            </label>
-            <label>Instance class
-                <select name="instance_class">
-                    <option value="default" {% if form_instance_class == "default" %}selected{% endif %}>default</option>
-                    <option value="cpu-optimized" {% if form_instance_class == "cpu-optimized" %}selected{% endif %}>cpu-optimized</option>
-                </select>
-            </label>
-            <label>Plan type
-                <select name="plan_type">
-                    <option value="fixed" {% if form_plan_type == "fixed" %}selected{% endif %}>fixed</option>
-                    <option value="custom" {% if form_plan_type == "custom" %}selected{% endif %}>custom</option>
-                </select>
-            </label>
-            <button type="submit">Next</button>
-        </form>
-    </section>
-</body>
-</html>"#,
-    ext = "html"
-)]
+#[template(path = "create/start.html")]
 struct Step1Template<'a> {
+    current_user: Option<CurrentUser>,
+    api_hostname: String,
+    base_url: String,
+    flash_messages: Vec<String>,
+    has_flash_messages: bool,
     regions: &'a [Region],
-    form_region: &'a str,
-    form_instance_class: &'a str,
-    form_plan_type: &'a str,
+    form_data: Step1FormData,
 }
 
 async fn create_step_1(
@@ -567,14 +612,29 @@ async fn create_step_1(
     if region_sel.is_empty() && !regions.is_empty() {
         region_sel = regions[0].id.clone();
     }
+    let TemplateGlobals {
+        current_user,
+        api_hostname,
+        base_url,
+        flash_messages,
+        has_flash_messages,
+    } = build_template_globals(&state, &jar);
+    let form_data = Step1FormData {
+        region: region_sel,
+        instance_class: base.instance_class.clone(),
+        plan_type: base.plan_type.clone(),
+    };
     inject_context(
         &state,
         &jar,
         Step1Template {
+            current_user,
+            api_hostname,
+            base_url,
+            flash_messages,
+            has_flash_messages,
             regions: &regions,
-            form_region: &region_sel,
-            form_instance_class: &base.instance_class,
-            form_plan_type: &base.plan_type,
+            form_data,
         }
         .render()
         .unwrap(),
@@ -582,34 +642,26 @@ async fn create_step_1(
 }
 
 // ---------- Wizard Step 2 (Hostnames & IP Assignment) ----------
-#[derive(Template)]
-#[template(
-    source = r#"<!DOCTYPE html>
-<html>
-<head><title>Create - Step 2</title></head>
-<body>
-    <h1>Hostnames & Networking</h1>
-    <form method="get" action="/create/step-3">
-        <textarea name="hostnames" rows="4" cols="40">{{ hostnames_text }}</textarea>
-        <div>
-            <label><input type="checkbox" name="assign_ipv4" value="1" {% if base.assign_ipv4 %}checked{% endif %}/> Assign IPv4</label>
-            <label><input type="checkbox" name="assign_ipv6" value="1" {% if base.assign_ipv6 %}checked{% endif %}/> Assign IPv6</label>
-        </div>
-        <label>Floating IP count <input type="number" name="floating_ip_count" value="{{ base.floating_ip_count }}" /></label>
-        <input type="hidden" name="region" value="{{ base.region }}" />
-        <input type="hidden" name="instance_class" value="{{ base.instance_class }}" />
-        <input type="hidden" name="plan_type" value="{{ base.plan_type }}" />
-        <button type="submit">Next</button>
-    </form>
-    <p><a href="{{ back_url }}">Back</a></p>
-</body>
-</html>"#,
-    ext = "html"
-)]
-struct Step2Template<'a> {
-    base: &'a BaseState,
+#[derive(Clone)]
+struct Step2FormData {
     hostnames_text: String,
+    assign_ipv4: bool,
+    assign_ipv6: bool,
+    floating_ip_count: String,
+}
+
+#[derive(Template)]
+#[template(path = "create/hostnames.html")]
+struct Step2Template<'a> {
+    current_user: Option<CurrentUser>,
+    api_hostname: String,
+    base_url: String,
+    flash_messages: Vec<String>,
+    has_flash_messages: bool,
+    base_state: &'a BaseState,
+    form_data: Step2FormData,
     back_url: String,
+    submit_url: String,
 }
 
 async fn create_step_2(
@@ -635,18 +687,37 @@ async fn create_step_2(
     let back_pairs = build_base_query_pairs(&base);
     let back_q = build_query_string(&back_pairs);
     let back_url = if back_q.is_empty() {
-        "/create/step-1".to_string()
+        absolute_url(&state, "/create/step-1")
     } else {
-        format!("/create/step-1?{}", back_q)
+        absolute_url(&state, &format!("/create/step-1?{}", back_q))
     };
     let hostnames_text = base.hostnames.join(", ");
+    let TemplateGlobals {
+        current_user,
+        api_hostname,
+        base_url,
+        flash_messages,
+        has_flash_messages,
+    } = build_template_globals(&state, &jar);
+    let form_data = Step2FormData {
+        hostnames_text,
+        assign_ipv4: base.assign_ipv4,
+        assign_ipv6: base.assign_ipv6,
+        floating_ip_count: base.floating_ip_count.to_string(),
+    };
     inject_context(
         &state,
         &jar,
         Step2Template {
-            base: &base,
-            hostnames_text,
+            current_user,
+            api_hostname,
+            base_url,
+            flash_messages,
+            has_flash_messages,
+            base_state: &base,
+            form_data,
             back_url,
+            submit_url: absolute_url(&state, "/create/step-3"),
         }
         .render()
         .unwrap(),
@@ -671,45 +742,49 @@ struct ProductView {
 }
 
 #[derive(Template)]
-#[template(
-    source = r#"<!DOCTYPE html>
-<html>
-<head><title>Create - Step 3</title></head>
-<body>
-    <h1>Plan details</h1>
-    <form method="get" action="/create/step-4">
-        <input type="hidden" name="region" value="{{ base.region }}" />
-        <input type="hidden" name="instance_class" value="{{ base.instance_class }}" />
-        <input type="hidden" name="plan_type" value="{{ base.plan_type }}" />
-        <input type="hidden" name="hostnames" value="{{ hostnames_join }}" />
-        {% if base.plan_type == "fixed" %}
-            {% for product in products %}
-            <label><input type="radio" name="product_id" value="{{ product.id }}" {% if product.id == selected_product_id %}checked{% endif %}/> {{ product.name }} - {{ product.tags }}</label><br />
-            {% endfor %}
-        {% else %}
-            <label>CPU <input type="number" name="cpu" value="{{ cpu }}" /></label>
-            <label>RAM (GB) <input type="number" name="ramInGB" value="{{ ramInGB }}" /></label>
-            <label>Disk (GB) <input type="number" name="diskInGB" value="{{ diskInGB }}" /></label>
-            <label>Bandwidth (TB) <input type="number" name="bandwidthInTB" value="{{ bandwidthInTB }}" step="0.1" /></label>
-        {% endif %}
-        <button type="submit">Next</button>
-    </form>
-    <p><a href="{{ back_url }}">Back</a></p>
-</body>
-</html>"#,
-    ext = "html"
-)]
-#[allow(non_snake_case)]
-struct Step3Template<'a> {
-    base: &'a BaseState,
+#[template(path = "create/fixed.html")]
+struct Step3FixedTemplate<'a> {
+    current_user: Option<CurrentUser>,
+    api_hostname: String,
+    base_url: String,
+    flash_messages: Vec<String>,
+    has_flash_messages: bool,
+    base_state: &'a BaseState,
     products: &'a [ProductView],
-    selected_product_id: &'a str,
-    hostnames_join: String,
-    cpu: String,
-    ramInGB: String,
-    diskInGB: String,
-    bandwidthInTB: String,
+    has_products: bool,
+    selected_product_id: String,
+    region_name: String,
+    floating_ip_count: String,
     back_url: String,
+    submit_url: String,
+    restart_url: String,
+}
+
+#[derive(Clone)]
+struct CustomPlanFormValues {
+    cpu: String,
+    ram_in_gb: String,
+    disk_in_gb: String,
+    bandwidth_in_tb: String,
+}
+
+#[derive(Template)]
+#[template(path = "create/custom.html")]
+struct Step3CustomTemplate<'a> {
+    current_user: Option<CurrentUser>,
+    api_hostname: String,
+    base_url: String,
+    flash_messages: Vec<String>,
+    has_flash_messages: bool,
+    base_state: &'a BaseState,
+    region_name: String,
+    floating_ip_count: String,
+    back_url: String,
+    submit_url: String,
+    requirements: Vec<String>,
+    minimum_ram: i32,
+    minimum_disk: i32,
+    form_values: CustomPlanFormValues,
 }
 
 fn value_to_short_string(value: &Value) -> String {
@@ -871,50 +946,81 @@ async fn create_step_3(
     let back_pairs = build_base_query_pairs(&base);
     let back_q = build_query_string(&back_pairs);
     let back_url = if back_q.is_empty() {
-        "/create/step-2".to_string()
+        absolute_url(&state, "/create/step-2")
     } else {
-        format!("/create/step-2?{}", back_q)
+        absolute_url(&state, &format!("/create/step-2?{}", back_q))
     };
     if base.plan_type == "fixed" {
         let products = load_products(&state, &base.region).await;
-        let selected_product_id = q.get("product_id").map(|s| s.as_str()).unwrap_or("");
-        let hostnames_join = base.hostnames.join(", ");
+        let selected_product_id = q.get("product_id").cloned().unwrap_or_default();
+        let TemplateGlobals {
+            current_user,
+            api_hostname,
+            base_url,
+            flash_messages,
+            has_flash_messages,
+        } = build_template_globals(&state, &jar);
         return inject_context(
             &state,
             &jar,
-            Step3Template {
-                base: &base,
+            Step3FixedTemplate {
+                current_user,
+                api_hostname,
+                base_url,
+                flash_messages,
+                has_flash_messages,
+                base_state: &base,
                 products: &products,
+                has_products: !products.is_empty(),
                 selected_product_id,
-                hostnames_join,
-                cpu: "".into(),
-                ramInGB: "".into(),
-                diskInGB: "".into(),
-                bandwidthInTB: "".into(),
+                region_name: base.region.clone(),
+                floating_ip_count: base.floating_ip_count.to_string(),
                 back_url,
+                submit_url: absolute_url(&state, "/create/step-4"),
+                restart_url: absolute_url(&state, "/create/step-1"),
             }
             .render()
             .unwrap(),
         );
     }
-    let hostnames_join = base.hostnames.join(", ");
-    let cpu = q.get("cpu").cloned().unwrap_or_default();
-    let ram = q.get("ramInGB").cloned().unwrap_or_default();
-    let disk = q.get("diskInGB").cloned().unwrap_or_default();
-    let bw = q.get("bandwidthInTB").cloned().unwrap_or_default();
+    let cpu = q.get("cpu").cloned().unwrap_or_else(|| "2".into());
+    let ram = q.get("ramInGB").cloned().unwrap_or_else(|| "4".into());
+    let disk = q.get("diskInGB").cloned().unwrap_or_else(|| "50".into());
+    let bw = q
+        .get("bandwidthInTB")
+        .cloned()
+        .unwrap_or_else(|| "1".into());
+    let TemplateGlobals {
+        current_user,
+        api_hostname,
+        base_url,
+        flash_messages,
+        has_flash_messages,
+    } = build_template_globals(&state, &jar);
+    let form_values = CustomPlanFormValues {
+        cpu,
+        ram_in_gb: ram,
+        disk_in_gb: disk,
+        bandwidth_in_tb: bw,
+    };
     inject_context(
         &state,
         &jar,
-        Step3Template {
-            base: &base,
-            products: &[],
-            selected_product_id: "",
-            hostnames_join,
-            cpu,
-            ramInGB: ram,
-            diskInGB: disk,
-            bandwidthInTB: bw,
+        Step3CustomTemplate {
+            current_user,
+            api_hostname,
+            base_url,
+            flash_messages,
+            has_flash_messages,
+            base_state: &base,
+            region_name: base.region.clone(),
+            floating_ip_count: base.floating_ip_count.to_string(),
             back_url,
+            submit_url: absolute_url(&state, "/create/step-5"),
+            requirements: Vec::new(),
+            minimum_ram: 1,
+            minimum_disk: 1,
+            form_values,
         }
         .render()
         .unwrap(),
@@ -922,42 +1028,26 @@ async fn create_step_3(
 }
 
 // ---------- Wizard Step 4 (Extras for fixed plans) ----------
-#[derive(Template)]
-#[template(
-    source = r#"<!DOCTYPE html>
-<html>
-<head><title>Create - Step 4</title></head>
-<body>
-    <h1>Extras</h1>
-    {% if base.plan_type == "fixed" %}
-    <form method="get" action="/create/step-5">
-        <input type="hidden" name="region" value="{{ base.region }}" />
-        <input type="hidden" name="instance_class" value="{{ base.instance_class }}" />
-        <input type="hidden" name="plan_type" value="{{ base.plan_type }}" />
-        <input type="hidden" name="hostnames" value="{{ hostnames_join }}" />
-        <input type="hidden" name="product_id" value="{{ product_id }}" />
-        <label>Extra disk (GB) <input type="number" name="extra_disk" value="{{ extra_disk }}" /></label>
-        <label>Extra bandwidth (TB) <input type="number" name="extra_bandwidth" value="{{ extra_bandwidth }}" step="0.1" /></label>
-        <button type="submit">Next</button>
-    </form>
-    {% else %}
-    <p>No extras for custom plans.</p>
-    <p><a href="{{ next_url }}">Continue</a></p>
-    {% endif %}
-    <p><a href="{{ back_url }}">Back</a></p>
-</body>
-</html>"#,
-    ext = "html"
-)]
-#[allow(non_snake_case)]
-struct Step4Template<'a> {
-    base: &'a BaseState,
-    hostnames_join: String,
-    product_id: String,
+#[derive(Clone)]
+struct ExtrasFormValues {
     extra_disk: String,
     extra_bandwidth: String,
+}
+
+#[derive(Template)]
+#[template(path = "create/extras.html")]
+struct Step4Template<'a> {
+    current_user: Option<CurrentUser>,
+    api_hostname: String,
+    base_url: String,
+    flash_messages: Vec<String>,
+    has_flash_messages: bool,
+    base_state: &'a BaseState,
+    floating_ip_count: String,
+    product_id: String,
+    extras: ExtrasFormValues,
     back_url: String,
-    next_url: String,
+    submit_url: String,
 }
 
 async fn create_step_4(
@@ -972,52 +1062,56 @@ async fn create_step_4(
     if base.hostnames.is_empty() || base.region.is_empty() {
         return Redirect::to("/create/step-1").into_response();
     }
-    let hostnames_join = base.hostnames.join(", ");
     let back_pairs = build_base_query_pairs(&base);
     let back_q = build_query_string(&back_pairs);
     let back_url = if back_q.is_empty() {
-        "/create/step-3".to_string()
+        absolute_url(&state, "/create/step-3")
     } else {
-        format!("/create/step-3?{}", back_q)
+        absolute_url(&state, &format!("/create/step-3?{}", back_q))
     };
     if base.plan_type != "fixed" {
-        // Skip extras
         let next_pairs = build_base_query_pairs(&base);
         let next_q = build_query_string(&next_pairs);
-        let next_url = format!("/create/step-5?{}", next_q);
-        return inject_context(
-            &state,
-            &jar,
-            Step4Template {
-                base: &base,
-                hostnames_join,
-                product_id: String::new(),
-                extra_disk: String::new(),
-                extra_bandwidth: String::new(),
-                back_url,
-                next_url,
-            }
-            .render()
-            .unwrap(),
-        );
+        let next_url = if next_q.is_empty() {
+            "/create/step-5".to_string()
+        } else {
+            format!("/create/step-5?{}", next_q)
+        };
+        return Redirect::to(&next_url).into_response();
     }
     let product_id = q.get("product_id").cloned().unwrap_or_default();
     if product_id.is_empty() {
         return Redirect::to("/create/step-3").into_response();
     }
-    let extra_disk = q.get("extra_disk").cloned().unwrap_or("0".into());
-    let extra_bandwidth = q.get("extra_bandwidth").cloned().unwrap_or("0".into());
+    let TemplateGlobals {
+        current_user,
+        api_hostname,
+        base_url,
+        flash_messages,
+        has_flash_messages,
+    } = build_template_globals(&state, &jar);
+    let extras = ExtrasFormValues {
+        extra_disk: q.get("extra_disk").cloned().unwrap_or_else(|| "0".into()),
+        extra_bandwidth: q
+            .get("extra_bandwidth")
+            .cloned()
+            .unwrap_or_else(|| "0".into()),
+    };
     inject_context(
         &state,
         &jar,
         Step4Template {
-            base: &base,
-            hostnames_join,
+            current_user,
+            api_hostname,
+            base_url,
+            flash_messages,
+            has_flash_messages,
+            base_state: &base,
+            floating_ip_count: base.floating_ip_count.to_string(),
             product_id,
-            extra_disk,
-            extra_bandwidth,
+            extras,
             back_url,
-            next_url: String::new(),
+            submit_url: absolute_url(&state, "/create/step-5"),
         }
         .render()
         .unwrap(),
@@ -1038,52 +1132,32 @@ struct OsItem {
     is_default: bool,
 }
 
+#[derive(Clone, Default)]
+struct CustomPlanCarry {
+    cpu: String,
+    ram_in_gb: String,
+    disk_in_gb: String,
+    bandwidth_in_tb: String,
+}
+
 #[derive(Template)]
-#[template(
-    source = r#"<!DOCTYPE html>
-<html>
-<head><title>Create - Step 5</title></head>
-<body>
-    <h1>Select operating system</h1>
-    <form method="get" action="/create/step-6">
-        <input type="hidden" name="region" value="{{ base.region }}" />
-        <input type="hidden" name="instance_class" value="{{ base.instance_class }}" />
-        <input type="hidden" name="plan_type" value="{{ base.plan_type }}" />
-        <input type="hidden" name="hostnames" value="{{ hostnames_join }}" />
-        {% if base.plan_type == "fixed" %}
-            <input type="hidden" name="product_id" value="{{ product_id }}" />
-            <input type="hidden" name="extra_disk" value="{{ extra_disk }}" />
-            <input type="hidden" name="extra_bandwidth" value="{{ extra_bandwidth }}" />
-        {% else %}
-            <input type="hidden" name="cpu" value="{{ cpu }}" />
-            <input type="hidden" name="ramInGB" value="{{ ramInGB }}" />
-            <input type="hidden" name="diskInGB" value="{{ diskInGB }}" />
-            <input type="hidden" name="bandwidthInTB" value="{{ bandwidthInTB }}" />
-        {% endif %}
-        {% for os in os_list %}
-            <label><input type="radio" name="os_id" value="{{ os.id }}" {% if os.id == selected_os_id %}checked{% endif %}/> {{ os.name }} ({{ os.family }})</label><br />
-        {% endfor %}
-        <button type="submit">Next</button>
-    </form>
-    <p><a href="{{ back_url }}">Back</a></p>
-</body>
-</html>"#,
-    ext = "html"
-)]
-#[allow(non_snake_case)]
+#[template(path = "create/os.html")]
 struct Step5Template<'a> {
-    base: &'a BaseState,
-    hostnames_join: String,
+    current_user: Option<CurrentUser>,
+    api_hostname: String,
+    base_url: String,
+    flash_messages: Vec<String>,
+    has_flash_messages: bool,
+    base_state: &'a BaseState,
     os_list: &'a [OsItem],
-    selected_os_id: &'a str,
+    selected_os_id: String,
     product_id: String,
     extra_disk: String,
     extra_bandwidth: String,
-    cpu: String,
-    ramInGB: String,
-    diskInGB: String,
-    bandwidthInTB: String,
+    custom_plan: CustomPlanCarry,
+    floating_ip_count: String,
     back_url: String,
+    submit_url: String,
 }
 
 async fn load_os_list(state: &AppState) -> Vec<OsItem> {
@@ -1238,38 +1312,84 @@ async fn create_step_5(
     if base.hostnames.is_empty() || base.region.is_empty() {
         return Redirect::to("/create/step-1").into_response();
     }
-    let hostnames_join = base.hostnames.join(", ");
-    let back_pairs = build_base_query_pairs(&base);
-    let back_q = build_query_string(&back_pairs);
-    let back_url = if base.plan_type == "fixed" {
-        format!("/create/step-4?{}", back_q)
-    } else {
-        format!("/create/step-3?{}", back_q)
+    let TemplateGlobals {
+        current_user,
+        api_hostname,
+        base_url,
+        flash_messages,
+        has_flash_messages,
+    } = build_template_globals(&state, &jar);
+    let product_id = q.get("product_id").cloned().unwrap_or_default();
+    if base.plan_type == "fixed" && product_id.is_empty() {
+        return Redirect::to("/create/step-3").into_response();
+    }
+    let extra_disk = q.get("extra_disk").cloned().unwrap_or_else(|| "0".into());
+    let extra_bandwidth = q
+        .get("extra_bandwidth")
+        .cloned()
+        .unwrap_or_else(|| "0".into());
+    let custom_plan = CustomPlanCarry {
+        cpu: q.get("cpu").cloned().unwrap_or_else(|| "2".into()),
+        ram_in_gb: q.get("ramInGB").cloned().unwrap_or_else(|| "4".into()),
+        disk_in_gb: q.get("diskInGB").cloned().unwrap_or_else(|| "50".into()),
+        bandwidth_in_tb: q
+            .get("bandwidthInTB")
+            .cloned()
+            .unwrap_or_else(|| "1".into()),
     };
     let os_list = load_os_list(&state).await;
-    let selected_os_id = q.get("os_id").cloned().unwrap_or_else(|| {
-        os_list
+    let mut selected_os_id = base.os_id.clone();
+    if selected_os_id.is_empty() {
+        selected_os_id = q.get("os_id").cloned().unwrap_or_default();
+    }
+    if selected_os_id.is_empty() {
+        selected_os_id = os_list
             .iter()
             .find(|o| o.is_default)
             .map(|o| o.id.clone())
-            .unwrap_or_default()
-    });
+            .or_else(|| os_list.first().map(|o| o.id.clone()))
+            .unwrap_or_default();
+    }
+    let mut back_pairs = build_base_query_pairs(&base);
+    let back_target = if base.plan_type == "fixed" {
+        if !product_id.is_empty() {
+            back_pairs.push(("product_id".into(), product_id.clone()));
+        }
+        back_pairs.push(("extra_disk".into(), extra_disk.clone()));
+        back_pairs.push(("extra_bandwidth".into(), extra_bandwidth.clone()));
+        "/create/step-4"
+    } else {
+        back_pairs.push(("cpu".into(), custom_plan.cpu.clone()));
+        back_pairs.push(("ramInGB".into(), custom_plan.ram_in_gb.clone()));
+        back_pairs.push(("diskInGB".into(), custom_plan.disk_in_gb.clone()));
+        back_pairs.push(("bandwidthInTB".into(), custom_plan.bandwidth_in_tb.clone()));
+        "/create/step-3"
+    };
+    let back_q = build_query_string(&back_pairs);
+    let back_url = if back_q.is_empty() {
+        absolute_url(&state, back_target)
+    } else {
+        absolute_url(&state, &format!("{}?{}", back_target, back_q))
+    };
     inject_context(
         &state,
         &jar,
         Step5Template {
-            base: &base,
-            hostnames_join,
+            current_user,
+            api_hostname,
+            base_url,
+            flash_messages,
+            has_flash_messages,
+            base_state: &base,
             os_list: &os_list,
-            selected_os_id: &selected_os_id,
-            product_id: q.get("product_id").cloned().unwrap_or_default(),
-            extra_disk: q.get("extra_disk").cloned().unwrap_or("0".into()),
-            extra_bandwidth: q.get("extra_bandwidth").cloned().unwrap_or("0".into()),
-            cpu: q.get("cpu").cloned().unwrap_or_default(),
-            ramInGB: q.get("ramInGB").cloned().unwrap_or_default(),
-            diskInGB: q.get("diskInGB").cloned().unwrap_or_default(),
-            bandwidthInTB: q.get("bandwidthInTB").cloned().unwrap_or_default(),
+            selected_os_id,
+            product_id,
+            extra_disk,
+            extra_bandwidth,
+            custom_plan,
+            floating_ip_count: base.floating_ip_count.to_string(),
             back_url,
+            submit_url: absolute_url(&state, "/create/step-6"),
         }
         .render()
         .unwrap(),
@@ -1284,51 +1404,23 @@ struct SelectableSshKey {
 }
 
 #[derive(Template)]
-#[template(
-    source = r#"<!DOCTYPE html>
-<html>
-<head><title>Create - Step 6</title></head>
-<body>
-    <h1>Choose SSH keys</h1>
-    <form method="get" action="/create/step-7">
-        <input type="hidden" name="region" value="{{ base.region }}" />
-        <input type="hidden" name="instance_class" value="{{ base.instance_class }}" />
-        <input type="hidden" name="plan_type" value="{{ base.plan_type }}" />
-        <input type="hidden" name="hostnames" value="{{ hostnames_join }}" />
-        <input type="hidden" name="os_id" value="{{ base.os_id }}" />
-        {% if base.plan_type == "fixed" %}
-            <input type="hidden" name="product_id" value="{{ product_id }}" />
-            <input type="hidden" name="extra_disk" value="{{ extra_disk }}" />
-            <input type="hidden" name="extra_bandwidth" value="{{ extra_bandwidth }}" />
-        {% else %}
-            <input type="hidden" name="cpu" value="{{ cpu }}" />
-            <input type="hidden" name="ramInGB" value="{{ ramInGB }}" />
-            <input type="hidden" name="diskInGB" value="{{ diskInGB }}" />
-            <input type="hidden" name="bandwidthInTB" value="{{ bandwidthInTB }}" />
-        {% endif %}
-        {% for key in ssh_keys %}
-            <label><input type="checkbox" name="ssh_key_ids" value="{{ key.id }}" {% if key.selected %}checked{% endif %}/> {{ key.name }}</label><br />
-        {% endfor %}
-        <button type="submit">Next</button>
-    </form>
-    <p><a href="{{ back_url }}">Back</a></p>
-</body>
-</html>"#,
-    ext = "html"
-)]
-#[allow(non_snake_case)]
+#[template(path = "create/ssh_keys.html")]
 struct Step6Template<'a> {
-    base: &'a BaseState,
-    hostnames_join: String,
+    current_user: Option<CurrentUser>,
+    api_hostname: String,
+    base_url: String,
+    flash_messages: Vec<String>,
+    has_flash_messages: bool,
+    base_state: &'a BaseState,
+    floating_ip_count: String,
     ssh_keys: Vec<SelectableSshKey>,
     product_id: String,
     extra_disk: String,
     extra_bandwidth: String,
-    cpu: String,
-    ramInGB: String,
-    diskInGB: String,
-    bandwidthInTB: String,
+    custom_plan: CustomPlanCarry,
     back_url: String,
+    submit_url: String,
+    manage_keys_url: String,
 }
 
 async fn create_step_6(
@@ -1340,13 +1432,58 @@ async fn create_step_6(
         return r.into_response();
     }
     let base = parse_wizard_base(&q);
+    if base.hostnames.is_empty() || base.region.is_empty() {
+        return Redirect::to("/create/step-1").into_response();
+    }
     if base.os_id.is_empty() {
         return Redirect::to("/create/step-5").into_response();
     }
-    let hostnames_join = base.hostnames.join(", ");
-    let back_pairs = build_base_query_pairs(&base);
+    let TemplateGlobals {
+        current_user,
+        api_hostname,
+        base_url,
+        flash_messages,
+        has_flash_messages,
+    } = build_template_globals(&state, &jar);
+    let product_id = q.get("product_id").cloned().unwrap_or_default();
+    if base.plan_type == "fixed" && product_id.is_empty() {
+        return Redirect::to("/create/step-3").into_response();
+    }
+    let extra_disk = q.get("extra_disk").cloned().unwrap_or_else(|| "0".into());
+    let extra_bandwidth = q
+        .get("extra_bandwidth")
+        .cloned()
+        .unwrap_or_else(|| "0".into());
+    let custom_plan = CustomPlanCarry {
+        cpu: q.get("cpu").cloned().unwrap_or_else(|| "2".into()),
+        ram_in_gb: q.get("ramInGB").cloned().unwrap_or_else(|| "4".into()),
+        disk_in_gb: q.get("diskInGB").cloned().unwrap_or_else(|| "50".into()),
+        bandwidth_in_tb: q
+            .get("bandwidthInTB")
+            .cloned()
+            .unwrap_or_else(|| "1".into()),
+    };
+    let mut back_pairs = build_base_query_pairs(&base);
+    let back_target = if base.plan_type == "fixed" {
+        if !product_id.is_empty() {
+            back_pairs.push(("product_id".into(), product_id.clone()));
+        }
+        back_pairs.push(("extra_disk".into(), extra_disk.clone()));
+        back_pairs.push(("extra_bandwidth".into(), extra_bandwidth.clone()));
+        "/create/step-5"
+    } else {
+        back_pairs.push(("cpu".into(), custom_plan.cpu.clone()));
+        back_pairs.push(("ramInGB".into(), custom_plan.ram_in_gb.clone()));
+        back_pairs.push(("diskInGB".into(), custom_plan.disk_in_gb.clone()));
+        back_pairs.push(("bandwidthInTB".into(), custom_plan.bandwidth_in_tb.clone()));
+        "/create/step-5"
+    };
     let back_q = build_query_string(&back_pairs);
-    let back_url = format!("/create/step-5?{}", back_q);
+    let back_url = if back_q.is_empty() {
+        absolute_url(&state, back_target)
+    } else {
+        absolute_url(&state, &format!("{}?{}", back_target, back_q))
+    };
     let customer_id = fetch_default_customer_id(&state).await;
     let ssh_keys = load_ssh_keys_api(&state, customer_id).await;
     let selected_ids: std::collections::HashSet<String> =
@@ -1354,11 +1491,11 @@ async fn create_step_6(
     let selectable: Vec<SelectableSshKey> = ssh_keys
         .into_iter()
         .map(|key| {
-            let selected = selected_ids.contains(&key.id);
+            let is_selected = selected_ids.contains(&key.id);
             SelectableSshKey {
                 id: key.id,
                 name: key.name,
-                selected,
+                selected: is_selected,
             }
         })
         .collect();
@@ -1366,17 +1503,21 @@ async fn create_step_6(
         &state,
         &jar,
         Step6Template {
-            base: &base,
-            hostnames_join,
+            current_user,
+            api_hostname,
+            base_url,
+            flash_messages,
+            has_flash_messages,
+            base_state: &base,
+            floating_ip_count: base.floating_ip_count.to_string(),
             ssh_keys: selectable,
-            product_id: q.get("product_id").cloned().unwrap_or_default(),
-            extra_disk: q.get("extra_disk").cloned().unwrap_or("0".into()),
-            extra_bandwidth: q.get("extra_bandwidth").cloned().unwrap_or("0".into()),
-            cpu: q.get("cpu").cloned().unwrap_or_default(),
-            ramInGB: q.get("ramInGB").cloned().unwrap_or_default(),
-            diskInGB: q.get("diskInGB").cloned().unwrap_or_default(),
-            bandwidthInTB: q.get("bandwidthInTB").cloned().unwrap_or_default(),
+            product_id,
+            extra_disk,
+            extra_bandwidth,
+            custom_plan,
             back_url,
+            submit_url: absolute_url(&state, "/create/step-7"),
+            manage_keys_url: absolute_url(&state, "/ssh-keys"),
         }
         .render()
         .unwrap(),
@@ -1384,53 +1525,41 @@ async fn create_step_6(
 }
 
 // ---------- Wizard Step 7 (Review & Create) ----------
-#[derive(Template)]
-#[template(
-    source = r#"<!DOCTYPE html>
-<html>
-<head><title>Create - Review</title></head>
-<body>
-    <h1>Review configuration</h1>
-    <p>Region: {{ base.region }}</p>
-    <p>Hostnames: {{ hostnames_join }}</p>
-    <p>Plan type: {{ base.plan_type }}</p>
-    <p>Instance class: {{ base.instance_class }}</p>
-    <p>OS: {{ base.os_id }}</p>
-    <form method="post">
-        <input type="hidden" name="region" value="{{ base.region }}" />
-        <input type="hidden" name="instance_class" value="{{ base.instance_class }}" />
-        <input type="hidden" name="plan_type" value="{{ base.plan_type }}" />
-        <input type="hidden" name="hostnames" value="{{ hostnames_join }}" />
-        <input type="hidden" name="os_id" value="{{ base.os_id }}" />
-        {% for id in base.ssh_key_ids %}
-            <input type="hidden" name="ssh_key_ids" value="{{ id }}" />
-        {% endfor %}
-        <input type="hidden" name="product_id" value="{{ product_id }}" />
-        <input type="hidden" name="extra_disk" value="{{ extra_disk }}" />
-        <input type="hidden" name="extra_bandwidth" value="{{ extra_bandwidth }}" />
-        <input type="hidden" name="cpu" value="{{ cpu }}" />
-        <input type="hidden" name="ramInGB" value="{{ ramInGB }}" />
-        <input type="hidden" name="diskInGB" value="{{ diskInGB }}" />
-        <input type="hidden" name="bandwidthInTB" value="{{ bandwidthInTB }}" />
-        <button type="submit">Create instance</button>
-    </form>
-    <p><a href="{{ back_url }}">Back</a></p>
-</body>
-</html>"#,
-    ext = "html"
-)]
-#[allow(non_snake_case)]
-struct Step7Template<'a> {
-    base: &'a BaseState,
-    hostnames_join: String,
+#[derive(Clone, Default)]
+struct PlanReviewState {
     product_id: String,
     extra_disk: String,
     extra_bandwidth: String,
     cpu: String,
-    ramInGB: String,
-    diskInGB: String,
-    bandwidthInTB: String,
+    ram_in_gb: String,
+    disk_in_gb: String,
+    bandwidth_in_tb: String,
+}
+
+#[derive(Template)]
+#[template(path = "create/review.html")]
+struct Step7Template<'a> {
+    current_user: Option<CurrentUser>,
+    api_hostname: String,
+    base_url: String,
+    flash_messages: Vec<String>,
+    has_flash_messages: bool,
+    base_state: &'a BaseState,
+    floating_ip_count: String,
+    plan_state: PlanReviewState,
+    plan_type_label: String,
+    region_name: String,
+    hostnames_display: String,
+    plan_summary: Vec<ProductEntry>,
+    has_plan_summary: bool,
+    price_entries: Vec<ProductEntry>,
+    has_price_entries: bool,
+    selected_os_label: String,
+    ssh_keys_display: String,
+    footnote_text: String,
+    has_footnote: bool,
     back_url: String,
+    submit_url: String,
 }
 
 async fn create_step_7_core(
@@ -1449,8 +1578,37 @@ async fn create_step_7_core(
         &query
     };
     let base = parse_wizard_base(source);
+    if base.hostnames.is_empty() || base.region.is_empty() {
+        return Redirect::to("/create/step-1").into_response();
+    }
     if base.os_id.is_empty() {
         return Redirect::to("/create/step-5").into_response();
+    }
+    let mut plan_state = PlanReviewState::default();
+    if base.plan_type == "fixed" {
+        plan_state.product_id = source.get("product_id").cloned().unwrap_or_default();
+        if plan_state.product_id.is_empty() {
+            return Redirect::to("/create/step-3").into_response();
+        }
+        plan_state.extra_disk = source
+            .get("extra_disk")
+            .cloned()
+            .unwrap_or_else(|| "0".into());
+        plan_state.extra_bandwidth = source
+            .get("extra_bandwidth")
+            .cloned()
+            .unwrap_or_else(|| "0".into());
+    } else {
+        plan_state.cpu = source.get("cpu").cloned().unwrap_or_else(|| "2".into());
+        plan_state.ram_in_gb = source.get("ramInGB").cloned().unwrap_or_else(|| "4".into());
+        plan_state.disk_in_gb = source
+            .get("diskInGB")
+            .cloned()
+            .unwrap_or_else(|| "50".into());
+        plan_state.bandwidth_in_tb = source
+            .get("bandwidthInTB")
+            .cloned()
+            .unwrap_or_else(|| "1".into());
     }
     if method == axum::http::Method::POST {
         let mut payload = serde_json::json!({
@@ -1468,41 +1626,41 @@ async fn create_step_7_core(
             payload["sshKeyIds"] = Value::from(base.ssh_key_ids.clone());
         }
         if base.plan_type == "fixed" {
-            if let Some(prod) = source.get("product_id") {
-                payload["productId"] = Value::from(prod.clone());
-            }
+            payload["productId"] = Value::from(plan_state.product_id.clone());
             let mut extras = serde_json::Map::new();
-            if let Some(d) = source.get("extra_disk").and_then(|v| v.parse::<i64>().ok()) {
-                if d > 0 {
-                    extras.insert("diskInGB".into(), Value::from(d));
-                }
-            }
-            if let Some(b) = source
-                .get("extra_bandwidth")
-                .and_then(|v| v.parse::<i64>().ok())
+            if let Some(d) = plan_state
+                .extra_disk
+                .trim()
+                .parse::<i64>()
+                .ok()
+                .filter(|v| *v > 0)
             {
-                if b > 0 {
-                    extras.insert("bandwidthInTB".into(), Value::from(b));
-                }
+                extras.insert("diskInGB".into(), Value::from(d));
+            }
+            if let Some(b) = plan_state
+                .extra_bandwidth
+                .trim()
+                .parse::<i64>()
+                .ok()
+                .filter(|v| *v > 0)
+            {
+                extras.insert("bandwidthInTB".into(), Value::from(b));
             }
             if !extras.is_empty() {
                 payload["extraResource"] = Value::Object(extras);
             }
         } else {
             let mut extras = serde_json::Map::new();
-            if let Some(cpu) = source.get("cpu").and_then(|v| v.parse::<i64>().ok()) {
+            if let Some(cpu) = plan_state.cpu.trim().parse::<i64>().ok() {
                 extras.insert("cpu".into(), Value::from(cpu));
             }
-            if let Some(ram) = source.get("ramInGB").and_then(|v| v.parse::<i64>().ok()) {
+            if let Some(ram) = plan_state.ram_in_gb.trim().parse::<i64>().ok() {
                 extras.insert("ramInGB".into(), Value::from(ram));
             }
-            if let Some(disk) = source.get("diskInGB").and_then(|v| v.parse::<i64>().ok()) {
+            if let Some(disk) = plan_state.disk_in_gb.trim().parse::<i64>().ok() {
                 extras.insert("diskInGB".into(), Value::from(disk));
             }
-            if let Some(bw) = source
-                .get("bandwidthInTB")
-                .and_then(|v| v.parse::<i64>().ok())
-            {
+            if let Some(bw) = plan_state.bandwidth_in_tb.trim().parse::<i64>().ok() {
                 extras.insert("bandwidthInTB".into(), Value::from(bw));
             }
             if !extras.is_empty() {
@@ -1516,59 +1674,143 @@ async fn create_step_7_core(
             return Redirect::to("/instances").into_response();
         }
     }
-    let back_pairs = build_base_query_pairs(&base);
+    let TemplateGlobals {
+        current_user,
+        api_hostname,
+        base_url,
+        flash_messages,
+        has_flash_messages,
+    } = build_template_globals(&state, &jar);
+    let mut plan_summary = Vec::new();
+    let mut price_entries = Vec::new();
+    let mut footnote = None;
+    if base.plan_type == "fixed" {
+        let products = load_products(&state, &base.region).await;
+        if let Some(prod) = products.into_iter().find(|p| p.id == plan_state.product_id) {
+            plan_summary = prod.spec_entries.clone();
+            price_entries = prod.price_entries.clone();
+            if !prod.description.trim().is_empty() {
+                footnote = Some(prod.description);
+            }
+        }
+    } else {
+        let mut summary = Vec::new();
+        if !plan_state.cpu.trim().is_empty() {
+            summary.push(ProductEntry {
+                term: "vCPU".into(),
+                value: plan_state.cpu.clone(),
+            });
+        }
+        if !plan_state.ram_in_gb.trim().is_empty() {
+            summary.push(ProductEntry {
+                term: "RAM (GB)".into(),
+                value: plan_state.ram_in_gb.clone(),
+            });
+        }
+        if !plan_state.disk_in_gb.trim().is_empty() {
+            summary.push(ProductEntry {
+                term: "Disk (GB)".into(),
+                value: plan_state.disk_in_gb.clone(),
+            });
+        }
+        if !plan_state.bandwidth_in_tb.trim().is_empty() {
+            summary.push(ProductEntry {
+                term: "Bandwidth (TB)".into(),
+                value: plan_state.bandwidth_in_tb.clone(),
+            });
+        }
+        plan_summary = summary;
+    }
+    let os_list = load_os_list(&state).await;
+    let selected_os_label = os_list
+        .iter()
+        .find(|os| os.id == base.os_id)
+        .map(|os| {
+            let mut label = os.name.clone();
+            if let Some(version) = &os.version {
+                if !version.is_empty() {
+                    label.push(' ');
+                    label.push_str(version);
+                }
+            }
+            label
+        })
+        .unwrap_or_else(|| base.os_id.clone());
+    let selected_key_ids: Vec<String> = base.ssh_key_ids.iter().map(|id| id.to_string()).collect();
+    let ssh_keys_display = if selected_key_ids.is_empty() {
+        "None".into()
+    } else {
+        let id_set: std::collections::HashSet<_> = selected_key_ids.iter().cloned().collect();
+        let customer_id = fetch_default_customer_id(&state).await;
+        let ssh_keys = load_ssh_keys_api(&state, customer_id).await;
+        let mut names = Vec::new();
+        for key in ssh_keys {
+            if id_set.contains(&key.id) {
+                names.push(key.name);
+            }
+        }
+        if names.is_empty() {
+            format!("{} SSH key(s)", id_set.len())
+        } else {
+            names.join(", ")
+        }
+    };
+    let hostnames_display = if base.hostnames.is_empty() {
+        "(none)".into()
+    } else {
+        base.hostnames.join(", ")
+    };
+    let plan_type_label = if base.plan_type == "fixed" {
+        "Fixed plan".into()
+    } else {
+        "Custom plan".into()
+    };
+    let mut back_pairs = build_base_query_pairs(&base);
+    if base.plan_type == "fixed" {
+        back_pairs.push(("product_id".into(), plan_state.product_id.clone()));
+        back_pairs.push(("extra_disk".into(), plan_state.extra_disk.clone()));
+        back_pairs.push(("extra_bandwidth".into(), plan_state.extra_bandwidth.clone()));
+    } else {
+        back_pairs.push(("cpu".into(), plan_state.cpu.clone()));
+        back_pairs.push(("ramInGB".into(), plan_state.ram_in_gb.clone()));
+        back_pairs.push(("diskInGB".into(), plan_state.disk_in_gb.clone()));
+        back_pairs.push(("bandwidthInTB".into(), plan_state.bandwidth_in_tb.clone()));
+    }
     let back_q = build_query_string(&back_pairs);
-    let back_url = format!("/create/step-6?{}", back_q);
-    let hostnames_join = base.hostnames.join(", ");
-    let product_id = query
-        .get("product_id")
-        .cloned()
-        .or_else(|| form.get("product_id").cloned())
-        .unwrap_or_default();
-    let extra_disk = query
-        .get("extra_disk")
-        .cloned()
-        .or_else(|| form.get("extra_disk").cloned())
-        .unwrap_or_else(|| "0".into());
-    let extra_bandwidth = query
-        .get("extra_bandwidth")
-        .cloned()
-        .or_else(|| form.get("extra_bandwidth").cloned())
-        .unwrap_or_else(|| "0".into());
-    let cpu = query
-        .get("cpu")
-        .cloned()
-        .or_else(|| form.get("cpu").cloned())
-        .unwrap_or_default();
-    let ram = query
-        .get("ramInGB")
-        .cloned()
-        .or_else(|| form.get("ramInGB").cloned())
-        .unwrap_or_default();
-    let disk = query
-        .get("diskInGB")
-        .cloned()
-        .or_else(|| form.get("diskInGB").cloned())
-        .unwrap_or_default();
-    let bandwidth = query
-        .get("bandwidthInTB")
-        .cloned()
-        .or_else(|| form.get("bandwidthInTB").cloned())
-        .unwrap_or_default();
+    let back_url = if back_q.is_empty() {
+        absolute_url(&state, "/create/step-6")
+    } else {
+        absolute_url(&state, &format!("/create/step-6?{}", back_q))
+    };
+    let has_plan_summary = !plan_summary.is_empty();
+    let has_price_entries = !price_entries.is_empty();
+    let footnote_text = footnote.unwrap_or_default();
+    let has_footnote = !footnote_text.is_empty();
     inject_context(
         &state,
         &jar,
         Step7Template {
-            base: &base,
-            hostnames_join,
-            product_id,
-            extra_disk,
-            extra_bandwidth,
-            cpu,
-            ramInGB: ram,
-            diskInGB: disk,
-            bandwidthInTB: bandwidth,
+            current_user,
+            api_hostname,
+            base_url,
+            flash_messages,
+            has_flash_messages,
+            base_state: &base,
+            floating_ip_count: base.floating_ip_count.to_string(),
+            plan_state,
+            plan_type_label,
+            region_name: base.region.clone(),
+            hostnames_display,
+            plan_summary,
+            has_plan_summary,
+            price_entries,
+            has_price_entries,
+            selected_os_label,
+            ssh_keys_display,
+            footnote_text,
+            has_footnote,
             back_url,
+            submit_url: absolute_url(&state, "/create/step-7"),
         }
         .render()
         .unwrap(),
@@ -3157,13 +3399,18 @@ async fn main() {
 
     let api_base_url = std::env::var("API_BASE_URL").unwrap_or_else(|_| "".into());
     let api_token = std::env::var("API_TOKEN").unwrap_or_else(|_| "".into());
+    let public_base_url = std::env::var("PUBLIC_BASE_URL")
+        .map(|v| sanitize_base_url(&v))
+        .unwrap_or_else(|_| sanitize_base_url("http://localhost:5000"));
     let client = Client::builder().build().unwrap();
     let state = AppState {
         users: user_store,
         sessions: Arc::new(Mutex::new(HashMap::new())),
         api_base_url,
         api_token,
+        public_base_url,
         default_customer_cache: Arc::new(Mutex::new(None)),
+        flash_store: Arc::new(Mutex::new(HashMap::new())),
         client,
     };
 

@@ -4,7 +4,12 @@
 
 {% block content %}
 <h1>Sign in</h1>
-<form method="post">
+{% if let Some(msg) = error %}
+<div class="flash-messages">
+    <div class="flash-message">{{ msg }}</div>
+</div>
+{% endif %}
+<form method="post" action="{{ base_url }}/login">
     <label for="username">Username</label>
     <input type="text" id="username" name="username" required autofocus>
 

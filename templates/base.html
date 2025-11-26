@@ -4,12 +4,12 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}Zyffiliate{% endblock %}</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+    <base href="{{ base_url }}/">
+    <link rel="stylesheet" href="/static/styles.css">
 </head>
 <body>
-    {% if current_user %}
+    {% if let Some(user) = current_user %}
     <nav>
-        {% set user_initial = (current_user.username or '')[:1]|upper %}
         <header>
             <div>
                 <b aria-label="Zyffiliate">
@@ -18,27 +18,27 @@
                 <p>Zyffiliate Control</p>
             </div>
             <div>
-                <i aria-hidden="true">{{ user_initial if user_initial else 'U' }}</i>
+                <i aria-hidden="true">{{ user.username }}</i>
                 <aside>
-                    <span>{{ current_user.username }}</span>
-                    <span>{{ current_user.role|title }}</span>
+                    <span>{{ user.username }}</span>
+                    <span>{{ user.role }}</span>
                 </aside>
-                <form method="post" action="{{ url_for('logout') }}">
+                <form method="post" action="{{ base_url }}/logout">
                     <button type="submit">Logout</button>
                 </form>
             </div>
         </header>
         <div role="navigation">
-            <a href="{{ url_for('instances') }}">Instances</a>
-            {% if current_user.role == 'owner' %}
-            <a href="{{ url_for('create_step_1') }}">Create</a>
-            <a href="{{ url_for('bulk_subscription_refund') }}">Bulk refunds</a>
-            <a href="{{ url_for('regions') }}">Regions</a>
-            <a href="{{ url_for('os_list') }}">OS</a>
-            <a href="{{ url_for('applications') }}">Apps</a>
-            <a href="{{ url_for('ssh_keys') }}">SSH Keys</a>
-            <a href="{{ url_for('manage_users') }}">Users</a>
-            <a href="{{ url_for('access_management') }}">Assignments</a>
+            <a href="{{ base_url }}/instances">Instances</a>
+            {% if user.role == "owner" %}
+            <a href="{{ base_url }}/create/step-1">Create</a>
+            <a href="{{ base_url }}/bulk-subscription-refund">Bulk refunds</a>
+            <a href="{{ base_url }}/regions">Regions</a>
+            <a href="{{ base_url }}/os">OS</a>
+            <a href="{{ base_url }}/applications">Apps</a>
+            <a href="{{ base_url }}/ssh-keys">SSH Keys</a>
+            <a href="{{ base_url }}/users">Users</a>
+            <a href="{{ base_url }}/access">Assignments</a>
             {% endif %}
         </div>
         <footer>
@@ -48,15 +48,13 @@
     {% endif %}
 
     <main>
-        {% with messages = get_flashed_messages() %}
-        {% if messages %}
+        {% if has_flash_messages %}
         <section class="flash-messages">
-            {% for message in messages %}
+            {% for message in flash_messages %}
             <div class="flash-message">{{ message }}</div>
             {% endfor %}
         </section>
         {% endif %}
-        {% endwith %}
 
         {% block content %}{% endblock %}
     </main>
