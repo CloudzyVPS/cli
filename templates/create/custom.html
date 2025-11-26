@@ -4,28 +4,33 @@
 
 {% block content %}
 <header class="page-header">
-    <p class="breadcrumb"><a href="{{ back_to_start_url }}">← Previous step</a></p>
+    <p class="breadcrumb"><a href="{{ back_url }}">← Previous step</a></p>
     <h1>Define custom resources</h1>
-    <p>Step 3 of 7 · Enter the exact CPU, RAM, disk, and bandwidth for {{ region.name }}.</p>
+    <p>Step 3 of 7 · Enter the exact CPU, RAM, disk, and bandwidth for {{ region_name }}.</p>
 </header>
 
-<form method="get" action="{{ url_for('create_step_5') }}" class="surface" novalidate>
+<form method="get" action="{{ submit_url }}" class="surface" novalidate>
     {% for host in base_state.hostnames %}
     <input type="hidden" name="hostnames" value="{{ host }}">
     {% endfor %}
     <input type="hidden" name="region" value="{{ base_state.region }}">
     <input type="hidden" name="instance_class" value="{{ base_state.instance_class }}">
     <input type="hidden" name="plan_type" value="{{ base_state.plan_type }}">
-    <input type="hidden" name="assign_ipv4" value="{{ '1' if base_state.assign_ipv4 else '0' }}">
-    <input type="hidden" name="assign_ipv6" value="{{ '1' if base_state.assign_ipv6 else '0' }}">
-    <input type="hidden" name="floating_ip_count" value="{{ base_state.floating_ip_count|default(0, true) }}">
+    <input type="hidden" name="assign_ipv4" value="{% if base_state.assign_ipv4 %}1{% else %}0{% endif %}">
+    <input type="hidden" name="assign_ipv6" value="{% if base_state.assign_ipv6 %}1{% else %}0{% endif %}">
+    <input type="hidden" name="floating_ip_count" value="{{ floating_ip_count }}">
     {% for key_id in base_state.ssh_key_ids %}
     <input type="hidden" name="ssh_key_ids" value="{{ key_id }}">
     {% endfor %}
     <fieldset class="form-section">
         <legend class="form-label">Resource requirements</legend>
-        {% if requirements %}
-        <p class="requirements">This region enforces {{ requirements|join(' · ') }}.</p>
+        {% if !requirements.is_empty() %}
+        <p class="requirements">This region enforces:</p>
+        <ul class="requirements-list">
+            {% for rule in requirements %}
+            <li>{{ rule }}</li>
+            {% endfor %}
+        </ul>
         {% endif %}
         <div class="fields-grid compact">
             <div>
@@ -34,15 +39,15 @@
             </div>
             <div>
                 <label for="ramInGB">RAM (GB)</label>
-                <input type="number" id="ramInGB" name="ramInGB" min="{{ minimums.ram }}" value="{{ form_values.ramInGB }}" required>
+                <input type="number" id="ramInGB" name="ramInGB" min="{{ minimum_ram }}" value="{{ form_values.ram_in_gb }}" required>
             </div>
             <div>
                 <label for="diskInGB">Disk (GB)</label>
-                <input type="number" id="diskInGB" name="diskInGB" min="{{ minimums.disk }}" value="{{ form_values.diskInGB }}" required>
+                <input type="number" id="diskInGB" name="diskInGB" min="{{ minimum_disk }}" value="{{ form_values.disk_in_gb }}" required>
             </div>
             <div>
                 <label for="bandwidthInTB">Bandwidth (TB)</label>
-                <input type="number" id="bandwidthInTB" name="bandwidthInTB" min="1" value="{{ form_values.bandwidthInTB }}">
+                <input type="number" id="bandwidthInTB" name="bandwidthInTB" min="1" value="{{ form_values.bandwidth_in_tb }}">
             </div>
         </div>
     </fieldset>

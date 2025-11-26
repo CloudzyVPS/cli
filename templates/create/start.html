@@ -8,7 +8,7 @@
     <p>Step 1 of 7 · Select region, instance class, and plan type</p>
 </header>
 
-<form method="get" action="{{ url_for('create_step_2') }}" class="surface" novalidate>
+<form method="get" action="{{ base_url }}/create/step-2" class="surface" novalidate>
     <div class="fields-grid">
         <fieldset>
             <legend>Region</legend>
@@ -24,9 +24,9 @@
             <legend>Instance class</legend>
             <label for="instance_class" class="sr-only">Instance class</label>
             <select id="instance_class" name="instance_class">
-                <option value="default" {% if form_data.instance_class == 'default' %}selected{% endif %}>Default</option>
-                <option value="cpu-optimized" {% if form_data.instance_class == 'cpu-optimized' %}selected{% endif %}>CPU Optimized</option>
-                <option value="gpu-provided" {% if form_data.instance_class == 'gpu-provided' %}selected{% endif %}>GPU Provided</option>
+                <option value="default" {% if form_data.instance_class == "default" %}selected{% endif %}>Default</option>
+                <option value="cpu-optimized" {% if form_data.instance_class == "cpu-optimized" %}selected{% endif %}>CPU Optimized</option>
+                <option value="gpu-provided" {% if form_data.instance_class == "gpu-provided" %}selected{% endif %}>GPU Provided</option>
             </select>
             <small>Use custom class types for specialised workloads.</small>
         </fieldset>
@@ -36,11 +36,11 @@
         <legend>Plan type</legend>
         <div class="radio-group">
             <label>
-                <input type="radio" name="plan_type" value="fixed" {% if form_data.plan_type == 'fixed' %}checked{% endif %}>
+                <input type="radio" name="plan_type" value="fixed" {% if form_data.plan_type == "fixed" %}checked{% endif %}>
                 <span>Use existing product</span>
             </label>
             <label>
-                <input type="radio" name="plan_type" value="custom" {% if form_data.plan_type == 'custom' %}checked{% endif %}>
+                <input type="radio" name="plan_type" value="custom" {% if form_data.plan_type == "custom" %}checked{% endif %}>
                 <span>Custom resources</span>
             </label>
         </div>
