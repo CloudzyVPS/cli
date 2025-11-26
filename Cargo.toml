@@ -1,0 +1,25 @@
+[package]
+name = "zyffiliate"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+axum = { version = "0.7", features = ["macros", "json"] }
+askama = "0.12"
+tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+reqwest = { version = "0.12", features = ["json"] }
+tower = "0.4"
+tower-http = { version = "0.5", features = ["trace", "cors", "fs"] }
+dotenvy = "0.15"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+thiserror = "1"
+pbkdf2 = "0.12"
+sha2 = "0.10"
+rand = "0.8"
+hex = "0.4"
+axum-extra = { version = "0.9", features = ["cookie"] }
+time = { version = "0.3", features = ["macros"] }
+urlencoding = "2"
