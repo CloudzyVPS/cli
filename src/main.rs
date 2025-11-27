@@ -6,6 +6,7 @@ use axum::{
     Router,
 };
 use axum_extra::extract::cookie::{Cookie, CookieJar};
+use clap::{Parser, Subcommand};
 use hex::encode as hex_encode;
 use pbkdf2::pbkdf2_hmac;
 use rand::{rngs::OsRng, RngCore};
@@ -13,6 +14,8 @@ use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use sha2::Sha256;
+use std::path::Path;
+use std::process;
 use std::{
     collections::HashMap,
     net::SocketAddr,
@@ -107,6 +110,170 @@ fn render_stub(title: &str, path: &str) -> Html<String> {
 
 fn plain_html(msg: &str) -> Response {
     Html(msg.to_string()).into_response()
+}
+
+fn persist_users_file(users: &Arc<Mutex<HashMap<String, UserRecord>>>) -> Result<(), String> {
+    let users = users.lock().unwrap();
+    let mut serialized: serde_json::Map<String, Value> = serde_json::Map::new();
+    for (u, rec) in users.iter() {
+        serialized.insert(
+            u.clone(),
+            serde_json::json!({"password": rec.password, "role": rec.role, "assigned_instances": rec.assigned_instances }),
+        );
+    }
+    std::fs::write(
+        "users.json",
+        serde_json::to_string_pretty(&Value::Object(serialized)).map_err(|e| e.to_string())?,
+    )
+    .map_err(|e| e.to_string())
+}
+
+fn load_users_store() -> Arc<Mutex<HashMap<String, UserRecord>>> {
+    let path = Path::new("users.json");
+    let mut map: HashMap<String, UserRecord> = HashMap::new();
+    if path.exists() {
+        if let Ok(text) = std::fs::read_to_string(path) {
+            if let Ok(json_val) = serde_json::from_str::<serde_json::Value>(&text) {
+                if let Some(obj) = json_val.as_object() {
+                    for (k, v) in obj.iter() {
+                        if let Some(pw) = v.get("password").and_then(|x| x.as_str()) {
+                            let role = v
+                                .get("role")
+                                .and_then(|x| x.as_str())
+                                .unwrap_or("admin")
+                                .to_string();
+                            let assigned_instances = v
+                                .get("assigned_instances")
+                                .and_then(|a| a.as_array())
+                                .map(|arr| {
+                                    arr.iter()
+                                        .filter_map(|x| x.as_str().map(|s| s.to_string()))
+                                        .collect()
+                                })
+                                .unwrap_or_else(|| vec![]);
+                            map.insert(
+                                k.to_lowercase(),
+                                UserRecord {
+                                    password: pw.to_string(),
+                                    role,
+                                    assigned_instances,
+                                },
+                            );
+                        }
+                    }
+                }
+            }
+        }
+    } else {
+        // default owner creation similar to previous behavior
+        let salt = {
+            let mut b = [0u8; 12];
+            OsRng.fill_bytes(&mut b);
+            hex_encode(b)
+        };
+        let mut dk = [0u8; 32];
+        pbkdf2_hmac::<Sha256>(b"owner123", salt.as_bytes(), PBKDF2_ITERATIONS, &mut dk);
+        let hash_hex = hex_encode(dk);
+        let full = format!("pbkdf2:sha256:{}${}${}", PBKDF2_ITERATIONS, salt, hash_hex);
+        map.insert(
+            "owner".to_string(),
+            UserRecord {
+                password: full,
+                role: "owner".to_string(),
+                assigned_instances: vec![],
+            },
+        );
+        let users_arc = Arc::new(Mutex::new(map));
+        let _ = persist_users_file(&users_arc);
+        return users_arc;
+    }
+    Arc::new(Mutex::new(map))
+}
+
+fn build_state_from_env(env_file: Option<&str>) -> AppState {
+    if let Some(path) = env_file {
+        let _ = dotenvy::from_filename(path);
+    } else {
+        let _ = dotenvy::dotenv();
+    }
+    let user_store = load_users_store();
+    let api_base_url = std::env::var("API_BASE_URL").unwrap_or_else(|_| "".into());
+    let api_token = std::env::var("API_TOKEN").unwrap_or_else(|_| "".into());
+    let public_base_url = std::env::var("PUBLIC_BASE_URL")
+        .map(|v| sanitize_base_url(&v))
+        .unwrap_or_else(|_| sanitize_base_url("http://localhost:5000"));
+    let client = Client::builder().build().unwrap();
+    AppState {
+        users: user_store,
+        sessions: Arc::new(Mutex::new(HashMap::new())),
+        api_base_url,
+        api_token,
+        public_base_url,
+        default_customer_cache: Arc::new(Mutex::new(None)),
+        flash_store: Arc::new(Mutex::new(HashMap::new())),
+        client,
+    }
+}
+
+fn build_app(state: AppState) -> Router {
+    Router::new()
+        .route("/", get(root_get))
+        .route("/login", get(login_get).post(login_post))
+        .route("/logout", post(logout_post))
+        .route("/users", get(users_list).post(users_create))
+        .route("/users/:username/reset-password", post(reset_password))
+        .route("/users/:username/role", post(update_role))
+        .route("/users/:username/delete", post(delete_user))
+        .route("/access", get(access_get))
+        .route("/access/:username", post(update_access))
+        .route("/ssh-keys", get(ssh_keys_get).post(ssh_keys_post))
+        .route("/instances", get(instances_real))
+        .route("/regions", get(regions_get))
+        .route("/products", get(products_get))
+        .route("/os", get(os_get))
+        .route("/applications", get(applications_get))
+        .route("/create/step-1", get(create_step_1))
+        .route("/create/step-2", get(create_step_2))
+        .route("/create/step-3", get(create_step_3))
+        .route("/create/step-4", get(create_step_4))
+        .route("/create/step-5", get(create_step_5))
+        .route("/create/step-6", get(create_step_6))
+        .route(
+            "/create/step-7",
+            get(create_step_7_get).post(create_step_7_post),
+        )
+        .route("/instance/:instance_id", get(instance_detail))
+        .route("/instance/:instance_id/poweron", get(instance_poweron))
+        .route("/instance/:instance_id/poweroff", get(instance_poweroff))
+        .route("/instance/:instance_id/reset", get(instance_reset))
+        .route(
+            "/instance/:instance_id/change-pass",
+            get(instance_change_pass),
+        )
+        .route("/instance/:instance_id/change-os", get(instance_change_os))
+        .route(
+            "/instance/:instance_id/subscription-refund",
+            get(instance_subscription_refund),
+        )
+        .route(
+            "/instance/:instance_id/add-traffic",
+            post(instance_add_traffic),
+        )
+        .route(
+            "/bulk-subscription-refund",
+            get(bulk_subscription_refund_get).post(bulk_subscription_refund),
+        )
+        .nest_service("/static", ServeDir::new("static"))
+        .with_state(state)
+}
+
+async fn start_server(state: AppState, host: &str, port: u16) {
+    let addr: SocketAddr = format!("{}:{}", host, port).parse().unwrap();
+    let app = build_app(state.clone());
+    tracing::info!(%addr, "Starting Zyffiliate Rust server");
+    axum::serve(tokio::net::TcpListener::bind(addr).await.unwrap(), app)
+        .await
+        .unwrap();
 }
 
 // Individual route handlers (stubs). Later these will load data & real templates.
@@ -2988,8 +3155,12 @@ struct ApplicationsTemplate<'a> {
     total_apps: usize,
 }
 
-async fn root_get() -> impl IntoResponse {
-    render_stub("Dashboard", "/")
+async fn root_get(State(state): State<AppState>, jar: CookieJar) -> impl IntoResponse {
+    // Redirect to /instances if authenticated, otherwise to /login
+    if let Some(_uname) = current_username_from_jar(&state, &jar) {
+        return Redirect::to("/instances").into_response();
+    }
+    Redirect::to("/login").into_response()
 }
 
 async fn regions_get(State(state): State<AppState>, jar: CookieJar) -> impl IntoResponse {
@@ -3317,6 +3488,50 @@ async fn bulk_subscription_refund_get(
     Html(BulkRefundTemplate.render().unwrap()).into_response()
 }
 
+#[derive(Parser)]
+#[command(author, version, about = "Zyffiliate command-line tool")]
+struct Cli {
+    #[command(subcommand)]
+    command: Option<Commands>,
+}
+
+#[derive(Subcommand)]
+enum Commands {
+    /// Start the web server
+    Serve {
+        /// Host to bind to
+        #[arg(long, default_value_t = String::from("0.0.0.0"))]
+        host: String,
+        /// Port to bind to
+        #[arg(long, default_value_t = 5000)]
+        port: u16,
+        /// Path to .env file
+        #[arg(long)]
+        env_file: Option<String>,
+    },
+    /// Validate configuration (env vars / API credentials)
+    CheckConfig { env_file: Option<String> },
+    /// Manage local users (users.json)
+    Users {
+        #[command(subcommand)]
+        sub: UserCommands,
+    },
+}
+
+#[derive(Subcommand)]
+enum UserCommands {
+    List,
+    Add {
+        username: String,
+        password: String,
+        role: String,
+    },
+    ResetPassword {
+        username: String,
+        password: String,
+    },
+}
+
 #[tokio::main]
 async fn main() {
     // Initialize tracing
@@ -3325,11 +3540,12 @@ async fn main() {
         .with(EnvFilter::from_default_env())
         .init();
 
-    // Load environment variables (.env) if present
-    let _ = dotenvy::dotenv();
+    // CLI parsing
+    let cli = Cli::parse();
 
-    // Initialize user store from existing users.json if present
-    let user_store = {
+    // If CLI provided an env-file or not, we will load it per command below
+    // Build shared state (load users.json and env)
+    let _user_store = {
         let path = std::path::Path::new("users.json");
         let mut map: HashMap<String, UserRecord> = HashMap::new();
         if path.exists() {
@@ -3397,78 +3613,157 @@ async fn main() {
         Arc::new(Mutex::new(map))
     };
 
-    let api_base_url = std::env::var("API_BASE_URL").unwrap_or_else(|_| "".into());
-    let api_token = std::env::var("API_TOKEN").unwrap_or_else(|_| "".into());
-    let public_base_url = std::env::var("PUBLIC_BASE_URL")
-        .map(|v| sanitize_base_url(&v))
-        .unwrap_or_else(|_| sanitize_base_url("http://localhost:5000"));
-    let client = Client::builder().build().unwrap();
-    let state = AppState {
-        users: user_store,
-        sessions: Arc::new(Mutex::new(HashMap::new())),
-        api_base_url,
-        api_token,
-        public_base_url,
-        default_customer_cache: Arc::new(Mutex::new(None)),
-        flash_store: Arc::new(Mutex::new(HashMap::new())),
-        client,
-    };
+    // Note: we avoid constructing a default `state` here; commands build the per-command state
+    // using `build_state_from_env` so we can pass a custom `--env-file` when executing commands.
 
-    // Build router with initial endpoints
-    let app = Router::new()
-        .route("/", get(root_get))
-        .route("/login", get(login_get).post(login_post))
-        .route("/logout", post(logout_post))
-        .route("/users", get(users_list).post(users_create))
-        .route("/users/:username/reset-password", post(reset_password))
-        .route("/users/:username/role", post(update_role))
-        .route("/users/:username/delete", post(delete_user))
-        .route("/access", get(access_get))
-        .route("/access/:username", post(update_access))
-        .route("/ssh-keys", get(ssh_keys_get).post(ssh_keys_post))
-        .route("/instances", get(instances_real))
-        .route("/regions", get(regions_get))
-        .route("/products", get(products_get))
-        .route("/os", get(os_get))
-        .route("/applications", get(applications_get))
-        .route("/create/step-1", get(create_step_1))
-        .route("/create/step-2", get(create_step_2))
-        .route("/create/step-3", get(create_step_3))
-        .route("/create/step-4", get(create_step_4))
-        .route("/create/step-5", get(create_step_5))
-        .route("/create/step-6", get(create_step_6))
-        .route(
-            "/create/step-7",
-            get(create_step_7_get).post(create_step_7_post),
-        )
-        .route("/instance/:instance_id", get(instance_detail))
-        .route("/instance/:instance_id/poweron", get(instance_poweron))
-        .route("/instance/:instance_id/poweroff", get(instance_poweroff))
-        .route("/instance/:instance_id/reset", get(instance_reset))
-        .route(
-            "/instance/:instance_id/change-pass",
-            get(instance_change_pass),
-        )
-        .route("/instance/:instance_id/change-os", get(instance_change_os))
-        .route(
-            "/instance/:instance_id/subscription-refund",
-            get(instance_subscription_refund),
-        )
-        .route(
-            "/instance/:instance_id/add-traffic",
-            post(instance_add_traffic),
-        )
-        .route(
-            "/bulk-subscription-refund",
-            get(bulk_subscription_refund_get).post(bulk_subscription_refund),
-        )
-        // Serve static files (CSS, icons) at /static/*
-        .nest_service("/static", ServeDir::new("static"))
-        .with_state(state);
+    // Dispatch CLI commands
+    match cli.command.unwrap_or(Commands::Serve {
+        host: String::from("0.0.0.0"),
+        port: 5000,
+        env_file: None,
+    }) {
+        Commands::Serve {
+            host,
+            port,
+            env_file,
+        } => {
+            let state = build_state_from_env(env_file.as_deref());
+            start_server(state, &host, port).await;
+            return;
+            /// Add a new owner user (use --force to overwrite existing owner user(s))
+            AddOwner {
+                username: String,
+                password: String,
+                #[arg(long, default_value_t = false)]
+                force: bool,
+            },
+        }
+        Commands::CheckConfig { env_file } => {
+            let state = build_state_from_env(env_file.as_deref());
+            // Basic check: ensure API base and token exist; optionally ping regions
+            let mut ok = true;
+            if state.api_base_url.trim().is_empty() {
+                eprintln!("API_BASE_URL is not configured");
+                ok = false;
+            }
+            if state.api_token.trim().is_empty() {
+                eprintln!("API_TOKEN is not configured");
+                ok = false;
+            }
+            if !ok {
+                process::exit(1);
+            }
+            let resp = api_call(&state, "GET", "/v1/regions", None, None).await;
+            if resp.get("code").and_then(|c| c.as_str()) == Some("OKAY") {
+                println!("Configuration looks valid (regions returned)");
+                process::exit(0);
+            } else {
+                eprintln!(
+                    "Configuration appears invalid: {}",
+                    serde_json::to_string_pretty(&resp).unwrap_or_else(|_| "<non-json>".into())
+                );
+                process::exit(1);
+            }
+        }
+        Commands::Users { sub } => {
+            let state = build_state_from_env(None);
+            match sub {
+                UserCommands::List => {
+                    let users = state.users.lock().unwrap();
+                    println!("username\trole\tassigned_instances");
+                    for (u, rec) in users.iter() {
+                        let assigned = if rec.assigned_instances.is_empty() {
+                            String::new()
+                        } else {
+                            rec.assigned_instances.join(", ")
+                        };
+                        println!("{}\t{}\t{}", u, rec.role, assigned);
+                    }
+                    return;
+                }
+                UserCommands::Add {
+                    username,
+                    password,
+                    role,
+                } => {
+                    let uname = username.trim().to_lowercase();
+                    let mut users = state.users.lock().unwrap();
+                    if users.contains_key(&uname) {
+                        eprintln!("User '{}' already exists", uname);
+                        process::exit(1);
+                    }
+                    let hash = generate_password_hash(&password);
+                    users.insert(
+                        uname.clone(),
+                        UserRecord {
+                            password: hash,
+                            role: role.clone(),
+                            assigned_instances: vec![],
+                        },
+                    );
+                    drop(users);
+                    if let Err(e) = persist_users_file(&state.users) {
+                        eprintln!("Failed to persist users.json: {}", e);
+                        process::exit(1);
+                    }
+                    println!("User '{}' added", uname);
+                    return;
+                }
+                UserCommands::ResetPassword { username, password } => {
+                    let uname = username.trim().to_lowercase();
+                    let mut users = state.users.lock().unwrap();
+                    if let Some(rec) = users.get_mut(&uname) {
+                        rec.password = generate_password_hash(&password);
+                    } else {
+                        eprintln!("User '{}' not found", uname);
+                        process::exit(1);
+                    }
+                    drop(users);
+                    if let Err(e) = persist_users_file(&state.users) {
+                        eprintln!("Failed to persist users.json: {}", e);
+                        process::exit(1);
+                    }
+                    println!("Password for '{}' updated", uname);
+                    return;
+                }
+                UserCommands::AddOwner { username, password, force } => {
+                    let uname = username.trim().to_lowercase();
+                    let mut users = state.users.lock().unwrap();
+                    // If an owner already exists and we're not forcing, error out
+                    let owner_exists = users.values().any(|r| r.role == "owner");
+                    if owner_exists && !force {
+                        eprintln!(
+                            "An owner user already exists; use --force to create another owner or overwrite"
+                        );
+                        process::exit(1);
+                    }
+                    // If the username exists and force is not set, fail (consistent with `Add` semantics)
+                    if users.contains_key(&uname) && !force {
+                        eprintln!("User '{}' already exists; use --force to overwrite", uname);
+                        process::exit(1);
+                    }
+                    let hash = generate_password_hash(&password);
+                    users.insert(
+                        uname.clone(),
+                        UserRecord {
+                            password: hash,
+                            role: "owner".to_string(),
+                            assigned_instances: vec![],
+                        },
+                    );
+                    drop(users);
+                    if let Err(e) = persist_users_file(&state.users) {
+                        eprintln!("Failed to persist users.json: {}", e);
+                        process::exit(1);
+                    }
+                    println!("Owner '{}' created", uname);
+                    return;
+                }
+            }
+        }
+    }
 
-    let addr: SocketAddr = "0.0.0.0:5000".parse().unwrap();
-    tracing::info!(%addr, "Starting Zyffiliate Rust server");
-    axum::serve(tokio::net::TcpListener::bind(addr).await.unwrap(), app)
-        .await
-        .unwrap();
+    // All command arms either `return` or `process::exit`; nothing else to do here
+
+    // (start_server handles starting the http listener)
 }

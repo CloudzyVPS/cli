@@ -23,3 +23,4 @@ hex = "0.4"
 axum-extra = { version = "0.9", features = ["cookie"] }
 time = { version = "0.3", features = ["macros"] }
 urlencoding = "2"
+clap = { version = "4.2", features = ["derive"] }
