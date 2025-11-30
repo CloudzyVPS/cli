@@ -8,54 +8,58 @@
     <p>Select a region card to inspect the catalog of products offered there.</p>
 </header>
 
-{% if regions %}
+{% if !regions.is_empty() %}
 <section>
     <h2>Regions</h2>
     <p>Click any region to open <code>/products?region_id=&lt;id&gt;</code> with the relevant inventory.</p>
     <div class="region-grid" role="list">
         {% for region in regions %}
-        <a class="region-card" role="listitem" href="{{ url_for('products', region_id=region.id) }}">
+        <a class="region-card" role="listitem" href="{{ base_url }}/products?region_id={{ region.id }}">
             <div class="region-heading">
                 <h3>{{ region.name }}</h3>
-                <span class="region-chip">{{ region.abbr }}</span>
+                    {% if region.abbr.is_some() %}
+                    <span class="region-chip">{{ region.abbr.as_ref().unwrap() }}</span>
+                    {% endif %}
             </div>
             <p class="region-subtitle">Region ID {{ region.id }}</p>
-            {% if region.description %}
-            <p class="region-description">{{ region.description }}</p>
+            {% if region.description.is_some() %}
+            <p class="region-description">{{ region.description.as_ref().unwrap() }}</p>
             {% endif %}
             <dl class="region-metrics">
                 <div>
                     <dt>Status</dt>
-                    <dd>{{ 'Active' if region.isActive else 'Disabled' }}</dd>
+                    {% if region.is_active %}
+                    <dd>Active</dd>
+                    {% else %}
+                    <dd>Disabled</dd>
+                    {% endif %}
                 </div>
                 <div>
                     <dt>Premium tier</dt>
-                    <dd>{{ 'Yes' if region.isPremium else 'No' }}</dd>
+                    {% if region.is_premium %}
+                    <dd>Yes</dd>
+                    {% else %}
+                    <dd>No</dd>
+                    {% endif %}
                 </div>
-                {% if region.config and region.config.ramThresholdInGB %}
+                {% if region.ram_threshold_gb.is_some() %}
                 <div>
                     <dt>RAM threshold</dt>
-                    <dd>{{ region.config.ramThresholdInGB }} GB</dd>
+                    <dd>{{ region.ram_threshold_gb.as_ref().unwrap() }} GB</dd>
                 </div>
                 {% endif %}
-                {% if region.config and region.config.diskThresholdInGB %}
+                {% if region.disk_threshold_gb.is_some() %}
                 <div>
                     <dt>Disk threshold</dt>
-                    <dd>{{ region.config.diskThresholdInGB }} GB</dd>
+                    <dd>{{ region.disk_threshold_gb.as_ref().unwrap() }} GB</dd>
                 </div>
                 {% endif %}
             </dl>
-            {% if region.tags %}
-            <footer class="region-footer">
-                <p>Highlights:
-                    {% if region.tags is string %}
-                    {{ region.tags }}
-                    {% else %}
-                    {{ region.tags | join(', ') }}
-                    {% endif %}
-                </p>
-            </footer>
-            {% endif %}
+                {% if region.tags.is_some() %}
+                <footer class="region-footer">
+                    <p>{{ region.tags.as_ref().unwrap() }}</p>
+                </footer>
+                {% endif %}
             <span class="region-cta" aria-hidden="true">Browse products →</span>
         </a>
         {% endfor %}

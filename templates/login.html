@@ -4,9 +4,9 @@
 
 {% block content %}
 <h1>Sign in</h1>
-{% if let Some(msg) = error %}
+{% if error.is_some() %}
 <div class="flash-messages">
-    <div class="flash-message">{{ msg }}</div>
+    <div class="flash-message">{{ error.as_ref().unwrap() }}</div>
 </div>
 {% endif %}
 <form method="post" action="{{ base_url }}/login">

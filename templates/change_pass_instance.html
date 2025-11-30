@@ -4,7 +4,7 @@
 
 {% block content %}
 <header class="page-header">
-    <p class="breadcrumb"><a href="{{ url_for('instance_detail', instance_id=instance.id) }}">← Back to instance</a></p>
+    <p class="breadcrumb"><a href="{{ base_url }}/instance/{{ instance.id }}">← Back to instance</a></p>
     <h1>Change root password</h1>
     <p>Generate a new root password for this instance.</p>
 </header>
@@ -36,7 +36,7 @@
         <p><small>A new random password will be generated and displayed after confirmation. Make sure to save it securely.</small></p>
         
         <footer class="form-actions">
-            <a class="button-secondary" href="{{ url_for('instance_detail', instance_id=instance.id) }}">Cancel</a>
+            <a class="button-secondary" href="{{ base_url }}/instance/{{ instance.id }}">Cancel</a>
             <button type="submit">Change password</button>
         </footer>
     </form>

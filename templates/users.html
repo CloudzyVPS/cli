@@ -24,37 +24,37 @@
                     </tr>
                 </thead>
                 <tbody>
-                    {% for username, data in users.items() %}
+                    {% for row in rows %}
                     <tr>
-                        <td>{{ username }}</td>
-                        <td>{{ data.role|title }}</td>
-                        <td>
-                            {% if data.role == 'admin' %}
-                                {{ data.assigned_instances|length }}
-                            {% else %}
-                                &mdash;
-                            {% endif %}
+                                <td>{{ row.username }}</td>
+                                <td>{{ row.role }}</td>
+                                <td>
+                                    {% if row.role == "admin" %}
+                                        {{ row.assigned }}
+                                    {% else %}
+                                        &mdash;
+                                    {% endif %}
                         </td>
                         <td>
                             <div class="action-grid">
-                                <form method="post" action="{{ url_for('update_role', username=username) }}">
+                                <form method="post" action="{{ base_url }}/users/{{ row.username }}/role">
                                     <label class="form-label">Role</label>
                                     <div class="d-flex gap-sm">
                                         <select name="role" class="form-control form-select">
-                                            <option value="owner" {% if data.role == 'owner' %}selected{% endif %}>Owner</option>
-                                            <option value="admin" {% if data.role == 'admin' %}selected{% endif %}>Admin</option>
+                                            <option value="owner" {% if row.role == "owner" %}selected{% endif %}>Owner</option>
+                                            <option value="admin" {% if row.role == "admin" %}selected{% endif %}>Admin</option>
                                         </select>
                                         <button type="submit" class="btn btn-secondary btn-sm">Update</button>
                                     </div>
                                 </form>
-                                <form method="post" action="{{ url_for('reset_password', username=username) }}">
+                                <form method="post" action="{{ base_url }}/users/{{ row.username }}/reset-password">
                                     <label class="form-label">Reset Password</label>
                                     <div class="d-flex gap-sm">
                                         <input type="password" name="new_password" class="form-control" placeholder="New password" required>
                                         <button type="submit" class="btn btn-warning btn-sm">Save</button>
                                     </div>
                                 </form>
-                                <form method="post" action="{{ url_for('delete_user', username=username) }}" onsubmit="return confirm('Delete {{ username }}?');">
+                                <form method="post" action="{{ base_url }}/users/{{ row.username }}/delete" onsubmit="return confirm('Delete {{ row.username }}?');">
                                     <label class="form-label">Remove</label>
                                     <button type="submit" class="btn btn-danger btn-sm">Delete</button>
                                 </form>

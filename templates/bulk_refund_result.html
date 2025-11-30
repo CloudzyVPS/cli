@@ -4,7 +4,7 @@
 
 {% block content %}
 <h1>Bulk Subscription Refund Results</h1>
-{% if refunds %}
+{% if !refunds.is_empty() %}
 <table>
     <thead>
         <tr>
@@ -17,10 +17,10 @@
     <tbody>
         {% for refund in refunds %}
         <tr>
-            <td>{{ refund.instanceId }}</td>
-            <td>{{ refund.usedDays }}</td>
-            <td>{{ refund.remainingDays }}</td>
-            <td>${{ refund.refundAmount }}</td>
+            <td>{{ refund.instance_id }}</td>
+            <td>{{ refund.used_days }}</td>
+            <td>{{ refund.remaining_days }}</td>
+            <td>${{ refund.refund_amount }}</td>
         </tr>
         {% endfor %}
     </tbody>

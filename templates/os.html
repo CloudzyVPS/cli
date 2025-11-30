@@ -11,36 +11,36 @@
 <section>
     <h2>OS catalog</h2>
     <p>Select an image during provisioning or change-OS workflows.</p>
-    {% if os_list %}
+    {% if !os_list.is_empty() %}
     <div class="data-grid">
         {% for os in os_list %}
         <article class="data-card">
             <h3>{{ os.name }}</h3>
-            <p class="os-family">{{ os.family | default('Unknown family', true) }}</p>
+            <p class="os-family">{% if !os.family.is_empty() %}{{ os.family }}{% else %}Unknown family{% endif %}</p>
             <dl class="os-attributes">
                 <div>
                     <dt>Architecture</dt>
-                    <dd>{{ os.arch | default('n/a', true) }}</dd>
+                    <dd>{% if os.arch.is_some() %}{{ os.arch.as_ref().unwrap() }}{% else %}n/a{% endif %}</dd>
                 </div>
                 <div>
                     <dt>Min RAM</dt>
-                    <dd>{{ os.minRam | default('n/a', true) }}</dd>
+                    <dd>{% if os.min_ram.is_some() %}{{ os.min_ram.as_ref().unwrap() }}{% else %}n/a{% endif %}</dd>
                 </div>
-                {% if os.version %}
+                {% if os.version.is_some() %}
                 <div>
                     <dt>Version</dt>
-                    <dd>{{ os.version }}</dd>
+                    <dd>{{ os.version.as_ref().unwrap() }}</dd>
                 </div>
                 {% endif %}
-                {% if os.disk %}
+                {% if os.disk.is_some() %}
                 <div>
                     <dt>Disk</dt>
-                    <dd>{{ os.disk }}</dd>
+                    <dd>{{ os.disk.as_ref().unwrap() }}</dd>
                 </div>
                 {% endif %}
             </dl>
-            {% if os.description %}
-            <p class="os-description">{{ os.description }}</p>
+            {% if os.description.is_some() %}
+            <p class="os-description">{{ os.description.as_ref().unwrap() }}</p>
             {% endif %}
         </article>
         {% endfor %}

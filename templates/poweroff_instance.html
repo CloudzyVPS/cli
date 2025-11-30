@@ -4,7 +4,7 @@
 
 {% block content %}
 <header class="page-header">
-    <p class="breadcrumb"><a href="{{ url_for('instance_detail', instance_id=instance.id) }}">← Back to instance</a></p>
+    <p class="breadcrumb"><a href="{{ base_url }}/instance/{{ instance.id }}">← Back to instance</a></p>
     <h1>Power off instance</h1>
     <p>Gracefully shut down this instance.</p>
 </header>
@@ -46,7 +46,7 @@
 
     <form method="post">
         <footer class="form-actions">
-            <a class="button-secondary" href="{{ url_for('instance_detail', instance_id=instance.id) }}">Cancel</a>
+            <a class="button-secondary" href="{{ base_url }}/instance/{{ instance.id }}">Cancel</a>
             <button type="submit">Power off instance</button>
         </footer>
     </form>

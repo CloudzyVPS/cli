@@ -1,95 +1,14 @@
 {% extends "base.html" %}
 
-{% block title %}Instance Details{% endblock %}
+{% block title %}Instance {{ instance_id }}{% endblock %}
 
 {% block content %}
 <header class="page-header">
-    <h1>{{ instance.hostname }}</h1>
-    <p>Instance overview and available maintenance actions.</p>
+    <h1>Instance {{ instance_id }}</h1>
+    <p>Instance details JSON payload (raw):</p>
 </header>
 
 <section>
-    <dl>
-        <div>
-            <dt>Instance ID</dt>
-            <dd>{{ instance.id }}</dd>
-        </div>
-        <div>
-            <dt>Status</dt>
-            <dd>{{ instance.status }}</dd>
-        </div>
-        <div>
-            <dt>Region</dt>
-            <dd>{{ instance.region }}</dd>
-        </div>
-        <div>
-            <dt>Main IPv4</dt>
-            <dd>{{ instance.mainIp or '—' }}</dd>
-        </div>
-        <div>
-            <dt>Main IPv6</dt>
-            <dd>{{ instance.mainIpv6 or '—' }}</dd>
-        </div>
-        <div>
-            <dt>vCPUs</dt>
-            <dd>{{ instance.vcpuCount }}</dd>
-        </div>
-        <div>
-            <dt>RAM</dt>
-            <dd>{{ instance.ram }} MB</dd>
-        </div>
-        <div>
-            <dt>Disk</dt>
-            <dd>{{ instance.disk }} GB</dd>
-        </div>
-        <div>
-            <dt>Class</dt>
-            <dd>{{ instance.class }}</dd>
-        </div>
-        <div>
-            <dt>Operating system</dt>
-            <dd>{{ instance.os.name if instance.os else 'N/A' }}</dd>
-        </div>
-        {% if instance.extraResource %}
-        <div>
-            <dt>Custom resources</dt>
-            <dd>
-                {% if instance.extraResource.cpu %}CPU: {{ instance.extraResource.cpu }} · {% endif %}
-                {% if instance.extraResource.ramInGB %}RAM: {{ instance.extraResource.ramInGB }} GB · {% endif %}
-                {% if instance.extraResource.diskInGB %}Disk: {{ instance.extraResource.diskInGB }} GB · {% endif %}
-                {% if instance.extraResource.bandwidthInTB %}Bandwidth: {{ instance.extraResource.bandwidthInTB }} TB{% endif %}
-            </dd>
-        </div>
-        {% endif %}
-        {% if instance.features %}
-        <div>
-            <dt>Features</dt>
-            <dd>{{ instance.features | join(', ') }}</dd>
-        </div>
-        {% endif %}
-    </dl>
-</section>
-
-<section>
-    <h2>Actions</h2>
-    <div>
-        <a href="{{ url_for('poweron_instance', instance_id=instance.id) }}" class="button-secondary">Power On</a>
-        <a href="{{ url_for('poweroff_instance', instance_id=instance.id) }}" class="button-secondary">Power Off</a>
-        <a href="{{ url_for('reset_instance', instance_id=instance.id) }}" class="button-secondary">Reset</a>
-        <a href="{{ url_for('change_pass_instance', instance_id=instance.id) }}" class="button-secondary">Change Password</a>
-        <a href="{{ url_for('resize_instance', instance_id=instance.id) }}" class="button-secondary">Resize</a>
-        <a href="{{ url_for('change_os_instance', instance_id=instance.id) }}" class="button-secondary">Change OS</a>
-        <a href="{{ url_for('subscription_refund', instance_id=instance.id) }}" class="button-secondary">Subscription Refund</a>
-        <a href="{{ url_for('delete_instance', instance_id=instance.id) }}" class="button-danger">Delete Instance</a>
-    </div>
-
-    <form method="post" action="{{ url_for('add_traffic_instance', instance_id=instance.id) }}">
-        <label for="traffic_amount">Add traffic (TB)</label>
-        <div>
-            <input id="traffic_amount" name="traffic_amount" type="number" min="0.1" step="0.1" placeholder="e.g. 1.5">
-            <button type="submit">Add Traffic</button>
-        </div>
-        <p>Specify the amount of additional bandwidth to attach to this instance.</p>
-    </form>
+    <pre>{{ instance_json }}</pre>
 </section>
 {% endblock %}

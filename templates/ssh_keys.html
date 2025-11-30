@@ -11,21 +11,21 @@
 <section>
     <h2>Registered keys</h2>
     <small>Delete keys that are no longer needed or keep them available for future deployments.</small>
-    {% if customer_id %}
-    <small>Viewing keys for customer ID: <code>{{ customer_id }}</code></small>
+    {% if customer_id.is_some() %}
+    <small>Viewing keys for customer ID: <code>{{ customer_id.as_ref().unwrap() }}</code></small>
     {% endif %}
-    {% if not ssh_keys %}
+    {% if ssh_keys.is_empty() %}
     <p>🔑 No SSH keys are registered yet. Use the form below to add your first key.</p>
     {% else %}
     <div class="card-grid">
         {% for key in ssh_keys %}
         <article>
             <h3>{{ key.name }}</h3>
-            <small>ID #{{ key.id }}{% if key.customer_id %} · Customer {{ key.customer_id }}{% endif %}</small>
-            {% if key.fingerprint %}
+            <small>ID #{{ key.id }}{% if key.customer_id.is_some() %} · Customer {{ key.customer_id.as_ref().unwrap() }}{% endif %}</small>
+            {% if !key.fingerprint.is_empty() %}
             <p><strong>Fingerprint:</strong> {{ key.fingerprint }}</p>
             {% endif %}
-            {% if key.public_key %}
+            {% if !key.public_key.is_empty() %}
             <pre>{{ key.public_key }}</pre>
             {% endif %}
             <footer>
@@ -49,12 +49,12 @@
         <div class="fields-grid">
             <div>
                 <label for="ssh_name">Name</label>
-                <input type="text" id="ssh_name" name="name" value="{{ form_values.name }}" required>
+                <input type="text" id="ssh_name" name="name" value="" required>
             </div>
         </div>
         <div>
             <label for="ssh_public_key">Public key</label>
-            <textarea id="ssh_public_key" name="public_key" rows="5" required>{{ form_values.public_key }}</textarea>
+            <textarea id="ssh_public_key" name="public_key" rows="5" required></textarea>
         </div>
         <footer class="form-actions">
             <button type="submit">Add SSH key</button>
