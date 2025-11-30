@@ -8,18 +8,16 @@
 <table>
     <thead>
         <tr>
-            <th>ID</th>
             <th>Hostname</th>
+            <th>ID</th>
             <th>Actions</th>
         </tr>
     </thead>
     <tbody>
         {% for instance in instances %}
         <tr>
-            <td>{{ instance.id }}</td>
-            <td>{{ instance.hostname }}</td>
-            <td>—</td>
-            <td>—</td>
+            <td><strong>{{ instance.hostname }}</strong></td>
+            <td><code>{{ instance.id }}</code></td>
             <td>
                 <a href="{{ base_url }}/instance/{{ instance.id }}">Details</a>
             </td>

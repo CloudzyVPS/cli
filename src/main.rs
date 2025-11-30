@@ -5,7 +5,6 @@ use axum::{
     routing::{get, post},
     Router,
 };
-// use axum::http::StatusCode; // unused
 use tower_http::services::ServeDir;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -69,10 +68,8 @@ impl OneOrMany {
             OneOrMany::Many(v) => v.join(","),
         }
     }
-    // `to_csv_ref` unused; removing to silence warnings.
 }
 
-            
 fn persist_users_file(users_arc: &Arc<Mutex<HashMap<String, UserRecord>>>) -> Result<(), std::io::Error> {
     let users = users_arc.lock().unwrap();
     let mut serialized: serde_json::Map<String, serde_json::Value> = serde_json::Map::new();
@@ -236,8 +233,6 @@ struct RegionsPageTemplate<'a> {
     flash_messages: Vec<String>,
     has_flash_messages: bool,
     regions: &'a [Region],
-    total_regions: usize,
-    premium_count: usize,
 }
 
 #[derive(Template)]
@@ -264,7 +259,6 @@ struct OsCatalogTemplate<'a> {
     flash_messages: Vec<String>,
     has_flash_messages: bool,
     os_list: &'a [OsItem],
-    total_images: usize,
 }
 
 #[derive(Template)]
@@ -276,7 +270,6 @@ struct ApplicationsTemplate<'a> {
     flash_messages: Vec<String>,
     has_flash_messages: bool,
     apps: &'a [ApplicationView],
-    total_apps: usize,
 }
 
 #[derive(Template)]
@@ -288,10 +281,8 @@ struct InstanceDetailTemplate {
     flash_messages: Vec<String>,
     has_flash_messages: bool,
     instance_id: String,
-    // Human-friendly key-value details for the instance
+    hostname: String,
     details: Vec<(String, String)>,
-    // Raw JSON (pretty) for debugging in a collapsible block
-    instance_json: String,
 }
 
 #[derive(Template)]
@@ -497,9 +488,6 @@ fn take_flash_messages(state: &AppState, jar: &CookieJar) -> Vec<String> {
         .remove(&session_id)
         .unwrap_or_default()
 }
-
-// push_flash_message removed - we manage flash messages directly using the
-// `take_flash_messages` helper and by storing messages in `flash_store`.
 
 fn resolve_default_endpoint(state: &AppState, username: &str) -> String {
     let users = state.users.lock().unwrap();
@@ -1000,10 +988,113 @@ struct ProductEntry {
 struct ProductView {
     id: String,
     name: String,
+    display_name: String,
     description: String,
     tags: String,
     spec_entries: Vec<ProductEntry>,
     price_entries: Vec<ProductEntry>,
+}
+
+/// Build a user-friendly display name for a product from its specs.
+/// Uses CPU, RAM, Disk if available; falls back to name/tags/price or "Plan".
+fn build_product_display_name(
+    region: &str,
+    id: &str,
+    name: &str,
+    tags: &str,
+    spec_entries: &[ProductEntry],
+    price_entries: &[ProductEntry],
+) -> String {
+    // Try to extract CPU, RAM, Disk from spec_entries
+    let cpu = spec_entries
+        .iter()
+        .find(|e| {
+            let t = e.term.to_lowercase();
+            t.contains("cpu") || t.contains("vcpu") || t.contains("core")
+        })
+        .map(|e| e.value.clone());
+    let ram = spec_entries
+        .iter()
+        .find(|e| {
+            let t = e.term.to_lowercase();
+            t.contains("ram") || t.contains("memory")
+        })
+        .map(|e| e.value.clone());
+    let disk = spec_entries
+        .iter()
+        .find(|e| {
+            let t = e.term.to_lowercase();
+            t.contains("disk") || t.contains("storage") || t.contains("ssd") || t.contains("nvme")
+        })
+        .map(|e| e.value.clone());
+
+    // Build display name from specs if we have at least CPU or RAM
+    if cpu.is_some() || ram.is_some() {
+        let mut parts: Vec<String> = Vec::new();
+        if let Some(c) = cpu.as_ref() {
+            parts.push(c.clone());
+        }
+        if let Some(r) = ram.as_ref() {
+            parts.push(r.clone());
+        }
+        if let Some(d) = disk.as_ref() {
+            parts.push(d.clone());
+        }
+        if !parts.is_empty() {
+            return parts.join(" · ");
+        }
+    }
+
+    // Fallback: use name if it's different from id and not empty
+    if !name.is_empty() && name != id {
+        return name.to_string();
+    }
+
+    // Fallback: use tags if not empty
+    if !tags.is_empty() {
+        return tags.to_string();
+    }
+
+    // Fallback: use the first price
+    if let Some(entry) = price_entries.first() {
+        if !entry.value.is_empty() {
+            return entry.value.clone();
+        }
+    }
+
+    // Build a fallback that includes region and main resource counts when possible
+    let mut parts: Vec<String> = Vec::new();
+    if !region.trim().is_empty() {
+        parts.push(region.to_string());
+    }
+    if let Some(v) = cpu.as_ref() {
+        // Avoid adding units if the spec value already contains text like "vCPU".
+        if v.to_lowercase().contains("vcpu") || v.to_lowercase().contains("cpu") {
+            parts.push(v.clone());
+        } else {
+            parts.push(format!("{} vCPU", v));
+        }
+    }
+    if let Some(v) = ram.as_ref() {
+        // Keep unit if included already
+        if v.to_lowercase().contains("gb") || v.to_lowercase().contains("ram") {
+            parts.push(v.clone());
+        } else {
+            parts.push(format!("{} RAM", v));
+        }
+    }
+    if let Some(v) = disk.as_ref() {
+        if v.to_lowercase().contains("gb") || v.to_lowercase().contains("disk") || v.to_lowercase().contains("ssd") {
+            parts.push(v.clone());
+        } else {
+            parts.push(format!("{} Disk", v));
+        }
+    }
+    if !parts.is_empty() {
+        return parts.join(" · ");
+    }
+    // Final fallback
+    "Plan".to_string()
 }
 
 #[derive(Template)]
@@ -1185,9 +1276,18 @@ async fn load_products(state: &AppState, region_id: &str) -> Vec<ProductView> {
                         plan.and_then(|p| p.get("prices"))
                             .or_else(|| plan.and_then(|p| p.get("pricing"))),
                     );
+                    let display_name = build_product_display_name(
+                        &region_id,
+                        &id,
+                        &name,
+                        &tags,
+                        &spec_entries,
+                        &price_entries,
+                    );
                     out.push(ProductView {
                         id,
                         name,
+                        display_name,
                         description,
                         tags,
                         spec_entries,
@@ -2337,7 +2437,6 @@ struct UsersTemplate {
     flash_messages: Vec<String>,
     has_flash_messages: bool,
     rows: Vec<UserTableRow>,
-    // removed `message` field - it's unused
 }
 
 struct UserTableRow {
@@ -2402,7 +2501,6 @@ async fn users_list(State(state): State<AppState>, jar: CookieJar) -> impl IntoR
             flash_messages,
             has_flash_messages,
             rows,
-            // removed `message` field - it's unused
         }
         .render()
         .unwrap(),
@@ -3072,8 +3170,8 @@ async fn regions_get(State(state): State<AppState>, jar: CookieJar) -> impl Into
         return r.into_response();
     }
     let (regions, _) = load_regions(&state).await;
-    let total_regions = regions.len();
-    let premium_count = regions.iter().filter(|r| r.is_premium).count();
+    // let total_regions = regions.len();
+    // let premium_count = regions.iter().filter(|r| r.is_premium).count();
     let TemplateGlobals { current_user, api_hostname, base_url, flash_messages, has_flash_messages } = build_template_globals(&state, &jar);
     let html = RegionsPageTemplate {
         current_user,
@@ -3082,8 +3180,6 @@ async fn regions_get(State(state): State<AppState>, jar: CookieJar) -> impl Into
         flash_messages,
         has_flash_messages,
         regions: &regions,
-        total_regions,
-        premium_count,
     }
     .render()
     .unwrap();
@@ -3145,7 +3241,7 @@ async fn os_get(State(state): State<AppState>, jar: CookieJar) -> impl IntoRespo
         return r.into_response();
     }
     let os_list = load_os_list(&state).await;
-    let total_images = os_list.len();
+    // let total_images = os_list.len();
     let TemplateGlobals { current_user, api_hostname, base_url, flash_messages, has_flash_messages } = build_template_globals(&state, &jar);
     let html = OsCatalogTemplate {
         current_user,
@@ -3154,7 +3250,6 @@ async fn os_get(State(state): State<AppState>, jar: CookieJar) -> impl IntoRespo
         flash_messages,
         has_flash_messages,
         os_list: &os_list,
-        total_images,
     }
     .render()
     .unwrap();
@@ -3166,7 +3261,7 @@ async fn applications_get(State(state): State<AppState>, jar: CookieJar) -> impl
         return r.into_response();
     }
     let apps = load_applications(&state).await;
-    let total_apps = apps.len();
+    // let total_apps = apps.len();
     let TemplateGlobals { current_user, api_hostname, base_url, flash_messages, has_flash_messages } = build_template_globals(&state, &jar);
     let html = ApplicationsTemplate {
         current_user,
@@ -3175,7 +3270,6 @@ async fn applications_get(State(state): State<AppState>, jar: CookieJar) -> impl
         flash_messages,
         has_flash_messages,
         apps: &apps,
-        total_apps,
     }
     .render()
     .unwrap();
@@ -3208,17 +3302,18 @@ async fn instance_detail(
     }
     let endpoint = format!("/v1/instances/{}", instance_id);
     let payload = api_call(&state, "GET", &endpoint, None, None).await;
-    let json = serde_json::to_string_pretty(&payload).unwrap_or_else(|_| "{}".into());
+    let _json = serde_json::to_string_pretty(&payload).unwrap_or_else(|_| "{}".into());
     // Collect nice key-value pair details we want to display rather than raw JSON
     let mut details: Vec<(String, String)> = Vec::new();
+    let mut hostname = "(no hostname)".to_string();
     if let Some(obj) = payload.as_object() {
         if let Some(data) = obj.get("data").and_then(|d| d.as_object()) {
-            let host = data
+            hostname = data
                 .get("hostname")
                 .and_then(|v| v.as_str())
                 .unwrap_or("(no hostname)")
                 .to_string();
-            details.push(("Hostname".into(), host));
+            details.push(("Hostname".into(), hostname.clone()));
             let status = data
                 .get("status")
                 .and_then(|v| v.as_str())
@@ -3295,8 +3390,8 @@ async fn instance_detail(
             flash_messages,
             has_flash_messages,
             instance_id: instance_id.clone(),
+            hostname,
             details,
-            instance_json: json,
         }
         .render()
         .unwrap(),

@@ -1,11 +1,11 @@
 {% extends "base.html" %}
 
-{% block title %}Instance {{ instance_id }}{% endblock %}
+{% block title %}{{ hostname }}{% endblock %}
 
 {% block content %}
 <header class="page-header">
-    <h1>Instance {{ instance_id }}</h1>
-    <p>Details for instance <strong>{{ instance_id }}</strong>.</p>
+    <h1>{{ hostname }}</h1>
+    <p>Instance ID: <code>{{ instance_id }}</code></p>
 </header>
 
 <section class="surface">
