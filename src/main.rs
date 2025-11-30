@@ -1,134 +1,109 @@
 use askama::Template;
 use axum::{
-    extract::{Form, State},
+    extract::{Form, State, CookieJar},
     response::{Html, IntoResponse, Redirect, Response},
     routing::{get, post},
     Router,
 };
-use axum_extra::extract::cookie::{Cookie, CookieJar};
-use clap::{Parser, Subcommand};
-use hex::encode as hex_encode;
-use pbkdf2::pbkdf2_hmac;
-use rand::{rngs::OsRng, RngCore};
-use reqwest::Client;
+use axum::http::StatusCode;
+use tower_http::services::ServeDir;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use sha2::Sha256;
-use std::path::Path;
+use std::net::SocketAddr;
+use std::sync::{Arc, Mutex};
+use std::collections::{HashMap, HashSet};
 use std::process;
-use std::{
-    collections::HashMap,
-    net::SocketAddr,
-    sync::{Arc, Mutex},
-};
-use tower_http::services::ServeDir;
-use tracing_subscriber::{fmt, prelude::*, EnvFilter};
-use urlencoding::encode;
+use hex::encode as hex_encode;
+use rand::rngs::OsRng;
+use rand_core::RngCore;
+use pbkdf2::pbkdf2_hmac;
+use sha2::Sha256;
+use clap::{Parser, Subcommand, Args};
+use tracing_subscriber::{fmt, EnvFilter};
+use cookie::Cookie;
+use std::env;
+use std::path::Path;
+// Simple helper to return a plaintext HTML response
+fn plain_html<S: AsRef<str>>(s: S) -> Html<String> {
+    Html(format!("<!DOCTYPE html><html><body><p>{}</p></body></html>", s.as_ref()))
+}
 
-const PBKDF2_ITERATIONS: u32 = 260_000;
-
-const LOGGING_IGNORE_ENDPOINTS: &[&str] =
-    &["/v1/regions", "/v1/products", "/v1/os", "/v1/ssh-keys"];
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
+// Simple user record persisted to users.json
+#[derive(Clone, Serialize, Deserialize)]
 struct UserRecord {
-    password: String, // werkzeug format: pbkdf2:sha256:ITERATIONS$salt$hash
+    password: String,
     role: String,
     assigned_instances: Vec<String>,
 }
 
+// AppState used across handlers
 #[derive(Clone)]
 struct AppState {
     users: Arc<Mutex<HashMap<String, UserRecord>>>,
-    sessions: Arc<Mutex<HashMap<String, String>>>, // session_id -> username
+    sessions: Arc<Mutex<HashMap<String, String>>>,
+    flash_store: Arc<Mutex<HashMap<String, Vec<String>>>>,
+    default_customer_cache: Arc<Mutex<Option<String>>>,
     api_base_url: String,
     api_token: String,
     public_base_url: String,
-    default_customer_cache: Arc<Mutex<Option<String>>>,
-    flash_store: Arc<Mutex<HashMap<String, Vec<String>>>>, // session_id -> flashes
-    client: Client,
+    client: reqwest::Client,
 }
 
-fn parse_werkzeug_pbkdf2(hash: &str) -> Option<(u32, String, String)> {
-    // Format: pbkdf2:sha256:iterations$salt$hash
-    let parts: Vec<&str> = hash.split('$').collect();
-    if parts.len() != 3 {
-        return None;
-    }
-    let meta = parts[0];
-    let salt = parts[1].to_string();
-    let hash_hex = parts[2].to_string();
-    let meta_parts: Vec<&str> = meta.split(':').collect();
-    if meta_parts.len() != 3 {
-        return None;
-    }
-    let iterations: u32 = meta_parts[2].parse().ok()?;
-    Some((iterations, salt, hash_hex))
-}
-
-fn verify_password(stored: &str, candidate: &str) -> bool {
-    if let Some((iterations, salt, expected_hex)) = parse_werkzeug_pbkdf2(stored) {
-        let mut dk = [0u8; 32];
-        pbkdf2_hmac::<Sha256>(candidate.as_bytes(), salt.as_bytes(), iterations, &mut dk);
-        let computed = hex_encode(dk);
-        computed == expected_hex
-    } else {
-        false
-    }
-}
-
-fn random_session_id() -> String {
-    let mut bytes = [0u8; 24];
-    OsRng.fill_bytes(&mut bytes);
-    hex_encode(bytes)
-}
-
-fn generate_password_hash(password: &str) -> String {
-    let salt_bytes = {
-        let mut b = [0u8; 12];
-        OsRng.fill_bytes(&mut b);
-        b
-    };
-    let salt_hex = hex_encode(salt_bytes);
-    let mut dk = [0u8; 32];
-    pbkdf2_hmac::<Sha256>(
-        password.as_bytes(),
-        salt_hex.as_bytes(),
-        PBKDF2_ITERATIONS,
-        &mut dk,
-    );
-    let hash_hex = hex_encode(dk);
-    format!(
-        "pbkdf2:sha256:{}${}${}",
-        PBKDF2_ITERATIONS, salt_hex, hash_hex
-    )
-}
-
-fn render_stub(title: &str, path: &str) -> Html<String> {
-    Html(format!("<!DOCTYPE html><html><head><title>Zyffiliate</title></head><body><h1>{}</h1><p>Stub page for {}</p></body></html>", title, path))
-}
-
-fn plain_html(msg: &str) -> Response {
-    Html(msg.to_string()).into_response()
-}
-
-fn persist_users_file(users: &Arc<Mutex<HashMap<String, UserRecord>>>) -> Result<(), String> {
-    let users = users.lock().unwrap();
-    let mut serialized: serde_json::Map<String, Value> = serde_json::Map::new();
+// Persist the users map to users.json
+fn persist_users_file(users_arc: &Arc<Mutex<HashMap<String, UserRecord>>>) -> Result<(), std::io::Error> {
+    let users = users_arc.lock().unwrap();
+    let mut serialized: serde_json::Map<String, serde_json::Value> = serde_json::Map::new();
     for (u, rec) in users.iter() {
-        serialized.insert(
-            u.clone(),
-            serde_json::json!({"password": rec.password, "role": rec.role, "assigned_instances": rec.assigned_instances }),
-        );
+        serialized.insert(u.clone(), serde_json::json!({"password": rec.password, "role": rec.role, "assigned_instances": rec.assigned_instances }));
     }
-    std::fs::write(
-        "users.json",
-        serde_json::to_string_pretty(&Value::Object(serialized)).map_err(|e| e.to_string())?,
-    )
-    .map_err(|e| e.to_string())
+    std::fs::write("users.json", serde_json::to_string_pretty(&serde_json::Value::Object(serialized))?)
 }
 
-fn load_users_store() -> Arc<Mutex<HashMap<String, UserRecord>>> {
+// PBKDF2 iterations constant
+const PBKDF2_ITERATIONS: u32 = 100_000;
+
+// Generate a werkzeug-compatible PBKDF2 password string
+fn generate_password_hash(password: &str) -> String {
+    let mut salt_bytes = [0u8; 12];
+    // try to use OsRng; if not available, fallback to rand
+    rand::rngs::OsRng.try_fill_bytes(&mut salt_bytes).unwrap();
+    let salt = hex::encode(salt_bytes);
+    let mut dk = [0u8; 32];
+    pbkdf2_hmac::<Sha256>(password.as_bytes(), salt.as_bytes(), PBKDF2_ITERATIONS, &mut dk);
+    let hash_hex = hex::encode(dk);
+    format!("pbkdf2:sha256:{}${}${}", PBKDF2_ITERATIONS, salt, hash_hex)
+}
+
+// Verify a PBKDF2 password string against a candidate
+fn verify_password(stored: &str, candidate: &str) -> bool {
+    if let Some(rest) = stored.strip_prefix("pbkdf2:sha256:") {
+        if let Some((iter_s, salt_hash)) = rest.split_once('$') {
+            if let Some((salt, expected_hash)) = salt_hash.split_once('$') {
+                if let Ok(iter) = iter_s.parse::<u32>() {
+                    let mut dk = [0u8; 32];
+                    pbkdf2_hmac::<Sha256>(candidate.as_bytes(), salt.as_bytes(), iter, &mut dk);
+                    let computed = hex::encode(dk);
+                    return computed == expected_hash;
+                }
+            }
+        }
+    }
+    false
+}
+
+// Build an AppState instance from env and users.json
+fn build_state_from_env(env_file: Option<&str>) -> AppState {
+    // load optional env file
+    if let Some(path) = env_file {
+        dotenvy::from_path(Path::new(path)).ok();
+    } else {
+        dotenvy::dotenv().ok();
+    }
+    let api_base_url = env::var("API_BASE_URL").unwrap_or_default();
+    let api_token = env::var("API_TOKEN").unwrap_or_default();
+    let public_base_url = sanitize_base_url(&env::var("PUBLIC_BASE_URL").unwrap_or_default());
+    let client = reqwest::Client::new();
+
     let path = Path::new("users.json");
     let mut map: HashMap<String, UserRecord> = HashMap::new();
     if path.exists() {
@@ -165,54 +140,119 @@ fn load_users_store() -> Arc<Mutex<HashMap<String, UserRecord>>> {
             }
         }
     } else {
-        // default owner creation similar to previous behavior
+        // create default owner
         let salt = {
             let mut b = [0u8; 12];
-            OsRng.fill_bytes(&mut b);
-            hex_encode(b)
+            rand::rngs::OsRng.try_fill_bytes(&mut b).unwrap();
+            hex::encode(b)
         };
         let mut dk = [0u8; 32];
         pbkdf2_hmac::<Sha256>(b"owner123", salt.as_bytes(), PBKDF2_ITERATIONS, &mut dk);
-        let hash_hex = hex_encode(dk);
+        let hash_hex = hex::encode(dk);
         let full = format!("pbkdf2:sha256:{}${}${}", PBKDF2_ITERATIONS, salt, hash_hex);
         map.insert(
-            "owner".to_string(),
+            "owner".into(),
             UserRecord {
                 password: full,
-                role: "owner".to_string(),
+                role: "owner".into(),
                 assigned_instances: vec![],
             },
         );
-        let users_arc = Arc::new(Mutex::new(map));
-        let _ = persist_users_file(&users_arc);
-        return users_arc;
+        let mut serialized: serde_json::Map<String, serde_json::Value> = serde_json::Map::new();
+        for (u, rec) in map.iter() {
+            serialized.insert(u.clone(), serde_json::json!({"password": rec.password, "role": rec.role, "assigned_instances": rec.assigned_instances }));
+        }
+        let _ = std::fs::write(
+            path,
+            serde_json::to_string_pretty(&serde_json::Value::Object(serialized)).unwrap(),
+        );
     }
-    Arc::new(Mutex::new(map))
-}
 
-fn build_state_from_env(env_file: Option<&str>) -> AppState {
-    if let Some(path) = env_file {
-        let _ = dotenvy::from_filename(path);
-    } else {
-        let _ = dotenvy::dotenv();
-    }
-    let user_store = load_users_store();
-    let api_base_url = std::env::var("API_BASE_URL").unwrap_or_else(|_| "".into());
-    let api_token = std::env::var("API_TOKEN").unwrap_or_else(|_| "".into());
-    let public_base_url = std::env::var("PUBLIC_BASE_URL")
-        .map(|v| sanitize_base_url(&v))
-        .unwrap_or_else(|_| sanitize_base_url("http://localhost:5000"));
-    let client = Client::builder().build().unwrap();
     AppState {
-        users: user_store,
+        users: Arc::new(Mutex::new(map)),
         sessions: Arc::new(Mutex::new(HashMap::new())),
+        flash_store: Arc::new(Mutex::new(HashMap::new())),
+        default_customer_cache: Arc::new(Mutex::new(None)),
         api_base_url,
         api_token,
         public_base_url,
-        default_customer_cache: Arc::new(Mutex::new(None)),
-        flash_store: Arc::new(Mutex::new(HashMap::new())),
         client,
     }
+}
+
+// Global template context injected into most page templates
+// (already implemented via build_template_globals/TemplateGlobals)
+#[derive(Template)]
+#[template(path = "regions.html")]
+struct RegionsPageTemplate<'a> {
+    current_user: Option<CurrentUser>,
+    api_hostname: String,
+    base_url: String,
+    flash_messages: Vec<String>,
+    has_flash_messages: bool,
+    regions: &'a [Region],
+    total_regions: usize,
+    premium_count: usize,
+}
+
+#[derive(Template)]
+#[template(path = "products.html")]
+struct ProductsPageTemplate<'a> {
+    current_user: Option<CurrentUser>,
+    api_hostname: String,
+    base_url: String,
+    flash_messages: Vec<String>,
+    has_flash_messages: bool,
+    regions: &'a [Region],
+    selected_region: Option<&'a Region>,
+    active_region_id: String,
+    requested_region: Option<String>,
+    products: &'a [ProductView],
+}
+
+#[derive(Template)]
+#[template(path = "os.html")]
+struct OsCatalogTemplate<'a> {
+    current_user: Option<CurrentUser>,
+    api_hostname: String,
+    base_url: String,
+    flash_messages: Vec<String>,
+    has_flash_messages: bool,
+    os_list: &'a [OsItem],
+    total_images: usize,
+}
+
+#[derive(Template)]
+#[template(path = "applications.html")]
+struct ApplicationsTemplate<'a> {
+    current_user: Option<CurrentUser>,
+    api_hostname: String,
+    base_url: String,
+    flash_messages: Vec<String>,
+    has_flash_messages: bool,
+    apps: &'a [ApplicationView],
+    total_apps: usize,
+}
+
+#[derive(Template)]
+#[template(path = "instance_detail.html")]
+struct InstanceDetailTemplate {
+    current_user: Option<CurrentUser>,
+    api_hostname: String,
+    base_url: String,
+    flash_messages: Vec<String>,
+    has_flash_messages: bool,
+    instance: Value,
+}
+
+#[derive(Template)]
+#[template(path = "bulk_refund.html")]
+struct BulkRefundTemplate {
+    current_user: Option<CurrentUser>,
+    api_hostname: String,
+    base_url: String,
+    flash_messages: Vec<String>,
+    has_flash_messages: bool,
 }
 
 fn build_app(state: AppState) -> Router {
@@ -2048,26 +2088,13 @@ async fn api_call(
     }
 }
 #[derive(Template)]
-#[template(
-    source = r#"<!DOCTYPE html>
-<html>
-<head><title>Users</title></head>
-<body>
-    <h1>User accounts</h1>
-    {% if let Some(msg) = message %}
-    <p>{{ msg }}</p>
-    {% endif %}
-    <table border="1">
-        <tr><th>Username</th><th>Role</th><th>Assigned</th></tr>
-        {% for row in rows %}
-        <tr><td>{{ row.username }}</td><td>{{ row.role }}</td><td>{{ row.assigned }}</td></tr>
-        {% endfor %}
-    </table>
-</body>
-</html>"#,
-    ext = "html"
-)]
+#[template(path = "users.html")]
 struct UsersTemplate<'a> {
+    current_user: Option<CurrentUser>,
+    api_hostname: String,
+    base_url: String,
+    flash_messages: Vec<String>,
+    has_flash_messages: bool,
     rows: Vec<UserTableRow>,
     message: Option<&'a str>,
 }
@@ -2117,10 +2144,22 @@ async fn users_list(State(state): State<AppState>, jar: CookieJar) -> impl IntoR
         .collect();
     rows.sort_by(|a, b| a.username.cmp(&b.username));
     drop(users);
+    let TemplateGlobals {
+        current_user,
+        api_hostname,
+        base_url,
+        flash_messages,
+        has_flash_messages,
+    } = build_template_globals(&state, &jar);
     inject_context(
         &state,
         &jar,
         UsersTemplate {
+            current_user,
+            api_hostname,
+            base_url,
+            flash_messages,
+            has_flash_messages,
             rows,
             message: None,
         }
@@ -2294,22 +2333,13 @@ async fn delete_user(
     Redirect::to("/users").into_response()
 }
 #[derive(Template)]
-#[template(
-    source = r#"<!DOCTYPE html>
-<html>
-<head><title>Instances</title></head>
-<body>
-    <h1>Instances</h1>
-    <ul>
-        {% for inst in instances %}
-        <li>#{{ inst.id }} {{ inst.hostname }}</li>
-        {% endfor %}
-    </ul>
-</body>
-</html>"#,
-    ext = "html"
-)]
+#[template(path = "instances.html")]
 struct InstancesTemplate<'a> {
+    current_user: Option<CurrentUser>,
+    api_hostname: String,
+    base_url: String,
+    flash_messages: Vec<String>,
+    has_flash_messages: bool,
     instances: &'a [InstanceView],
 }
 
@@ -2381,37 +2411,32 @@ async fn instances_real(State(state): State<AppState>, jar: CookieJar) -> impl I
         return Redirect::to("/login").into_response();
     };
     let list = load_instances_for_user(&state, &username).await;
+    let TemplateGlobals { current_user, api_hostname, base_url, flash_messages, has_flash_messages } = build_template_globals(&state, &jar);
     inject_context(
         &state,
         &jar,
-        InstancesTemplate { instances: &list }.render().unwrap(),
+        InstancesTemplate {
+            current_user,
+            api_hostname,
+            base_url,
+            flash_messages,
+            has_flash_messages,
+            instances: &list,
+        }
+        .render()
+        .unwrap(),
     )
 }
 
 // Access management (owner only): list admins and assign instances
 #[derive(Template)]
-#[template(
-    source = r#"<!DOCTYPE html>
-<html>
-<head><title>Access</title></head>
-<body>
-    <h1>Admin assignments</h1>
-    {% for admin in admins %}
-    <section>
-        <h2>{{ admin.username }}</h2>
-        <form method="post" action="/access/{{ admin.username }}">
-            {% for inst in admin.instances %}
-            <label><input type="checkbox" name="instances" value="{{ inst.id }}" {% if inst.checked %}checked{% endif %}/> #{{ inst.id }} {{ inst.hostname }}</label><br />
-            {% endfor %}
-            <button type="submit">Save</button>
-        </form>
-    </section>
-    {% endfor %}
-</body>
-</html>"#,
-    ext = "html"
-)]
+#[template(path = "access.html")]
 struct AccessTemplate {
+    current_user: Option<CurrentUser>,
+    api_hostname: String,
+    base_url: String,
+    flash_messages: Vec<String>,
+    has_flash_messages: bool,
     admins: Vec<AdminView>,
 }
 
@@ -2485,7 +2510,12 @@ async fn access_get(State(state): State<AppState>, jar: CookieJar) -> impl IntoR
         })
         .collect();
     admins.sort_by(|a, b| a.username.cmp(&b.username));
-    inject_context(&state, &jar, AccessTemplate { admins }.render().unwrap())
+    let TemplateGlobals { current_user, api_hostname, base_url, flash_messages, has_flash_messages } = build_template_globals(&state, &jar);
+    inject_context(
+        &state,
+        &jar,
+        AccessTemplate { current_user, api_hostname, base_url, flash_messages, has_flash_messages, admins }.render().unwrap(),
+    )
 }
 
 #[derive(Deserialize)]
@@ -2543,37 +2573,13 @@ struct SshKeyView {
 }
 
 #[derive(Template)]
-#[template(
-    source = r#"<!DOCTYPE html>
-<html>
-<head><title>SSH Keys</title></head>
-<body>
-    <h1>SSH Keys</h1>
-    {% if let Some(msg) = error %}
-    <p style="color:red">{{ msg }}</p>
-    {% endif %}
-    <form method="post">
-        <input type="hidden" name="action" value="create" />
-        <label>Name <input type="text" name="name" /></label>
-        <label>Public key <textarea name="public_key"></textarea></label>
-        <button type="submit">Add</button>
-    </form>
-    <ul>
-        {% for key in ssh_keys %}
-        <li>#{{ key.id }} {{ key.name }}
-            <form method="post" style="display:inline">
-                <input type="hidden" name="action" value="delete" />
-                <input type="hidden" name="ssh_key_id" value="{{ key.id }}" />
-                <button type="submit">Delete</button>
-            </form>
-        </li>
-        {% endfor %}
-    </ul>
-</body>
-</html>"#,
-    ext = "html"
-)]
+#[template(path = "ssh_keys.html")]
 struct SshKeysTemplate<'a> {
+    current_user: Option<CurrentUser>,
+    api_hostname: String,
+    base_url: String,
+    flash_messages: Vec<String>,
+    has_flash_messages: bool,
     ssh_keys: &'a [SshKeyView],
     error: Option<&'a str>,
 }
@@ -2727,10 +2733,16 @@ async fn ssh_keys_get(
         fetch_default_customer_id(&state).await
     };
     let keys = load_ssh_keys_api(&state, customer_id).await;
+    let TemplateGlobals { current_user, api_hostname, base_url, flash_messages, has_flash_messages } = build_template_globals(&state, &jar);
     inject_context(
         &state,
         &jar,
         SshKeysTemplate {
+            current_user,
+            api_hostname,
+            base_url,
+            flash_messages,
+            has_flash_messages,
             ssh_keys: &keys,
             error: None,
         }
@@ -2798,362 +2810,13 @@ async fn ssh_keys_post(
     Redirect::to("/ssh-keys").into_response()
 }
 
-#[derive(Template)]
-#[template(
-    source = r#"<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="utf-8" />
-    <title>Regions</title>
-    <link rel="stylesheet" href="/static/styles.css" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-</head>
-<body>
-    <main>
-        <header class="page-header">
-            <p><a href="/instances">&larr; Back to dashboard</a></p>
-            <h1>Regions</h1>
-            <p>Active infrastructure regions provided by the Cloudzy API.</p>
-            <p class="page-status">{{ total_regions }} active region{% if total_regions != 1 %}s{% endif %} • {{ premium_count }} premium</p>
-        </header>
-        {% if regions.is_empty() %}
-        <section>
-            <p>No regions were returned.</p>
-        </section>
-        {% else %}
-        <section aria-labelledby="regions-heading">
-            <h2 id="regions-heading" class="sr-only">Region list</h2>
-            <div class="region-grid" role="list">
-                {% for region in regions %}
-                <article class="region-card" role="listitem">
-                    <div class="region-heading">
-                        <h3>{{ region.name }}</h3>
-                        {% if let Some(code) = region.abbr.as_ref() %}
-                        <span class="region-chip">{{ code }}</span>
-                        {% endif %}
-                    </div>
-                    <p class="region-subtitle">Region ID {{ region.id }}</p>
-                    {% if let Some(desc) = region.description.as_ref() %}
-                    <p class="region-description">{{ desc }}</p>
-                    {% endif %}
-                    <dl class="region-metrics">
-                        <div>
-                            <dt>Status</dt>
-                            <dd>{% if region.is_active %}Active{% else %}Disabled{% endif %}</dd>
-                        </div>
-                        <div>
-                            <dt>Premium tier</dt>
-                            <dd>{% if region.is_premium %}Premium{% else %}Standard{% endif %}</dd>
-                        </div>
-                        {% if let Some(ram) = region.ram_threshold_gb %}
-                        <div>
-                            <dt>RAM threshold</dt>
-                            <dd>{{ ram }} GB</dd>
-                        </div>
-                        {% endif %}
-                        {% if let Some(disk) = region.disk_threshold_gb %}
-                        <div>
-                            <dt>Disk threshold</dt>
-                            <dd>{{ disk }} GB</dd>
-                        </div>
-                        {% endif %}
-                    </dl>
-                    {% if let Some(tags) = region.tags.as_ref() %}
-                    <footer class="region-footer">
-                        <p>{{ tags }}</p>
-                    </footer>
-                    {% endif %}
-                    <p class="region-cta"><a href="/products?region_id={{ region.id }}">Browse products &rarr;</a></p>
-                </article>
-                {% endfor %}
-            </div>
-        </section>
-        {% endif %}
-    </main>
-</body>
-</html>"#,
-    ext = "html"
-)]
-struct RegionsPageTemplate<'a> {
-    regions: &'a [Region],
-    total_regions: usize,
-    premium_count: usize,
-}
+// Regions are rendered using `templates/regions.html` (path-based Askama template)
 
-#[derive(Template)]
-#[template(
-    source = r#"<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="utf-8" />
-    <title>Products</title>
-    <link rel="stylesheet" href="/static/styles.css" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-</head>
-<body>
-    <main>
-        <header class="page-header">
-            <p><a href="/regions">&larr; Back to regions</a></p>
-            <h1>Products</h1>
-            {% if let Some(region) = selected_region %}
-            <p>Plans available in <strong>{{ region.name }}</strong> ({{ region.id }}).</p>
-            {% else %}
-            <p>Select a region to load its catalog.</p>
-            {% endif %}
-            {% if let Some(rid) = requested_region.as_ref() %}
-            <p class="page-status warning">No region with id {{ rid }} was found.</p>
-            {% endif %}
-        </header>
-        <section>
-            <h2>Select a region</h2>
-            {% if regions.is_empty() %}
-            <p>No regions are available yet.</p>
-            {% else %}
-            <div class="region-grid" role="list">
-                {% for region in regions %}
-                <a class="region-card" role="listitem" href="/products?region_id={{ region.id }}" {% if !active_region_id.is_empty() && active_region_id == region.id %}aria-current="true"{% endif %}>
-                    <div class="region-heading">
-                        <h3>{{ region.name }}</h3>
-                        {% if let Some(code) = region.abbr.as_ref() %}
-                        <span class="region-chip">{{ code }}</span>
-                        {% endif %}
-                    </div>
-                    <p class="region-subtitle">Region ID {{ region.id }}</p>
-                    {% if let Some(desc) = region.description.as_ref() %}
-                    <p class="region-description">{{ desc }}</p>
-                    {% endif %}
-                    <dl class="region-metrics">
-                        <div>
-                            <dt>Premium</dt>
-                            <dd>{% if region.is_premium %}Yes{% else %}No{% endif %}</dd>
-                        </div>
-                        {% if let Some(ram) = region.ram_threshold_gb %}
-                        <div>
-                            <dt>RAM threshold</dt>
-                            <dd>{{ ram }} GB</dd>
-                        </div>
-                        {% endif %}
-                        {% if let Some(disk) = region.disk_threshold_gb %}
-                        <div>
-                            <dt>Disk threshold</dt>
-                            <dd>{{ disk }} GB</dd>
-                        </div>
-                        {% endif %}
-                    </dl>
-                    <span class="region-cta" aria-hidden="true">{% if !active_region_id.is_empty() && active_region_id == region.id %}Viewing{% else %}View{% endif %} products</span>
-                </a>
-                {% endfor %}
-            </div>
-            {% endif %}
-        </section>
-        <section>
-            <h2>Product catalog</h2>
-            {% if let Some(region) = selected_region %}
-                {% if products.is_empty() %}
-                <p>📦 No products were returned for {{ region.name }}.</p>
-                {% else %}
-                <div class="product-grid" role="list">
-                    {% for product in products %}
-                    <article class="product-card" role="listitem" data-view-only="true">
-                        <div class="product-card-body">
-                            <header>
-                                <p class="product-plan-name">Product #{{ product.id }}</p>
-                                <h2>{{ product.name }}</h2>
-                            </header>
-                            {% if !product.description.is_empty() %}
-                            <p>{{ product.description }}</p>
-                            {% endif %}
-                            {% if !product.spec_entries.is_empty() %}
-                            <dl>
-                                {% for entry in product.spec_entries %}
-                                <div>
-                                    <dt>{{ entry.term }}</dt>
-                                    <dd>{{ entry.value }}</dd>
-                                </div>
-                                {% endfor %}
-                            </dl>
-                            {% endif %}
-                            {% if !product.price_entries.is_empty() %}
-                            <dl class="pricing">
-                                {% for entry in product.price_entries %}
-                                <div>
-                                    <dt>{{ entry.term }}</dt>
-                                    <dd>{{ entry.value }}</dd>
-                                </div>
-                                {% endfor %}
-                            </dl>
-                            {% endif %}
-                            {% if !product.tags.is_empty() %}
-                            <footer>
-                                <p>{{ product.tags }}</p>
-                            </footer>
-                            {% endif %}
-                        </div>
-                    </article>
-                    {% endfor %}
-                </div>
-                {% endif %}
-            {% else %}
-            <p>Select a region above to preview product plans.</p>
-            {% endif %}
-        </section>
-    </main>
-</body>
-</html>"#,
-    ext = "html"
-)]
-struct ProductsPageTemplate<'a> {
-    regions: &'a [Region],
-    selected_region: Option<&'a Region>,
-    active_region_id: String,
-    requested_region: Option<String>,
-    products: &'a [ProductView],
-}
+// Products are rendered using `templates/products.html` (path-based Askama template)
 
-#[derive(Template)]
-#[template(
-    source = r#"<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="utf-8" />
-    <title>Operating systems</title>
-    <link rel="stylesheet" href="/static/styles.css" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-</head>
-<body>
-    <main>
-        <header class="page-header">
-            <p><a href="/instances">&larr; Back to dashboard</a></p>
-            <h1>Operating systems</h1>
-            <p>{{ total_images }} images available for provisioning.</p>
-        </header>
-        <section>
-            <h2>Image catalog</h2>
-            {% if os_list.is_empty() %}
-            <p>💿 No operating systems were returned.</p>
-            {% else %}
-            <div class="data-grid">
-                {% for os in os_list %}
-                <article class="data-card">
-                    <header>
-                        <h3>{{ os.name }}</h3>
-                        <p class="os-family">{{ os.family }}</p>
-                    </header>
-                    <dl class="os-attributes">
-                        {% if let Some(arch) = os.arch.as_ref() %}
-                        <div>
-                            <dt>Architecture</dt>
-                            <dd>{{ arch }}</dd>
-                        </div>
-                        {% endif %}
-                        {% if let Some(version) = os.version.as_ref() %}
-                        <div>
-                            <dt>Version</dt>
-                            <dd>{{ version }}</dd>
-                        </div>
-                        {% endif %}
-                        {% if let Some(ram) = os.min_ram.as_ref() %}
-                        <div>
-                            <dt>Min RAM</dt>
-                            <dd>{{ ram }}</dd>
-                        </div>
-                        {% endif %}
-                        {% if let Some(disk) = os.disk.as_ref() %}
-                        <div>
-                            <dt>Disk</dt>
-                            <dd>{{ disk }}</dd>
-                        </div>
-                        {% endif %}
-                        <div>
-                            <dt>Default</dt>
-                            <dd>{% if os.is_default %}Yes{% else %}No{% endif %}</dd>
-                        </div>
-                    </dl>
-                    {% if let Some(desc) = os.description.as_ref() %}
-                    <p class="os-description">{{ desc }}</p>
-                    {% endif %}
-                </article>
-                {% endfor %}
-            </div>
-            {% endif %}
-        </section>
-    </main>
-</body>
-</html>"#,
-    ext = "html"
-)]
-struct OsCatalogTemplate<'a> {
-    os_list: &'a [OsItem],
-    total_images: usize,
-}
+// OS catalog is rendered using `templates/os.html` (path-based Askama template)
 
-#[derive(Template)]
-#[template(
-    source = r#"<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="utf-8" />
-    <title>Applications</title>
-    <link rel="stylesheet" href="/static/styles.css" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-</head>
-<body>
-    <main>
-        <header class="page-header">
-            <p><a href="/instances">&larr; Back to dashboard</a></p>
-            <h1>Applications</h1>
-            <p>{{ total_apps }} catalog item{% if total_apps != 1 %}s{% endif %} retrieved from the API.</p>
-        </header>
-        <section>
-            <h2>Marketplace</h2>
-            {% if apps.is_empty() %}
-            <p>No applications were returned.</p>
-            {% else %}
-            <div class="data-grid">
-                {% for app in apps %}
-                <article class="data-card">
-                    <header>
-                        <h3>{{ app.name }}</h3>
-                        {% if let Some(category) = app.category.as_ref() %}
-                        <p class="os-family">{{ category }}</p>
-                        {% endif %}
-                    </header>
-                    <p>{{ app.description }}</p>
-                    <dl>
-                        <div>
-                            <dt>Application ID</dt>
-                            <dd>{{ app.id }}</dd>
-                        </div>
-                        {% if let Some(price) = app.price.as_ref() %}
-                        <div>
-                            <dt>Price</dt>
-                            <dd>{{ price }}</dd>
-                        </div>
-                        {% endif %}
-                        <div>
-                            <dt>Featured</dt>
-                            <dd>{% if app.is_featured %}Yes{% else %}No{% endif %}</dd>
-                        </div>
-                    </dl>
-                    {% if let Some(tags) = app.tags.as_ref() %}
-                    <footer>
-                        <p>{{ tags }}</p>
-                    </footer>
-                    {% endif %}
-                </article>
-                {% endfor %}
-            </div>
-            {% endif %}
-        </section>
-    </main>
-</body>
-</html>"#,
-    ext = "html"
-)]
-struct ApplicationsTemplate<'a> {
-    apps: &'a [ApplicationView],
-    total_apps: usize,
-}
+// Applications are rendered using `templates/applications.html` (path-based Askama template)
 
 async fn root_get(State(state): State<AppState>, jar: CookieJar) -> impl IntoResponse {
     // Redirect to /instances if authenticated, otherwise to /login
@@ -3170,7 +2833,13 @@ async fn regions_get(State(state): State<AppState>, jar: CookieJar) -> impl Into
     let (regions, _) = load_regions(&state).await;
     let total_regions = regions.len();
     let premium_count = regions.iter().filter(|r| r.is_premium).count();
+    let TemplateGlobals { current_user, api_hostname, base_url, flash_messages, has_flash_messages } = build_template_globals(&state, &jar);
     let html = RegionsPageTemplate {
+        current_user,
+        api_hostname,
+        base_url,
+        flash_messages,
+        has_flash_messages,
         regions: &regions,
         total_regions,
         premium_count,
@@ -3212,7 +2881,13 @@ async fn products_get(
     };
     let selected_region = selected_region_idx.map(|idx| &regions[idx]);
     let active_region_id = selected_region_id.clone().unwrap_or_default();
+    let TemplateGlobals { current_user, api_hostname, base_url, flash_messages, has_flash_messages } = build_template_globals(&state, &jar);
     let html = ProductsPageTemplate {
+        current_user,
+        api_hostname,
+        base_url,
+        flash_messages,
+        has_flash_messages,
         regions: &regions,
         selected_region,
         active_region_id,
@@ -3230,7 +2905,13 @@ async fn os_get(State(state): State<AppState>, jar: CookieJar) -> impl IntoRespo
     }
     let os_list = load_os_list(&state).await;
     let total_images = os_list.len();
+    let TemplateGlobals { current_user, api_hostname, base_url, flash_messages, has_flash_messages } = build_template_globals(&state, &jar);
     let html = OsCatalogTemplate {
+        current_user,
+        api_hostname,
+        base_url,
+        flash_messages,
+        has_flash_messages,
         os_list: &os_list,
         total_images,
     }
@@ -3245,7 +2926,13 @@ async fn applications_get(State(state): State<AppState>, jar: CookieJar) -> impl
     }
     let apps = load_applications(&state).await;
     let total_apps = apps.len();
+    let TemplateGlobals { current_user, api_hostname, base_url, flash_messages, has_flash_messages } = build_template_globals(&state, &jar);
     let html = ApplicationsTemplate {
+        current_user,
+        api_hostname,
+        base_url,
+        flash_messages,
+        has_flash_messages,
         apps: &apps,
         total_apps,
     }
@@ -3255,23 +2942,7 @@ async fn applications_get(State(state): State<AppState>, jar: CookieJar) -> impl
 }
 
 // ---------- Instance Detail & Actions ----------
-#[derive(Template)]
-#[template(
-    source = r#"<!DOCTYPE html>
-<html>
-<head><title>Instance {{ instance_id }}</title></head>
-<body>
-    <h1>Instance {{ instance_id }}</h1>
-    <pre>{{ instance_json }}</pre>
-    <p><a href="/instances">Back</a></p>
-</body>
-</html>"#,
-    ext = "html"
-)]
-struct InstanceDetailTemplate {
-    instance_id: String,
-    instance_json: String,
-}
+// Instance details are rendered using `templates/instance_detail.html` (path-based Askama template)
 
 async fn enforce_instance_access(state: &AppState, jar: &CookieJar, instance_id: &str) -> bool {
     if let Some(username) = current_username_from_jar(state, jar) {
@@ -3297,12 +2968,17 @@ async fn instance_detail(
     let endpoint = format!("/v1/instances/{}", instance_id);
     let payload = api_call(&state, "GET", &endpoint, None, None).await;
     let json = serde_json::to_string_pretty(&payload).unwrap_or_else(|_| "{}".into());
+    let TemplateGlobals { current_user, api_hostname, base_url, flash_messages, has_flash_messages } = build_template_globals(&state, &jar);
     inject_context(
         &state,
         &jar,
         InstanceDetailTemplate {
-            instance_id,
-            instance_json: json,
+            current_user,
+            api_hostname,
+            base_url,
+            flash_messages,
+            has_flash_messages,
+            instance: payload,
         }
         .render()
         .unwrap(),
@@ -3431,22 +3107,7 @@ async fn instance_subscription_refund(
 }
 
 // Bulk subscription refund (owner)
-#[derive(Template)]
-#[template(
-    source = r#"<!DOCTYPE html>
-<html>
-<head><title>Bulk Refund</title></head>
-<body>
-    <h1>Bulk subscription refund</h1>
-    <form method="post">
-        <textarea name="ids" rows="6" cols="40"></textarea>
-        <button type="submit">Submit</button>
-    </form>
-</body>
-</html>"#,
-    ext = "html"
-)]
-struct BulkRefundTemplate;
+// Bulk refund page is rendered via `templates/bulk_refund.html` (path-based Askama template)
 
 #[derive(Deserialize)]
 struct BulkRefundForm {
@@ -3485,7 +3146,19 @@ async fn bulk_subscription_refund_get(
     if let Some(r) = ensure_owner(&state, &jar) {
         return r.into_response();
     }
-    Html(BulkRefundTemplate.render().unwrap()).into_response()
+    let TemplateGlobals { current_user, api_hostname, base_url, flash_messages, has_flash_messages } = build_template_globals(&state, &jar);
+    Html(
+        BulkRefundTemplate {
+            current_user,
+            api_hostname,
+            base_url,
+            flash_messages,
+            has_flash_messages,
+        }
+        .render()
+        .unwrap(),
+    )
+    .into_response()
 }
 
 #[derive(Parser)]
@@ -3525,6 +3198,13 @@ enum UserCommands {
         username: String,
         password: String,
         role: String,
+    },
+    /// Add a new owner user (use --force to overwrite existing owner user(s))
+    AddOwner {
+        username: String,
+        password: String,
+        #[arg(long, default_value_t = false)]
+        force: bool,
     },
     ResetPassword {
         username: String,
@@ -3630,13 +3310,6 @@ async fn main() {
             let state = build_state_from_env(env_file.as_deref());
             start_server(state, &host, port).await;
             return;
-            /// Add a new owner user (use --force to overwrite existing owner user(s))
-            AddOwner {
-                username: String,
-                password: String,
-                #[arg(long, default_value_t = false)]
-                force: bool,
-            },
         }
         Commands::CheckConfig { env_file } => {
             let state = build_state_from_env(env_file.as_deref());
@@ -3726,7 +3399,11 @@ async fn main() {
                     println!("Password for '{}' updated", uname);
                     return;
                 }
-                UserCommands::AddOwner { username, password, force } => {
+                UserCommands::AddOwner {
+                    username,
+                    password,
+                    force,
+                } => {
                     let uname = username.trim().to_lowercase();
                     let mut users = state.users.lock().unwrap();
                     // If an owner already exists and we're not forcing, error out
