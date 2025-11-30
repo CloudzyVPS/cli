@@ -24,3 +24,4 @@ axum-extra = { version = "0.9", features = ["cookie"] }
 time = { version = "0.3", features = ["macros"] }
 urlencoding = "2"
 clap = { version = "4.2", features = ["derive"] }
+cookie = "0.16"

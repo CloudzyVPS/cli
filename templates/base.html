@@ -8,7 +8,7 @@
     <link rel="stylesheet" href="/static/styles.css">
 </head>
 <body>
-    {% if let Some(user) = current_user %}
+    {% if current_user.is_some() %}
     <nav>
         <header>
             <div>
@@ -18,10 +18,10 @@
                 <p>Zyffiliate Control</p>
             </div>
             <div>
-                <i aria-hidden="true">{{ user.username }}</i>
+                <i aria-hidden="true">{{ current_user.as_ref().unwrap().username }}</i>
                 <aside>
-                    <span>{{ user.username }}</span>
-                    <span>{{ user.role }}</span>
+                    <span>{{ current_user.as_ref().unwrap().username }}</span>
+                    <span>{{ current_user.as_ref().unwrap().role }}</span>
                 </aside>
                 <form method="post" action="{{ base_url }}/logout">
                     <button type="submit">Logout</button>
@@ -30,7 +30,7 @@
         </header>
         <div role="navigation">
             <a href="{{ base_url }}/instances">Instances</a>
-            {% if user.role == "owner" %}
+                    {% if current_user.as_ref().unwrap().role == "owner" %}
             <a href="{{ base_url }}/create/step-1">Create</a>
             <a href="{{ base_url }}/bulk-subscription-refund">Bulk refunds</a>
             <a href="{{ base_url }}/regions">Regions</a>

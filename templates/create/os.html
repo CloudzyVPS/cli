@@ -43,20 +43,20 @@
                     <h2>{{ os_item.name }}</h2>
                     {% if !os_item.family.is_empty() %}
                     <p class="product-plan">
-                        {{ os_item.family }}{% if let Some(arch) = os_item.arch.as_ref() %} · {{ arch }}{% endif %}
+                        {{ os_item.family }}{% if os_item.arch.is_some() %} · {{ os_item.arch.as_ref().unwrap() }}{% endif %}
                     </p>
                     {% else %}
-                        {% if let Some(arch) = os_item.arch.as_ref() %}
+                        {% if os_item.arch.is_some() %}
                         <p class="product-plan">
-                            {{ arch }}
+                            {{ os_item.arch.as_ref().unwrap() }}
                         </p>
                         {% endif %}
                     {% endif %}
-                    {% if let Some(min_ram) = os_item.min_ram.as_ref() %}
+                    {% if os_item.min_ram.is_some() %}
                     <dl>
                         <div>
                             <dt>Min RAM</dt>
-                            <dd>{{ min_ram }}</dd>
+                            <dd>{{ os_item.min_ram.as_ref().unwrap() }}</dd>
                         </div>
                     </dl>
                     {% endif %}

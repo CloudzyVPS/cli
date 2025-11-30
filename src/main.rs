@@ -1,6 +1,6 @@
 use askama::Template;
 use axum::{
-    extract::{Form, State, CookieJar},
+    extract::{Form, State},
     response::{Html, IntoResponse, Redirect, Response},
     routing::{get, post},
     Router,
@@ -12,20 +12,25 @@ use serde_json::Value;
 use std::net::SocketAddr;
 use std::sync::{Arc, Mutex};
 use std::collections::{HashMap, HashSet};
+use urlencoding::encode;
 use std::process;
 use hex::encode as hex_encode;
 use rand::rngs::OsRng;
-use rand_core::RngCore;
+use rand::RngCore;
 use pbkdf2::pbkdf2_hmac;
 use sha2::Sha256;
 use clap::{Parser, Subcommand, Args};
 use tracing_subscriber::{fmt, EnvFilter};
-use cookie::Cookie;
+use tracing_subscriber::layer::SubscriberExt;
+use tracing_subscriber::util::SubscriberInitExt;
+use axum_extra::extract::cookie::{CookieJar, Cookie};
 use std::env;
 use std::path::Path;
+// No-op logging ignore endpoint list for request logging (customize as necessary)
+static LOGGING_IGNORE_ENDPOINTS: &[&str] = &[];
 // Simple helper to return a plaintext HTML response
-fn plain_html<S: AsRef<str>>(s: S) -> Html<String> {
-    Html(format!("<!DOCTYPE html><html><body><p>{}</p></body></html>", s.as_ref()))
+fn plain_html<S: AsRef<str>>(s: S) -> Response {
+    Html(format!("<!DOCTYPE html><html><body><p>{}</p></body></html>", s.as_ref())).into_response()
 }
 
 // Simple user record persisted to users.json
@@ -66,7 +71,7 @@ const PBKDF2_ITERATIONS: u32 = 100_000;
 fn generate_password_hash(password: &str) -> String {
     let mut salt_bytes = [0u8; 12];
     // try to use OsRng; if not available, fallback to rand
-    rand::rngs::OsRng.try_fill_bytes(&mut salt_bytes).unwrap();
+    rand::rngs::OsRng.fill_bytes(&mut salt_bytes);
     let salt = hex::encode(salt_bytes);
     let mut dk = [0u8; 32];
     pbkdf2_hmac::<Sha256>(password.as_bytes(), salt.as_bytes(), PBKDF2_ITERATIONS, &mut dk);
@@ -89,6 +94,13 @@ fn verify_password(stored: &str, candidate: &str) -> bool {
         }
     }
     false
+}
+
+// Generate a random session ID (hex)
+fn random_session_id() -> String {
+    let mut b = [0u8; 16];
+    rand::rngs::OsRng.fill_bytes(&mut b);
+    hex::encode(b)
 }
 
 // Build an AppState instance from env and users.json
@@ -143,7 +155,7 @@ fn build_state_from_env(env_file: Option<&str>) -> AppState {
         // create default owner
         let salt = {
             let mut b = [0u8; 12];
-            rand::rngs::OsRng.try_fill_bytes(&mut b).unwrap();
+            rand::rngs::OsRng.fill_bytes(&mut b);
             hex::encode(b)
         };
         let mut dk = [0u8; 32];
@@ -242,7 +254,8 @@ struct InstanceDetailTemplate {
     base_url: String,
     flash_messages: Vec<String>,
     has_flash_messages: bool,
-    instance: Value,
+    instance_id: String,
+    instance_json: String,
 }
 
 #[derive(Template)]
@@ -412,7 +425,7 @@ async fn logout_post(State(state): State<AppState>, jar: CookieJar) -> impl Into
     if let Some(sid) = jar.get("session_id").map(|c| c.value().to_string()) {
         state.sessions.lock().unwrap().remove(&sid);
     }
-    let cleared = jar.remove(Cookie::from("session_id"));
+    let cleared = jar.remove(Cookie::new("session_id", ""));
     Redirect::to("/login").into_response_with(cleared)
 }
 
@@ -2582,6 +2595,7 @@ struct SshKeysTemplate<'a> {
     has_flash_messages: bool,
     ssh_keys: &'a [SshKeyView],
     error: Option<&'a str>,
+    customer_id: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -2732,7 +2746,7 @@ async fn ssh_keys_get(
     } else {
         fetch_default_customer_id(&state).await
     };
-    let keys = load_ssh_keys_api(&state, customer_id).await;
+    let keys = load_ssh_keys_api(&state, customer_id.clone()).await;
     let TemplateGlobals { current_user, api_hostname, base_url, flash_messages, has_flash_messages } = build_template_globals(&state, &jar);
     inject_context(
         &state,
@@ -2745,6 +2759,7 @@ async fn ssh_keys_get(
             has_flash_messages,
             ssh_keys: &keys,
             error: None,
+            customer_id,
         }
         .render()
         .unwrap(),
@@ -2978,7 +2993,8 @@ async fn instance_detail(
             base_url,
             flash_messages,
             has_flash_messages,
-            instance: payload,
+            instance_id: instance_id.clone(),
+            instance_json: json,
         }
         .render()
         .unwrap(),

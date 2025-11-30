@@ -4,7 +4,7 @@
 
 {% block content %}
 <header class="page-header">
-    <p class="breadcrumb"><a href="{{ url_for('instance_detail', instance_id=instance.id) }}">← Back to instance</a></p>
+    <p class="breadcrumb"><a href="{{ base_url }}/instance/{{ instance.id }}">← Back to instance</a></p>
     <h1>Change operating system</h1>
     <p>Select a new operating system for this instance.</p>
 </header>
@@ -54,7 +54,7 @@
         </fieldset>
 
         <footer class="form-actions">
-            <a class="button-secondary" href="{{ url_for('instance_detail', instance_id=instance.id) }}">Cancel</a>
+            <a class="button-secondary" href="{{ base_url }}/instance/{{ instance.id }}">Cancel</a>
             <button type="submit">Change operating system</button>
         </footer>
     </form>

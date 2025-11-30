@@ -8,31 +8,21 @@
     <p>Review current assignments and adjust which instances each admin can manage.</p>
 </header>
 
-{% if admins %}
+{% if !admins.is_empty() %}
 <div role="list">
-    {% for username, data in admins | dictsort %}
-    {% set assigned_ids = data.get('assigned_instances', []) %}
+    {% for admin in admins %}
     <section role="listitem">
-        <h2>{{ username }}</h2>
-        <p>{{ assigned_ids | length }} assigned instance{{ '' if (assigned_ids | length) == 1 else 's' }}</p>
-        <form action="{{ url_for('update_access', username=username) }}" method="post">
+        <h2>{{ admin.username }}</h2>
+        <form action="{{ base_url }}/access/{{ admin.username }}" method="post">
             <fieldset>
                 <legend>Select instances</legend>
-                {% if instance_map %}
+                {% if !admin.instances.is_empty() %}
                 <div role="list">
-                    {% for instance_id, instance in instance_map | dictsort %}
-                    {% set instance_data = instance %}
-                    {% set is_assigned = instance_id in assigned_ids %}
-                    <label role="listitem" {% if is_assigned %}aria-current="true"{% endif %}>
-                        <input type="checkbox" name="instances" value="{{ instance_id }}" {% if is_assigned %}checked{% endif %}>
-                        <span>{{ instance_data.get('hostname', 'Unnamed Instance') }}</span>
-                        <span>ID: {{ instance_id }}</span>
-                        {% if instance_data.get('plan') %}
-                        <span>Plan: {{ instance_data.get('plan', {}).get('name', 'N/A') }}</span>
-                        {% endif %}
-                        {% if instance_data.get('status') %}
-                        <span>Status: {{ instance_data.get('status') }}</span>
-                        {% endif %}
+                    {% for row in admin.instances %}
+                    <label role="listitem" {% if row.checked %}aria-current="true"{% endif %}>
+                        <input type="checkbox" name="instances" value="{{ row.id }}" {% if row.checked %}checked{% endif %}>
+                        <span>{{ row.hostname }}</span>
+                        <span>ID: {{ row.id }}</span>
                     </label>
                     {% endfor %}
                 </div>

@@ -6,52 +6,61 @@
 <header class="page-header">
     <h1>Products</h1>
     <p>Browse available compute plans per region. Cards below update the <code>region_id</code> query parameter.</p>
-    {% if selected_region %}
-    <p class="page-status">Showing products for <strong>{{ selected_region.name }}</strong> (ID {{ selected_region.id }}).</p>
-    {% elif requested_region %}
-    <p class="page-status warning">No region with ID {{ requested_region }} was found.</p>
+    {% if selected_region.is_some() %}
+    <p class="page-status">Showing products for <strong>{{ selected_region.as_ref().unwrap().name }}</strong> (ID {{ selected_region.as_ref().unwrap().id }}).</p>
+    {% else if requested_region.is_some() %}
+    <p class="page-status warning">No region with ID {{ requested_region.as_ref().unwrap() }} was found.</p>
     {% endif %}
 </header>
 
 <section>
     <h2>Select a region</h2>
     <p>Click one of the cards to filter the list. You can also bookmark the resulting URL.</p>
-    {% if regions %}
+    {% if !regions.is_empty() %}
     <div class="region-grid" role="list">
-        {% for region in regions %}
-        {% set is_selected = selected_region and (selected_region.id|string) == (region.id|string) %}
-        <a class="region-card" role="listitem" href="{{ url_for('products', region_id=region.id) }}" {% if is_selected %}aria-current="true"{% endif %}>
+                {% for region in regions %}
+        <a class="region-card" role="listitem" href="{{ base_url }}/products?region_id={{ region.id }}" {% if active_region_id == region.id %}aria-current="true"{% endif %}>
             <div class="region-heading">
                 <h3>{{ region.name }}</h3>
-                <span class="region-chip">{{ region.abbr }}</span>
+                {% if region.abbr.is_some() %}
+                <span class="region-chip">{{ region.abbr.as_ref().unwrap() }}</span>
+                {% endif %}
             </div>
             <p class="region-subtitle">Region ID {{ region.id }}</p>
-            {% if region.description %}
-            <p class="region-description">{{ region.description }}</p>
+            {% if region.description.is_some() %}
+            <p class="region-description">{{ region.description.as_ref().unwrap() }}</p>
             {% endif %}
             <dl class="region-metrics">
                 <div>
                     <dt>Status</dt>
-                    <dd>{{ 'Active' if region.isActive else 'Disabled' }}</dd>
+                    {% if region.is_active %}
+                    <dd>Active</dd>
+                    {% else %}
+                    <dd>Disabled</dd>
+                    {% endif %}
                 </div>
                 <div>
                     <dt>Premium tier</dt>
-                    <dd>{{ 'Yes' if region.isPremium else 'No' }}</dd>
+                    {% if region.is_premium %}
+                    <dd>Yes</dd>
+                    {% else %}
+                    <dd>No</dd>
+                    {% endif %}
                 </div>
-                {% if region.config and region.config.ramThresholdInGB %}
+                {% if region.ram_threshold_gb.is_some() %}
                 <div>
                     <dt>RAM threshold</dt>
-                    <dd>{{ region.config.ramThresholdInGB }} GB</dd>
+                    <dd>{{ region.ram_threshold_gb.as_ref().unwrap() }} GB</dd>
                 </div>
                 {% endif %}
-                {% if region.config and region.config.diskThresholdInGB %}
+                {% if region.disk_threshold_gb.is_some() %}
                 <div>
                     <dt>Disk threshold</dt>
-                    <dd>{{ region.config.diskThresholdInGB }} GB</dd>
+                    <dd>{{ region.disk_threshold_gb.as_ref().unwrap() }} GB</dd>
                 </div>
                 {% endif %}
             </dl>
-            <span class="region-cta" aria-hidden="true">{% if is_selected %}Viewing products{% else %}View products →{% endif %}</span>
+            <span class="region-cta" aria-hidden="true">{% if active_region_id == region.id %}Viewing products{% else %}View products →{% endif %}</span>
         </a>
         {% endfor %}
     </div>
@@ -62,34 +71,27 @@
 
 <section>
     <h2>Product catalog</h2>
-    {% if selected_region %}
-    <p>Plans available in {{ selected_region.name }}. Pricing and specifications come directly from the API.</p>
+    {% if selected_region.is_some() %}
+    <p>Plans available in {{ selected_region.as_ref().unwrap().name }}. Pricing and specifications come directly from the API.</p>
     {% else %}
     <p>Select a region above to load its product inventory.</p>
     {% endif %}
 
-    {% if selected_region %}
-        {% if products %}
+    {% if selected_region.is_some() %}
+        {% if !products.is_empty() %}
         <div class="product-grid" role="list">
             {% for product in products %}
             <article class="product-card" role="listitem">
                 <div class="product-card-body">
-                    <h2>
-                        {% for metric in metrics %}
-                            <span class="metric" title="{{ metric.label }}" aria-label="{{ metric.label }}">
-                                {% if metric.icon %}<img src="{{ url_for('static', filename='icons/' ~ metric.icon) }}" alt="" aria-hidden="true">{% endif %}
-                                <span>{{ metric.value }}</span>
-                            </span>
-                            {% endfor %}
-                        </h2>
-                    {% if product.plan_name %}
-                    <p class="product-plan">{{ product.plan_name }}</p>
+                    <h2>{{ product.name }}</h2>
+                    {% if product.tags != "" %}
+                    <p class="product-plan">{{ product.tags }}</p>
                     {% endif %}
                     <p class="product-meta">Product #{{ product.id }}</p>
-                    {% if product.description %}
+                    {% if !product.description.is_empty() %}
                     <p>{{ product.description }}</p>
                     {% endif %}
-                    {% if product.spec_entries %}
+                    {% if !product.spec_entries.is_empty() %}
                     <dl>
                         {% for entry in product.spec_entries %}
                         <div>
@@ -99,7 +101,7 @@
                         {% endfor %}
                     </dl>
                     {% endif %}
-                    {% if product.price_entries %}
+                    {% if !product.price_entries.is_empty() %}
                     <dl class="pricing">
                         {% for entry in product.price_entries %}
                         <div>
@@ -109,7 +111,7 @@
                         {% endfor %}
                     </dl>
                     {% endif %}
-                    {% if product.tags %}
+                    {% if product.tags != "" %}
                     <footer>
                         <p>{{ product.tags }}</p>
                     </footer>
@@ -121,8 +123,8 @@
         {% else %}
         <p>📦 No products are currently returned for this region.</p>
         {% endif %}
-    {% elif requested_region %}
-        <p>🌍 We could not find a region with ID {{ requested_region }}.</p>
+    {% else if requested_region.is_some() %}
+        <p>🌍 We could not find a region with ID {{ requested_region.as_ref().unwrap() }}.</p>
     {% endif %}
 </section>
 {% endblock %}

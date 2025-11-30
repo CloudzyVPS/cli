@@ -4,15 +4,12 @@
 
 {% block content %}
 <h1>Instances</h1>
-{% if instances %}
+{% if !instances.is_empty() %}
 <table>
     <thead>
         <tr>
             <th>ID</th>
             <th>Hostname</th>
-            <th>Status</th>
-            <th>Region</th>
-            <th>Main IP</th>
             <th>Actions</th>
         </tr>
     </thead>
@@ -21,11 +18,10 @@
         <tr>
             <td>{{ instance.id }}</td>
             <td>{{ instance.hostname }}</td>
-            <td>{{ instance.status }}</td>
-            <td>{{ instance.region }}</td>
-            <td>{{ instance.mainIp }}</td>
+            <td>—</td>
+            <td>—</td>
             <td>
-                <a href="/instance/{{ instance.id }}">Details</a>
+                <a href="{{ base_url }}/instance/{{ instance.id }}">Details</a>
             </td>
         </tr>
         {% endfor %}

@@ -4,14 +4,18 @@
 
 {% block content %}
 <h1>Available Applications</h1>
-{% if apps %}
+{% if !apps.is_empty() %}
 <ul>
     {% for app in apps %}
     <li>
         <strong>{{ app.name }}</strong>
         <p>{{ app.description }}</p>
-        <p>Price: ${{ app.price }}</p>
-        <p>Tag: {{ app.tag }}</p>
+        {% if app.price.is_some() %}
+        <p>Price: ${{ app.price.as_ref().unwrap() }}</p>
+        {% endif %}
+        {% if app.tags.is_some() %}
+        <p>Tag: {{ app.tags.as_ref().unwrap() }}</p>
+        {% endif %}
     </li>
     {% endfor %}
 </ul>
