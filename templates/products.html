@@ -16,7 +16,7 @@
 <section>
     <h2>Select a region</h2>
     <p>Click one of the cards to filter the list. You can also bookmark the resulting URL.</p>
-    {% if !regions.is_empty() %}
+    {% if regions.len() > 0 %}
     <div class="region-grid" role="list">
                 {% for region in regions %}
         <a class="region-card" role="listitem" href="{{ base_url }}/products?region_id={{ region.id }}" {% if active_region_id == region.id %}aria-current="true"{% endif %}>
@@ -78,20 +78,54 @@
     {% endif %}
 
     {% if selected_region.is_some() %}
-        {% if !products.is_empty() %}
+        {% if products.len() > 0 %}
         <div class="product-grid" role="list">
             {% for product in products %}
             <article class="product-card" role="listitem">
                 <div class="product-card-body">
-                    <h2>{{ product.name }}</h2>
+                    {% if product.name != product.id %}
+                        {% if product.name != "" %}
+                            <h2>{{ product.name }}</h2>
+                        {% else %}
+                            {% if product.tags != "" %}
+                                <h2>{{ product.tags }}</h2>
+                            {% else if product.price_entries.len() > 0 %}
+                                {% for entry in product.price_entries %}
+                                    {% if loop.index == 1 %}
+                                        <h2>{{ entry.value }}</h2>
+                                    {% endif %}
+                                {% endfor %}
+                            {% else %}
+                                <h2>Plan</h2>
+                            {% endif %}
+                        {% endif %}
+                    {% else %}
+                    {% if product.tags != "" %}
+                    <h2>{{ product.tags }}</h2>
+                    {% else if product.price_entries.len() > 0 %}
+                    {% for entry in product.price_entries %}
+                        {% if loop.index == 1 %}
+                        <h2>{{ entry.value }}</h2>
+                        {% endif %}
+                    {% endfor %}
+                    {% else %}
+                    <h2>Plan</h2>
+                    {% endif %}
+                    {% endif %}
                     {% if product.tags != "" %}
                     <p class="product-plan">{{ product.tags }}</p>
                     {% endif %}
-                    <p class="product-meta">Product #{{ product.id }}</p>
-                    {% if !product.description.is_empty() %}
+                    {% if product.price_entries.len() > 0 %}
+                    {% for entry in product.price_entries %}
+                    {% if loop.index == 1 %}
+                    <div class="product-price">{{ entry.value }}</div>
+                    {% endif %}
+                    {% endfor %}
+                    {% endif %}
+                    {% if product.description != "" %}
                     <p>{{ product.description }}</p>
                     {% endif %}
-                    {% if !product.spec_entries.is_empty() %}
+                    {% if product.spec_entries.len() > 0 %}
                     <dl>
                         {% for entry in product.spec_entries %}
                         <div>
@@ -101,7 +135,7 @@
                         {% endfor %}
                     </dl>
                     {% endif %}
-                    {% if !product.price_entries.is_empty() %}
+                    {% if product.price_entries.len() > 0 %}
                     <dl class="pricing">
                         {% for entry in product.price_entries %}
                         <div>

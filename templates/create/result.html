@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+
+{% block title %}Create · Result (Step 8){% endblock %}
+
+{% block content %}
+<header class="page-header">
+    <p class="breadcrumb"><a href="{{ back_url }}">← Previous step</a></p>
+    <h1>Provisioning Result</h1>
+    <p>Summary and details for the last create request.</p>
+</header>
+
+<section class="surface">
+    <h2>Status</h2>
+    <p><strong>{{ status_label }}</strong></p>
+    {% if code.is_some() %}
+    <dl>
+        <div>
+            <dt>Code</dt>
+            <dd>{{ code.as_ref().unwrap() }}</dd>
+        </div>
+    </dl>
+    {% endif %}
+    {% if detail.is_some() %}
+    <p>{{ detail.as_ref().unwrap() }}</p>
+    {% endif %}
+    {% if errors.len() > 0 %}
+    <h3>Probable errors</h3>
+    <ul>
+        {% for e in errors %}
+        <li>{{ e }}</li>
+        {% endfor %}
+    </ul>
+    {% endif %}
+    <details>
+        <summary>Raw API response</summary>
+        <pre>{{ raw_json }}</pre>
+    </details>
+</section>
+
+<footer class="form-actions">
+    <a href="{{ back_url }}">Return to wizard</a>
+</footer>
+{% endblock %}

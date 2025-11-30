@@ -11,12 +11,12 @@
 <section>
     <h2>OS catalog</h2>
     <p>Select an image during provisioning or change-OS workflows.</p>
-    {% if !os_list.is_empty() %}
+    {% if os_list.len() > 0 %}
     <div class="data-grid">
         {% for os in os_list %}
         <article class="data-card">
             <h3>{{ os.name }}</h3>
-            <p class="os-family">{% if !os.family.is_empty() %}{{ os.family }}{% else %}Unknown family{% endif %}</p>
+            <p class="os-family">{% if os.family != "" %}{{ os.family }}{% else %}Unknown family{% endif %}</p>
             <dl class="os-attributes">
                 <div>
                     <dt>Architecture</dt>

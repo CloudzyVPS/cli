@@ -5,7 +5,7 @@ use axum::{
     routing::{get, post},
     Router,
 };
-use axum::http::StatusCode;
+// use axum::http::StatusCode; // unused
 use tower_http::services::ServeDir;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -19,7 +19,7 @@ use rand::rngs::OsRng;
 use rand::RngCore;
 use pbkdf2::pbkdf2_hmac;
 use sha2::Sha256;
-use clap::{Parser, Subcommand, Args};
+use clap::{Parser, Subcommand};
 use tracing_subscriber::{fmt, EnvFilter};
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
@@ -27,7 +27,9 @@ use axum_extra::extract::cookie::{CookieJar, Cookie};
 use std::env;
 use std::path::Path;
 // No-op logging ignore endpoint list for request logging (customize as necessary)
-static LOGGING_IGNORE_ENDPOINTS: &[&str] = &[];
+// API endpoints we should not log (avoid leaking full OS/Products payloads)
+// Also ignore these common web routes to avoid verbose logging
+static LOGGING_IGNORE_ENDPOINTS: &[&str] = &["/v1/os", "/v1/products", "/os", "/products"];
 // Simple helper to return a plaintext HTML response
 fn plain_html<S: AsRef<str>>(s: S) -> Response {
     Html(format!("<!DOCTYPE html><html><body><p>{}</p></body></html>", s.as_ref())).into_response()
@@ -54,7 +56,23 @@ struct AppState {
     client: reqwest::Client,
 }
 
-// Persist the users map to users.json
+#[derive(Deserialize, Debug)]
+#[serde(untagged)]
+enum OneOrMany {
+    One(String),
+    Many(Vec<String>),
+}
+impl OneOrMany {
+    fn to_csv(self) -> String {
+        match self {
+            OneOrMany::One(s) => s,
+            OneOrMany::Many(v) => v.join(","),
+        }
+    }
+    // `to_csv_ref` unused; removing to silence warnings.
+}
+
+            
 fn persist_users_file(users_arc: &Arc<Mutex<HashMap<String, UserRecord>>>) -> Result<(), std::io::Error> {
     let users = users_arc.lock().unwrap();
     let mut serialized: serde_json::Map<String, serde_json::Value> = serde_json::Map::new();
@@ -62,6 +80,21 @@ fn persist_users_file(users_arc: &Arc<Mutex<HashMap<String, UserRecord>>>) -> Re
         serialized.insert(u.clone(), serde_json::json!({"password": rec.password, "role": rec.role, "assigned_instances": rec.assigned_instances }));
     }
     std::fs::write("users.json", serde_json::to_string_pretty(&serde_json::Value::Object(serialized))?)
+}
+
+fn parse_urlencoded_body(body: &axum::body::Bytes) -> HashMap<String, Vec<String>> {
+    let mut map: HashMap<String, Vec<String>> = HashMap::new();
+    let raw = String::from_utf8_lossy(body);
+    for pair in raw.split('&') {
+        if pair.is_empty() { continue; }
+        let mut parts = pair.splitn(2, '=');
+        let key_enc = parts.next().unwrap_or("");
+        let val_enc = parts.next().unwrap_or("");
+        let key = urlencoding::decode(key_enc).unwrap_or_else(|_| key_enc.into()).to_string();
+        let val = urlencoding::decode(val_enc).unwrap_or_else(|_| val_enc.into()).to_string();
+        map.entry(key).or_default().push(val);
+    }
+    map
 }
 
 // PBKDF2 iterations constant
@@ -255,6 +288,9 @@ struct InstanceDetailTemplate {
     flash_messages: Vec<String>,
     has_flash_messages: bool,
     instance_id: String,
+    // Human-friendly key-value details for the instance
+    details: Vec<(String, String)>,
+    // Raw JSON (pretty) for debugging in a collapsible block
     instance_json: String,
 }
 
@@ -295,6 +331,7 @@ fn build_app(state: AppState) -> Router {
             "/create/step-7",
             get(create_step_7_get).post(create_step_7_post),
         )
+        .route("/create/step-8", get(create_step_8))
         .route("/instance/:instance_id", get(instance_detail))
         .route("/instance/:instance_id/poweron", get(instance_poweron))
         .route("/instance/:instance_id/poweroff", get(instance_poweroff))
@@ -348,9 +385,10 @@ struct LoginTemplate {
 }
 
 async fn login_get(State(state): State<AppState>, jar: CookieJar) -> impl IntoResponse {
-    if let Some(username) = current_username_from_jar(&state, &jar) {
-        let target = resolve_default_endpoint(&state, &username);
-        return Redirect::to(&target).into_response();
+    if let Some(_username) = current_username_from_jar(&state, &jar) {
+        // If already logged in, redirect to `/` which will then send the
+        // user to the correct default landing (instances or create).
+        return Redirect::to("/").into_response();
     }
     let TemplateGlobals {
         current_user,
@@ -460,13 +498,8 @@ fn take_flash_messages(state: &AppState, jar: &CookieJar) -> Vec<String> {
         .unwrap_or_default()
 }
 
-fn push_flash_message(state: &AppState, jar: &CookieJar, message: impl Into<String>) {
-    let Some(session_id) = session_id_from_jar(jar) else {
-        return;
-    };
-    let mut store = state.flash_store.lock().unwrap();
-    store.entry(session_id).or_default().push(message.into());
-}
+// push_flash_message removed - we manage flash messages directly using the
+// `take_flash_messages` helper and by storing messages in `flash_store`.
 
 fn resolve_default_endpoint(state: &AppState, username: &str) -> String {
     let users = state.users.lock().unwrap();
@@ -534,16 +567,28 @@ fn build_template_globals(state: &AppState, jar: &CookieJar) -> TemplateGlobals 
     let flash_messages = take_flash_messages(state, jar);
     TemplateGlobals {
         current_user: build_current_user(state, jar),
-        api_hostname: state.api_base_url.clone(),
+        api_hostname: hostname_from_url(&state.api_base_url),
         base_url: state.public_base_url.clone(),
         has_flash_messages: !flash_messages.is_empty(),
         flash_messages,
     }
 }
 
+fn hostname_from_url(u: &str) -> String {
+    let s = u.trim();
+    if s.is_empty() {
+        return "".into();
+    }
+    // Remove scheme if present
+    let s = if let Some(idx) = s.find("://") { &s[idx+3..] } else { s };
+    // Take up to first slash
+    let host = s.split('/').next().unwrap_or(s);
+    host.to_string()
+}
+
 fn inject_context(state: &AppState, jar: &CookieJar, mut html: String) -> Response {
     let current = build_current_user(state, jar);
-    let api_hostname = state.api_base_url.clone();
+    let api_hostname = hostname_from_url(&state.api_base_url);
     // Insert a hidden context div right after opening <body>
     let ctx_div = format!("<div id='ctx' data-api-hostname='{}' data-base-url='{}' data-current-username='{}' data-current-role='{}' style='display:none'></div>",
                           api_hostname,
@@ -978,6 +1023,8 @@ struct Step3FixedTemplate<'a> {
     back_url: String,
     submit_url: String,
     restart_url: String,
+    ssh_key_ids_csv: String,
+    hostnames_csv: String,
 }
 
 #[derive(Clone)]
@@ -1005,6 +1052,8 @@ struct Step3CustomTemplate<'a> {
     minimum_ram: i32,
     minimum_disk: i32,
     form_values: CustomPlanFormValues,
+    ssh_key_ids_csv: String,
+    hostnames_csv: String,
 }
 
 fn value_to_short_string(value: &Value) -> String {
@@ -1170,6 +1219,9 @@ async fn create_step_3(
     } else {
         absolute_url(&state, &format!("/create/step-2?{}", back_q))
     };
+    let ssh_key_ids_csv = base.ssh_key_ids.iter().map(|id| id.to_string()).collect::<Vec<_>>().join(",");
+    let hostnames_csv = base.hostnames.join(",");
+
     if base.plan_type == "fixed" {
         let products = load_products(&state, &base.region).await;
         let selected_product_id = q.get("product_id").cloned().unwrap_or_default();
@@ -1180,6 +1232,7 @@ async fn create_step_3(
             flash_messages,
             has_flash_messages,
         } = build_template_globals(&state, &jar);
+        // Use the outer variables defined above
         return inject_context(
             &state,
             &jar,
@@ -1198,6 +1251,8 @@ async fn create_step_3(
                 back_url,
                 submit_url: absolute_url(&state, "/create/step-4"),
                 restart_url: absolute_url(&state, "/create/step-1"),
+                ssh_key_ids_csv: ssh_key_ids_csv.clone(),
+                hostnames_csv: hostnames_csv.clone(),
             }
             .render()
             .unwrap(),
@@ -1210,6 +1265,8 @@ async fn create_step_3(
         .get("bandwidthInTB")
         .cloned()
         .unwrap_or_else(|| "1".into());
+    
+    let hostnames_csv = base.hostnames.join(",");
     let TemplateGlobals {
         current_user,
         api_hostname,
@@ -1241,6 +1298,8 @@ async fn create_step_3(
             minimum_ram: 1,
             minimum_disk: 1,
             form_values,
+            ssh_key_ids_csv: ssh_key_ids_csv.clone(),
+            hostnames_csv: hostnames_csv,
         }
         .render()
         .unwrap(),
@@ -1265,6 +1324,8 @@ struct Step4Template<'a> {
     base_state: &'a BaseState,
     floating_ip_count: String,
     product_id: String,
+    ssh_key_ids_csv: String,
+    hostnames_csv: String,
     extras: ExtrasFormValues,
     back_url: String,
     submit_url: String,
@@ -1282,6 +1343,8 @@ async fn create_step_4(
     if base.hostnames.is_empty() || base.region.is_empty() {
         return Redirect::to("/create/step-1").into_response();
     }
+    let ssh_key_ids_csv = base.ssh_key_ids.iter().map(|id| id.to_string()).collect::<Vec<_>>().join(",");
+    let hostnames_csv = base.hostnames.join(",");
     let back_pairs = build_base_query_pairs(&base);
     let back_q = build_query_string(&back_pairs);
     let back_url = if back_q.is_empty() {
@@ -1329,6 +1392,8 @@ async fn create_step_4(
             base_state: &base,
             floating_ip_count: base.floating_ip_count.to_string(),
             product_id,
+            ssh_key_ids_csv: ssh_key_ids_csv,
+            hostnames_csv: hostnames_csv,
             extras,
             back_url,
             submit_url: absolute_url(&state, "/create/step-5"),
@@ -1378,6 +1443,8 @@ struct Step5Template<'a> {
     floating_ip_count: String,
     back_url: String,
     submit_url: String,
+    hostnames_csv: String,
+    ssh_key_ids_csv: String,
 }
 
 async fn load_os_list(state: &AppState) -> Vec<OsItem> {
@@ -1591,6 +1658,8 @@ async fn create_step_5(
     } else {
         absolute_url(&state, &format!("{}?{}", back_target, back_q))
     };
+    let hostnames_csv = base.hostnames.join(",");
+    let ssh_key_ids_csv = base.ssh_key_ids.iter().map(|id| id.to_string()).collect::<Vec<_>>().join(",");
     inject_context(
         &state,
         &jar,
@@ -1610,6 +1679,8 @@ async fn create_step_5(
             floating_ip_count: base.floating_ip_count.to_string(),
             back_url,
             submit_url: absolute_url(&state, "/create/step-6"),
+            hostnames_csv: hostnames_csv,
+            ssh_key_ids_csv: ssh_key_ids_csv,
         }
         .render()
         .unwrap(),
@@ -1641,6 +1712,7 @@ struct Step6Template<'a> {
     back_url: String,
     submit_url: String,
     manage_keys_url: String,
+    hostnames_csv: String,
 }
 
 async fn create_step_6(
@@ -1706,7 +1778,7 @@ async fn create_step_6(
     };
     let customer_id = fetch_default_customer_id(&state).await;
     let ssh_keys = load_ssh_keys_api(&state, customer_id).await;
-    let selected_ids: std::collections::HashSet<String> =
+    let selected_ids: HashSet<String> =
         base.ssh_key_ids.iter().map(|id| id.to_string()).collect();
     let selectable: Vec<SelectableSshKey> = ssh_keys
         .into_iter()
@@ -1719,6 +1791,8 @@ async fn create_step_6(
             }
         })
         .collect();
+    let hostnames_csv = base.hostnames.join(",");
+    let ssh_key_ids_csv = base.ssh_key_ids.iter().map(|id| id.to_string()).collect::<Vec<_>>().join(",");
     inject_context(
         &state,
         &jar,
@@ -1738,6 +1812,7 @@ async fn create_step_6(
             back_url,
             submit_url: absolute_url(&state, "/create/step-7"),
             manage_keys_url: absolute_url(&state, "/ssh-keys"),
+            hostnames_csv,
         }
         .render()
         .unwrap(),
@@ -1776,10 +1851,31 @@ struct Step7Template<'a> {
     has_price_entries: bool,
     selected_os_label: String,
     ssh_keys_display: String,
+    selected_product_tags: Option<String>,
+    selected_product_description: Option<String>,
     footnote_text: String,
     has_footnote: bool,
     back_url: String,
     submit_url: String,
+    ssh_key_ids_csv: String,
+    selected_product_name: Option<String>,
+    hostnames_csv: String,
+}
+
+#[derive(Template)]
+#[template(path = "create/result.html")]
+struct Step8Template {
+    current_user: Option<CurrentUser>,
+    api_hostname: String,
+    base_url: String,
+    flash_messages: Vec<String>,
+    has_flash_messages: bool,
+    back_url: String,
+    status_label: String,
+    code: Option<String>,
+    detail: Option<String>,
+    errors: Vec<String>,
+    raw_json: String,
 }
 
 async fn create_step_7_core(
@@ -1892,6 +1988,63 @@ async fn create_step_7_core(
             || resp.get("code").and_then(|c| c.as_str()) == Some("CREATED")
         {
             return Redirect::to("/instances").into_response();
+        } else {
+            // Build error / result page
+            let mut errors: Vec<String> = Vec::new();
+            if let Some(detail) = resp.get("detail").and_then(|d| d.as_str()) {
+                if !detail.trim().is_empty() {
+                    errors.push(detail.to_string());
+                }
+            }
+            // Some APIs return 'errors' as array or map
+            if let Some(arr) = resp.get("errors").and_then(|e| e.as_array()) {
+                for entry in arr {
+                    if let Some(s) = entry.as_str() {
+                        errors.push(s.to_string());
+                    } else if let Some(obj) = entry.as_object() {
+                        for (k, v) in obj {
+                            if let Some(s) = v.as_str() {
+                                errors.push(format!("{}: {}", k, s));
+                            } else {
+                                errors.push(format!("{}: {}", k, value_to_short_string(v)));
+                            }
+                        }
+                    } else {
+                        errors.push(value_to_short_string(entry));
+                    }
+                }
+            } else if let Some(obj) = resp.get("errors").and_then(|e| e.as_object()) {
+                for (k, v) in obj {
+                    if let Some(s) = v.as_str() {
+                        errors.push(format!("{}: {}", k, s));
+                    } else {
+                        errors.push(format!("{}: {}", k, value_to_short_string(v)));
+                    }
+                }
+            }
+            let code = resp.get("code").and_then(|c| c.as_str()).map(|s| s.to_string());
+            let detail = resp.get("detail").and_then(|d| d.as_str()).map(|s| s.to_string());
+            let raw_json = serde_json::to_string_pretty(&resp).unwrap_or_else(|_| "{}".into());
+            let TemplateGlobals { current_user, api_hostname, base_url, flash_messages, has_flash_messages } = build_template_globals(&state, &jar);
+            return inject_context(
+                &state,
+                &jar,
+                Step8Template {
+                    current_user,
+                    api_hostname,
+                    base_url,
+                    flash_messages,
+                    has_flash_messages,
+                    back_url: absolute_url(&state, "/create/step-6"),
+                    status_label: "Failed".into(),
+                    code,
+                    detail,
+                    errors,
+                    raw_json,
+                }
+                .render()
+                .unwrap(),
+            );
         }
     }
     let TemplateGlobals {
@@ -1904,14 +2057,38 @@ async fn create_step_7_core(
     let mut plan_summary = Vec::new();
     let mut price_entries = Vec::new();
     let mut footnote = None;
+    
+    // selected product details for review
+    let mut selected_product_name: Option<String> = None;
+    let mut selected_product_tags: Option<String> = None;
+    let mut selected_product_description: Option<String> = None;
+    
     if base.plan_type == "fixed" {
         let products = load_products(&state, &base.region).await;
         if let Some(prod) = products.into_iter().find(|p| p.id == plan_state.product_id) {
             plan_summary = prod.spec_entries.clone();
             price_entries = prod.price_entries.clone();
-            if !prod.description.trim().is_empty() {
-                footnote = Some(prod.description);
+            let name = prod.name.clone();
+            let tags = prod.tags.clone();
+            let desc = prod.description.clone();
+            if !desc.trim().is_empty() {
+                footnote = Some(desc.clone());
             }
+            // Create a friendly display name for the product: prefer plan name when useful,
+            // otherwise fall back to tags, primary price, or first spec entry.
+            let mut display_name: Option<String> = None;
+            if !name.trim().is_empty() && name != prod.id {
+                display_name = Some(name.clone());
+            } else if !tags.trim().is_empty() {
+                display_name = Some(tags.clone());
+            } else if let Some(entry) = prod.price_entries.first() {
+                display_name = Some(entry.value.clone());
+            } else if let Some(entry) = prod.spec_entries.first() {
+                display_name = Some(format!("{}: {}", entry.term, entry.value));
+            }
+            selected_product_name = display_name;
+            selected_product_tags = if tags.trim().is_empty() { None } else { Some(tags.clone()) };
+            selected_product_description = if desc.trim().is_empty() { None } else { Some(desc.clone()) };
         }
     } else {
         let mut summary = Vec::new();
@@ -1960,7 +2137,7 @@ async fn create_step_7_core(
     let ssh_keys_display = if selected_key_ids.is_empty() {
         "None".into()
     } else {
-        let id_set: std::collections::HashSet<_> = selected_key_ids.iter().cloned().collect();
+        let id_set: HashSet<_> = selected_key_ids.iter().cloned().collect();
         let customer_id = fetch_default_customer_id(&state).await;
         let ssh_keys = load_ssh_keys_api(&state, customer_id).await;
         let mut names = Vec::new();
@@ -1979,6 +2156,12 @@ async fn create_step_7_core(
         "(none)".into()
     } else {
         base.hostnames.join(", ")
+    };
+    let hostnames_csv = base.hostnames.join(",");
+    let ssh_key_ids_csv = if selected_key_ids.is_empty() {
+        "".into()
+    } else {
+        selected_key_ids.join(",")
     };
     let plan_type_label = if base.plan_type == "fixed" {
         "Fixed plan".into()
@@ -2027,6 +2210,11 @@ async fn create_step_7_core(
             has_price_entries,
             selected_os_label,
             ssh_keys_display,
+            ssh_key_ids_csv,
+            selected_product_name,
+            selected_product_tags,
+            selected_product_description,
+            hostnames_csv,
             footnote_text,
             has_footnote,
             back_url,
@@ -2040,18 +2228,58 @@ async fn create_step_7_core(
 async fn create_step_7_get(
     State(state): State<AppState>,
     jar: CookieJar,
+    axum::extract::Query(q): axum::extract::Query<HashMap<String, OneOrMany>>,
+) -> impl IntoResponse {
+    // For GET requests, query params may have single or multiple values; flatten to CSV strings.
+    let mut q_flat: HashMap<String, String> = HashMap::new();
+    for (k, v) in q {
+        q_flat.insert(k, v.to_csv());
+    }
+    create_step_7_core(state, jar, axum::http::Method::GET, q_flat, HashMap::new()).await
+}
+
+async fn create_step_8(
+    State(state): State<AppState>,
+    jar: CookieJar,
     axum::extract::Query(q): axum::extract::Query<HashMap<String, String>>,
 ) -> impl IntoResponse {
-    create_step_7_core(state, jar, axum::http::Method::GET, q, HashMap::new()).await
+    let TemplateGlobals { current_user, api_hostname, base_url, flash_messages, has_flash_messages } = build_template_globals(&state, &jar);
+    let code = q.get("code").cloned();
+    let detail = q.get("detail").cloned();
+    let raw_json = q.get("raw").cloned().unwrap_or_default();
+    let errors = q.get("errors").map(|s| s.split('|').map(|s| s.to_string()).collect()).unwrap_or_else(Vec::new);
+    inject_context(&state, &jar, Step8Template {
+        current_user,
+        api_hostname,
+        base_url,
+        flash_messages,
+        has_flash_messages,
+        back_url: q.get("back_url").cloned().unwrap_or_else(|| absolute_url(&state, "/create/step-1")),
+        status_label: q.get("status_label").cloned().unwrap_or_else(|| "Result".into()),
+        code,
+        detail,
+        errors,
+        raw_json,
+    }.render().unwrap())
 }
 
 async fn create_step_7_post(
     State(state): State<AppState>,
     jar: CookieJar,
-    axum::extract::Query(q): axum::extract::Query<HashMap<String, String>>,
-    Form(form): Form<HashMap<String, String>>,
+    axum::extract::Query(q): axum::extract::Query<HashMap<String, OneOrMany>>,
+    body: axum::body::Bytes,
 ) -> impl IntoResponse {
-    create_step_7_core(state, jar, axum::http::Method::POST, q, form).await
+    let mut q_flat: HashMap<String, String> = HashMap::new();
+    for (k, v) in q {
+        q_flat.insert(k, v.to_csv());
+    }
+    // Try to parse as HashMap<String, Vec<String>> first
+    let mut f_flat: HashMap<String, String> = HashMap::new();
+    let parsed_map = parse_urlencoded_body(&body);
+    for (k, v) in parsed_map {
+        f_flat.insert(k, v.join(","));
+    }
+    create_step_7_core(state, jar, axum::http::Method::POST, q_flat, f_flat).await
 }
 
 async fn api_call(
@@ -2102,14 +2330,14 @@ async fn api_call(
 }
 #[derive(Template)]
 #[template(path = "users.html")]
-struct UsersTemplate<'a> {
+struct UsersTemplate {
     current_user: Option<CurrentUser>,
     api_hostname: String,
     base_url: String,
     flash_messages: Vec<String>,
     has_flash_messages: bool,
     rows: Vec<UserTableRow>,
-    message: Option<&'a str>,
+    // removed `message` field - it's unused
 }
 
 struct UserTableRow {
@@ -2174,7 +2402,7 @@ async fn users_list(State(state): State<AppState>, jar: CookieJar) -> impl IntoR
             flash_messages,
             has_flash_messages,
             rows,
-            message: None,
+            // removed `message` field - it's unused
         }
         .render()
         .unwrap(),
@@ -2401,7 +2629,7 @@ async fn load_instances_for_user(state: &AppState, username: &str) -> Vec<Instan
                         user.assigned_instances
                             .iter()
                             .cloned()
-                            .collect::<std::collections::HashSet<String>>(),
+                            .collect::<HashSet<String>>(),
                     ),
                 )
             } else {
@@ -2503,7 +2731,7 @@ async fn access_get(State(state): State<AppState>, jar: CookieJar) -> impl IntoR
         .iter()
         .filter(|(_, rec)| rec.role == "admin")
         .map(|(u, rec)| {
-            let assigned: std::collections::HashSet<&str> =
+            let assigned: HashSet<&str> =
                 rec.assigned_instances.iter().map(|s| s.as_str()).collect();
             let rows = list
                 .iter()
@@ -2594,7 +2822,6 @@ struct SshKeysTemplate<'a> {
     flash_messages: Vec<String>,
     has_flash_messages: bool,
     ssh_keys: &'a [SshKeyView],
-    error: Option<&'a str>,
     customer_id: Option<String>,
 }
 
@@ -2758,7 +2985,6 @@ async fn ssh_keys_get(
             flash_messages,
             has_flash_messages,
             ssh_keys: &keys,
-            error: None,
             customer_id,
         }
         .render()
@@ -2983,6 +3209,81 @@ async fn instance_detail(
     let endpoint = format!("/v1/instances/{}", instance_id);
     let payload = api_call(&state, "GET", &endpoint, None, None).await;
     let json = serde_json::to_string_pretty(&payload).unwrap_or_else(|_| "{}".into());
+    // Collect nice key-value pair details we want to display rather than raw JSON
+    let mut details: Vec<(String, String)> = Vec::new();
+    if let Some(obj) = payload.as_object() {
+        if let Some(data) = obj.get("data").and_then(|d| d.as_object()) {
+            let host = data
+                .get("hostname")
+                .and_then(|v| v.as_str())
+                .unwrap_or("(no hostname)")
+                .to_string();
+            details.push(("Hostname".into(), host));
+            let status = data
+                .get("status")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string();
+            details.push(("Status".into(), status));
+            let region = data
+                .get("region")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string();
+            details.push(("Region".into(), region.clone()));
+            let class = data
+                .get("class")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string();
+            details.push(("Instance class".into(), class));
+            let product_id = data
+                .get("productId")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string());
+            if let Some(pid) = product_id.clone() {
+                // Try to resolve product name using region-scoped product listing
+                let product_name = if !region.is_empty() && !pid.is_empty() {
+                    let products = load_products(&state, &region).await;
+                    products
+                        .into_iter()
+                        .find(|p| p.id == pid)
+                        .map(|p| p.name)
+                        .unwrap_or(pid.clone())
+                } else {
+                    pid.clone()
+                };
+                details.push(("Product".into(), product_name));
+            }
+            let vcpu = data.get("vcpuCount").and_then(|v| v.as_i64()).map(|v| v.to_string());
+            if let Some(x) = vcpu { details.push(("vCPU".into(), x)); }
+            let ram = data.get("ram").and_then(|v| v.as_i64()).map(|v| format!("{} MB", v));
+            if let Some(x) = ram { details.push(("RAM".into(), x)); }
+            let disk = data.get("disk").and_then(|v| v.as_i64()).map(|v| format!("{} GB", v));
+            if let Some(x) = disk { details.push(("Disk".into(), x)); }
+            let ip = data.get("mainIp").and_then(|v| v.as_str()).map(|s| s.to_string());
+            if let Some(x) = ip { details.push(("IPv4".into(), x)); }
+            let ip6 = data.get("mainIpv6").and_then(|v| v.as_str()).map(|s| s.to_string());
+            if let Some(x) = ip6 { details.push(("IPv6".into(), x)); }
+            if let Some(os_obj) = data.get("os") {
+                let os_name = os_obj
+                    .get("name")
+                    .and_then(|v| v.as_str())
+                    .or_else(|| os_obj.get("id").and_then(|v| v.as_str()))
+                    .unwrap_or("")
+                    .to_string();
+                if !os_name.is_empty() { details.push(("OS".into(), os_name)); }
+            }
+            if let Some(inserted) = data.get("insertedAt").and_then(|v| v.as_str()).map(|s| s.to_string()) {
+                details.push(("Created".into(), inserted));
+            }
+            if let Some(features) = data.get("features").and_then(|v| v.as_array()) {
+                let mut features_list = Vec::new();
+                for item in features { if let Some(s) = item.as_str() { features_list.push(s.to_string()); } }
+                if !features_list.is_empty() { details.push(("Features".into(), features_list.join(", "))); }
+            }
+        }
+    }
     let TemplateGlobals { current_user, api_hostname, base_url, flash_messages, has_flash_messages } = build_template_globals(&state, &jar);
     inject_context(
         &state,
@@ -2994,6 +3295,7 @@ async fn instance_detail(
             flash_messages,
             has_flash_messages,
             instance_id: instance_id.clone(),
+            details,
             instance_json: json,
         }
         .render()

@@ -10,9 +10,7 @@
 </header>
 
 <form method="post" action="{{ submit_url }}" class="surface" novalidate>
-    {% for host in base_state.hostnames %}
-    <input type="hidden" name="hostnames" value="{{ host }}">
-    {% endfor %}
+    <input type="hidden" name="hostnames" value="{{ hostnames_csv }}">
     <input type="hidden" name="region" value="{{ base_state.region }}">
     <input type="hidden" name="instance_class" value="{{ base_state.instance_class }}">
     <input type="hidden" name="plan_type" value="{{ base_state.plan_type }}">
@@ -20,9 +18,7 @@
     <input type="hidden" name="assign_ipv6" value="{% if base_state.assign_ipv6 %}1{% else %}0{% endif %}">
     <input type="hidden" name="floating_ip_count" value="{{ floating_ip_count }}">
     <input type="hidden" name="os_id" value="{{ base_state.os_id }}">
-    {% for key_id in base_state.ssh_key_ids %}
-    <input type="hidden" name="ssh_key_ids" value="{{ key_id }}">
-    {% endfor %}
+    <input type="hidden" name="ssh_key_ids" value="{{ ssh_key_ids_csv }}">
     {% if base_state.plan_type == "fixed" %}
     <input type="hidden" name="product_id" value="{{ plan_state.product_id }}">
     <input type="hidden" name="extra_disk" value="{{ plan_state.extra_disk }}">
@@ -41,6 +37,23 @@
             <p class="invoice-code">Hostnames: {{ hostnames_display }}</p>
         </header>
         <div class="invoice-body">
+            {% if selected_product_name.is_some() %}
+            <section>
+                <h3>Product</h3>
+                <dl>
+                    <div>
+                        <dt>Product</dt>
+                        <dd>{{ selected_product_name.as_ref().unwrap() }}</dd>
+                    </div>
+                </dl>
+                {% if selected_product_tags.is_some() %}
+                <p class="tags">Tags: {{ selected_product_tags.as_ref().unwrap() }}</p>
+                {% endif %}
+                {% if selected_product_description.is_some() %}
+                <p class="description">{{ selected_product_description.as_ref().unwrap() }}</p>
+                {% endif %}
+            </section>
+            {% endif %}
             {% if has_plan_summary %}
             <section>
                 <h3>Plan</h3>

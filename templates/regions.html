@@ -8,7 +8,7 @@
     <p>Select a region card to inspect the catalog of products offered there.</p>
 </header>
 
-{% if !regions.is_empty() %}
+{% if regions.len() > 0 %}
 <section>
     <h2>Regions</h2>
     <p>Click any region to open <code>/products?region_id=&lt;id&gt;</code> with the relevant inventory.</p>

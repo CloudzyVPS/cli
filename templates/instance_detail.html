@@ -5,10 +5,17 @@
 {% block content %}
 <header class="page-header">
     <h1>Instance {{ instance_id }}</h1>
-    <p>Instance details JSON payload (raw):</p>
+    <p>Details for instance <strong>{{ instance_id }}</strong>.</p>
 </header>
 
-<section>
-    <pre>{{ instance_json }}</pre>
+<section class="surface">
+    <dl class="instance-details">
+    {% for kv in details %}
+        <div>
+            <dt>{{ kv.0 }}</dt>
+            <dd>{{ kv.1 }}</dd>
+        </div>
+    {% endfor %}
+    </dl>
 </section>
 {% endblock %}

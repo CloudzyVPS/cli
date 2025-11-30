@@ -4,7 +4,7 @@
 
 {% block content %}
 <h1>Bulk Subscription Refund Results</h1>
-{% if !refunds.is_empty() %}
+{% if refunds.len() > 0 %}
 <table>
     <thead>
         <tr>

@@ -4,7 +4,7 @@
 
 {% block content %}
 <h1>Available Applications</h1>
-{% if !apps.is_empty() %}
+{% if apps.len() > 0 %}
 <ul>
     {% for app in apps %}
     <li>

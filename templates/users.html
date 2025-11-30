@@ -54,7 +54,7 @@
                                         <button type="submit" class="btn btn-warning btn-sm">Save</button>
                                     </div>
                                 </form>
-                                <form method="post" action="{{ base_url }}/users/{{ row.username }}/delete" onsubmit="return confirm('Delete {{ row.username }}?');">
+                                <form method="post" action="{{ base_url }}/users/{{ row.username }}/delete">
                                     <label class="form-label">Remove</label>
                                     <button type="submit" class="btn btn-danger btn-sm">Delete</button>
                                 </form>
