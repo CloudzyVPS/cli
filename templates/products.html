@@ -83,35 +83,7 @@
             {% for product in products %}
             <article class="product-card" role="listitem">
                 <div class="product-card-body">
-                    {% if product.name != product.id %}
-                        {% if product.name != "" %}
-                            <h2>{{ product.name }}</h2>
-                        {% else %}
-                            {% if product.tags != "" %}
-                                <h2>{{ product.tags }}</h2>
-                            {% else if product.price_entries.len() > 0 %}
-                                {% for entry in product.price_entries %}
-                                    {% if loop.index == 1 %}
-                                        <h2>{{ entry.value }}</h2>
-                                    {% endif %}
-                                {% endfor %}
-                            {% else %}
-                                <h2>Plan</h2>
-                            {% endif %}
-                        {% endif %}
-                    {% else %}
-                    {% if product.tags != "" %}
-                    <h2>{{ product.tags }}</h2>
-                    {% else if product.price_entries.len() > 0 %}
-                    {% for entry in product.price_entries %}
-                        {% if loop.index == 1 %}
-                        <h2>{{ entry.value }}</h2>
-                        {% endif %}
-                    {% endfor %}
-                    {% else %}
-                    <h2>Plan</h2>
-                    {% endif %}
-                    {% endif %}
+                    <h2>{{ product.display_name }}</h2>
                     {% if product.tags != "" %}
                     <p class="product-plan">{{ product.tags }}</p>
                     {% endif %}
