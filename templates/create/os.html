@@ -10,18 +10,14 @@
 </header>
 
 <form method="get" action="{{ submit_url }}" class="surface" novalidate>
-    {% for host in base_state.hostnames %}
-    <input type="hidden" name="hostnames" value="{{ host }}">
-    {% endfor %}
+    <input type="hidden" name="hostnames" value="{{ hostnames_csv }}">
     <input type="hidden" name="region" value="{{ base_state.region }}">
     <input type="hidden" name="instance_class" value="{{ base_state.instance_class }}">
     <input type="hidden" name="plan_type" value="{{ base_state.plan_type }}">
     <input type="hidden" name="assign_ipv4" value="{% if base_state.assign_ipv4 %}1{% else %}0{% endif %}">
     <input type="hidden" name="assign_ipv6" value="{% if base_state.assign_ipv6 %}1{% else %}0{% endif %}">
     <input type="hidden" name="floating_ip_count" value="{{ floating_ip_count }}">
-    {% for key_id in base_state.ssh_key_ids %}
-    <input type="hidden" name="ssh_key_ids" value="{{ key_id }}">
-    {% endfor %}
+    <input type="hidden" name="ssh_key_ids" value="{{ ssh_key_ids_csv }}">
     {% if base_state.plan_type == "fixed" %}
     <input type="hidden" name="product_id" value="{{ product_id }}">
     <input type="hidden" name="extra_disk" value="{{ extra_disk }}">
@@ -34,14 +30,14 @@
     {% endif %}
     <fieldset>
         <legend>Operating System</legend>
-        {% if !os_list.is_empty() %}
+        {% if os_list.len() > 0 %}
         <div class="product-grid" role="list">
             {% for os_item in os_list %}
             <label class="product-card" role="listitem" {% if selected_os_id == os_item.id %}aria-current="true"{% endif %}>
                 <input type="radio" name="os_id" value="{{ os_item.id }}" {% if selected_os_id == os_item.id %}checked{% endif %} required>
                 <div class="product-card-body">
                     <h2>{{ os_item.name }}</h2>
-                    {% if !os_item.family.is_empty() %}
+                    {% if os_item.family != "" %}
                     <p class="product-plan">
                         {{ os_item.family }}{% if os_item.arch.is_some() %} · {{ os_item.arch.as_ref().unwrap() }}{% endif %}
                     </p>

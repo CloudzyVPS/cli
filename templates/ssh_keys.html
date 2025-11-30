@@ -14,7 +14,7 @@
     {% if customer_id.is_some() %}
     <small>Viewing keys for customer ID: <code>{{ customer_id.as_ref().unwrap() }}</code></small>
     {% endif %}
-    {% if ssh_keys.is_empty() %}
+    {% if ssh_keys.len() == 0 %}
     <p>🔑 No SSH keys are registered yet. Use the form below to add your first key.</p>
     {% else %}
     <div class="card-grid">
@@ -22,14 +22,14 @@
         <article>
             <h3>{{ key.name }}</h3>
             <small>ID #{{ key.id }}{% if key.customer_id.is_some() %} · Customer {{ key.customer_id.as_ref().unwrap() }}{% endif %}</small>
-            {% if !key.fingerprint.is_empty() %}
+            {% if key.fingerprint != "" %}
             <p><strong>Fingerprint:</strong> {{ key.fingerprint }}</p>
             {% endif %}
-            {% if !key.public_key.is_empty() %}
+            {% if key.public_key != "" %}
             <pre>{{ key.public_key }}</pre>
             {% endif %}
             <footer>
-                <form method="post" onsubmit="return confirm('Delete this SSH key?');">
+                <form method="post">
                     <input type="hidden" name="action" value="delete">
                     <input type="hidden" name="ssh_key_id" value="{{ key.id }}">
                     <button type="submit" class="btn-danger">Delete</button>

@@ -10,21 +10,17 @@
 </header>
 
 <form method="get" action="{{ submit_url }}" class="surface" novalidate>
-    {% for host in base_state.hostnames %}
-    <input type="hidden" name="hostnames" value="{{ host }}">
-    {% endfor %}
+    <input type="hidden" name="hostnames" value="{{ hostnames_csv }}">
     <input type="hidden" name="region" value="{{ base_state.region }}">
     <input type="hidden" name="instance_class" value="{{ base_state.instance_class }}">
     <input type="hidden" name="plan_type" value="{{ base_state.plan_type }}">
     <input type="hidden" name="assign_ipv4" value="{% if base_state.assign_ipv4 %}1{% else %}0{% endif %}">
     <input type="hidden" name="assign_ipv6" value="{% if base_state.assign_ipv6 %}1{% else %}0{% endif %}">
     <input type="hidden" name="floating_ip_count" value="{{ floating_ip_count }}">
-    {% for key_id in base_state.ssh_key_ids %}
-    <input type="hidden" name="ssh_key_ids" value="{{ key_id }}">
-    {% endfor %}
+    <input type="hidden" name="ssh_key_ids" value="{{ ssh_key_ids_csv }}">
     <fieldset class="form-section">
         <legend class="form-label">Resource requirements</legend>
-        {% if !requirements.is_empty() %}
+        {% if requirements.len() > 0 %}
         <p class="requirements">This region enforces:</p>
         <ul class="requirements-list">
             {% for rule in requirements %}

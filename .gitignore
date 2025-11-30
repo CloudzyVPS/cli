@@ -6,3 +6,4 @@ venv
 target/
 users.json
 Cargo.lock
+*.log

@@ -10,9 +10,7 @@
 </header>
 
 <form method="get" action="{{ submit_url }}" class="surface" novalidate>
-    {% for host in base_state.hostnames %}
-    <input type="hidden" name="hostnames" value="{{ host }}">
-    {% endfor %}
+    <input type="hidden" name="hostnames" value="{{ hostnames_csv }}">
     <input type="hidden" name="region" value="{{ base_state.region }}">
     <input type="hidden" name="instance_class" value="{{ base_state.instance_class }}">
     <input type="hidden" name="plan_type" value="{{ base_state.plan_type }}">
@@ -32,7 +30,7 @@
     {% endif %}
     <fieldset class="form-section">
         <legend>SSH Keys</legend>
-        {% if !ssh_keys.is_empty() %}
+        {% if ssh_keys.len() > 0 %}
         <div class="checkbox-group">
             {% for key in ssh_keys %}
             <label>
