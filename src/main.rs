@@ -1783,14 +1783,11 @@ struct Step7Template<'a> {
     has_price_entries: bool,
     selected_os_label: String,
     ssh_keys_display: String,
-    selected_product_tags: Option<String>,
-    selected_product_description: Option<String>,
     footnote_text: String,
     has_footnote: bool,
     back_url: String,
     submit_url: String,
     ssh_key_ids_csv: String,
-    selected_product_name: Option<String>,
     hostnames_csv: String,
 }
 
@@ -1988,37 +1985,15 @@ async fn create_step_7_core(
     let mut price_entries = Vec::new();
     let mut footnote = None;
     
-    // selected product details for review
-    let mut selected_product_name: Option<String> = None;
-    let mut selected_product_tags: Option<String> = None;
-    let mut selected_product_description: Option<String> = None;
-    
     if base.plan_type == "fixed" {
         let products = load_products(&state, &base.region).await;
         if let Some(prod) = products.into_iter().find(|p| p.id == plan_state.product_id) {
             plan_summary = prod.spec_entries.clone();
             price_entries = prod.price_entries.clone();
-            let name = prod.name.clone();
-            let tags = prod.tags.clone();
             let desc = prod.description.clone();
             if !desc.trim().is_empty() {
                 footnote = Some(desc.clone());
             }
-            // Create a friendly display name for the product: prefer plan name when useful,
-            // otherwise fall back to tags, primary price, or first spec entry.
-            let mut display_name: Option<String> = None;
-            if !name.trim().is_empty() && name != prod.id {
-                display_name = Some(name.clone());
-            } else if !tags.trim().is_empty() {
-                display_name = Some(tags.clone());
-            } else if let Some(entry) = prod.price_entries.first() {
-                display_name = Some(entry.value.clone());
-            } else if let Some(entry) = prod.spec_entries.first() {
-                display_name = Some(format!("{}: {}", entry.term, entry.value));
-            }
-            selected_product_name = display_name;
-            selected_product_tags = if tags.trim().is_empty() { None } else { Some(tags.clone()) };
-            selected_product_description = if desc.trim().is_empty() { None } else { Some(desc.clone()) };
         }
     } else {
         let mut summary = Vec::new();
@@ -2132,9 +2107,6 @@ async fn create_step_7_core(
             selected_os_label,
             ssh_keys_display,
             ssh_key_ids_csv,
-            selected_product_name,
-            selected_product_tags,
-            selected_product_description,
             hostnames_csv,
             footnote_text,
             has_footnote,

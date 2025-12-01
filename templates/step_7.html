@@ -37,23 +37,6 @@
             <p class="invoice-code">Hostnames: {{ hostnames_display }}</p>
         </header>
         <div class="invoice-body">
-            {% if selected_product_name.is_some() %}
-            <section>
-                <h3>Product</h3>
-                <dl>
-                    <div>
-                        <dt>Product</dt>
-                        <dd>{{ selected_product_name.as_ref().unwrap() }}</dd>
-                    </div>
-                </dl>
-                {% if selected_product_tags.is_some() %}
-                <p class="tags">Tags: {{ selected_product_tags.as_ref().unwrap() }}</p>
-                {% endif %}
-                {% if selected_product_description.is_some() %}
-                <p class="description">{{ selected_product_description.as_ref().unwrap() }}</p>
-                {% endif %}
-            </section>
-            {% endif %}
             {% if has_plan_summary %}
             <section>
                 <h3>Plan</h3>
