@@ -37,6 +37,14 @@
                 <dt>Current status</dt>
                 <dd>{{ instance.status }}</dd>
             </div>
+            </dl>
+        </fieldset>
+    </section>
+
+    <form method="post" action="{{ base_url }}/instance/{{ instance.id }}/poweroff" style="margin-top:2em">
+        <button type="submit">Confirm Power Off</button>
+        <a class="button-secondary" href="{{ base_url }}/instance/{{ instance.id }}">Cancel</a>
+    </form>
             <div>
                 <dt>Region</dt>
                 <dd>{{ instance.region }}</dd>
