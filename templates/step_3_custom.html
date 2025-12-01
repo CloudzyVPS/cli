@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+
+{% block title %}Create · Step 3{% endblock %}
+
+{% block content %}
+<header class="page-header">
+    <p class="breadcrumb"><a href="{{ back_url }}">← Previous step</a></p>
+    <h1>Define custom resources</h1>
+    <p>Step 3 of 7 · Enter the exact CPU, RAM, disk, and bandwidth for {{ region_name }}.</p>
+</header>
+
+<form method="get" action="{{ submit_url }}" class="surface" novalidate>
+    <input type="hidden" name="hostnames" value="{{ hostnames_csv }}">
+    <input type="hidden" name="region" value="{{ base_state.region }}">
+    <input type="hidden" name="instance_class" value="{{ base_state.instance_class }}">
+    <input type="hidden" name="plan_type" value="{{ base_state.plan_type }}">
+    <input type="hidden" name="assign_ipv4" value="{% if base_state.assign_ipv4 %}1{% else %}0{% endif %}">
+    <input type="hidden" name="assign_ipv6" value="{% if base_state.assign_ipv6 %}1{% else %}0{% endif %}">
+    <input type="hidden" name="floating_ip_count" value="{{ floating_ip_count }}">
+    <input type="hidden" name="ssh_key_ids" value="{{ ssh_key_ids_csv }}">
+    <fieldset class="form-section">
+        <legend class="form-label">Resource requirements</legend>
+        {% if requirements.len() > 0 %}
+        <p class="requirements">This region enforces:</p>
+        <ul class="requirements-list">
+            {% for rule in requirements %}
+            <li>{{ rule }}</li>
+            {% endfor %}
+        </ul>
+        {% endif %}
+        <div class="fields-grid compact">
+            <div>
+                <label for="cpu">CPU (cores)</label>
+                <input type="number" id="cpu" name="cpu" min="1" value="{{ form_values.cpu }}" required>
+            </div>
+            <div>
+                <label for="ramInGB">RAM (GB)</label>
+                <input type="number" id="ramInGB" name="ramInGB" min="{{ minimum_ram }}" value="{{ form_values.ram_in_gb }}" required>
+            </div>
+            <div>
+                <label for="diskInGB">Disk (GB)</label>
+                <input type="number" id="diskInGB" name="diskInGB" min="{{ minimum_disk }}" value="{{ form_values.disk_in_gb }}" required>
+            </div>
+            <div>
+                <label for="bandwidthInTB">Bandwidth (TB)</label>
+                <input type="number" id="bandwidthInTB" name="bandwidthInTB" min="1" value="{{ form_values.bandwidth_in_tb }}">
+            </div>
+        </div>
+    </fieldset>
+
+    <footer class="form-actions">
+        <button type="submit">Continue</button>
+    </footer>
+</form>
+{% endblock %}

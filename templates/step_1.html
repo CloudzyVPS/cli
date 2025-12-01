@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+
+{% block title %}Create · Step 1{% endblock %}
+
+{% block content %}
+<header class="page-header">
+    <h1>Provision New Instance</h1>
+    <p>Step 1 of 7 · Select region, instance class, and plan type</p>
+</header>
+
+<form method="get" action="{{ base_url }}/create/step-2" class="surface" novalidate>
+    <div class="fields-grid">
+        <fieldset>
+            <legend>Region</legend>
+            <label for="region" class="sr-only">Deployment region</label>
+            <select id="region" name="region" required>
+                {% for region in regions %}
+                <option value="{{ region.id }}" {% if form_data.region == region.id %}selected{% endif %}>{{ region.name }}</option>
+                {% endfor %}
+            </select>
+            <small>Only active regions are listed.</small>
+        </fieldset>
+        <fieldset>
+            <legend>Instance class</legend>
+            <label for="instance_class" class="sr-only">Instance class</label>
+            <select id="instance_class" name="instance_class">
+                <option value="default" {% if form_data.instance_class == "default" %}selected{% endif %}>Default</option>
+                <option value="cpu-optimized" {% if form_data.instance_class == "cpu-optimized" %}selected{% endif %}>CPU Optimized</option>
+                <option value="gpu-provided" {% if form_data.instance_class == "gpu-provided" %}selected{% endif %}>GPU Provided</option>
+            </select>
+            <small>Use custom class types for specialised workloads.</small>
+        </fieldset>
+    </div>
+
+    <fieldset>
+        <legend>Plan type</legend>
+        <div class="radio-group">
+            <label>
+                <input type="radio" name="plan_type" value="fixed" {% if form_data.plan_type == "fixed" %}checked{% endif %}>
+                <span>Use existing product</span>
+            </label>
+            <label>
+                <input type="radio" name="plan_type" value="custom" {% if form_data.plan_type == "custom" %}checked{% endif %}>
+                <span>Custom resources</span>
+            </label>
+        </div>
+        <small>Products provide curated CPU, RAM, and disk footprints. Custom plans let you define exact limits.</small>
+    </fieldset>
+
+    <footer>
+        <button type="submit">Continue</button>
+    </footer>
+</form>
+{% endblock %}

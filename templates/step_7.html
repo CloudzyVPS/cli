@@ -1,0 +1,125 @@
+{% extends "base.html" %}
+
+{% block title %}Create · Step 7{% endblock %}
+
+{% block content %}
+<header class="page-header">
+    <p class="breadcrumb"><a href="{{ back_url }}">← Previous step</a></p>
+    <h1>Review and confirm</h1>
+    <p>Step 7 of 7 · Verify all details before provisioning</p>
+</header>
+
+<form method="post" action="{{ submit_url }}" class="surface" novalidate>
+    <input type="hidden" name="hostnames" value="{{ hostnames_csv }}">
+    <input type="hidden" name="region" value="{{ base_state.region }}">
+    <input type="hidden" name="instance_class" value="{{ base_state.instance_class }}">
+    <input type="hidden" name="plan_type" value="{{ base_state.plan_type }}">
+    <input type="hidden" name="assign_ipv4" value="{% if base_state.assign_ipv4 %}1{% else %}0{% endif %}">
+    <input type="hidden" name="assign_ipv6" value="{% if base_state.assign_ipv6 %}1{% else %}0{% endif %}">
+    <input type="hidden" name="floating_ip_count" value="{{ floating_ip_count }}">
+    <input type="hidden" name="os_id" value="{{ base_state.os_id }}">
+    <input type="hidden" name="ssh_key_ids" value="{{ ssh_key_ids_csv }}">
+    {% if base_state.plan_type == "fixed" %}
+    <input type="hidden" name="product_id" value="{{ plan_state.product_id }}">
+    <input type="hidden" name="extra_disk" value="{{ plan_state.extra_disk }}">
+    <input type="hidden" name="extra_bandwidth" value="{{ plan_state.extra_bandwidth }}">
+    {% else %}
+    <input type="hidden" name="cpu" value="{{ plan_state.cpu }}">
+    <input type="hidden" name="ramInGB" value="{{ plan_state.ram_in_gb }}">
+    <input type="hidden" name="diskInGB" value="{{ plan_state.disk_in_gb }}">
+    <input type="hidden" name="bandwidthInTB" value="{{ plan_state.bandwidth_in_tb }}">
+    {% endif %}
+
+    <section class="invoice">
+        <header>
+            <p class="invoice-tag">Provision summary</p>
+            <h2>{{ region_name }} · {{ plan_type_label }} plan</h2>
+            <p class="invoice-code">Hostnames: {{ hostnames_display }}</p>
+        </header>
+        <div class="invoice-body">
+            {% if selected_product_name.is_some() %}
+            <section>
+                <h3>Product</h3>
+                <dl>
+                    <div>
+                        <dt>Product</dt>
+                        <dd>{{ selected_product_name.as_ref().unwrap() }}</dd>
+                    </div>
+                </dl>
+                {% if selected_product_tags.is_some() %}
+                <p class="tags">Tags: {{ selected_product_tags.as_ref().unwrap() }}</p>
+                {% endif %}
+                {% if selected_product_description.is_some() %}
+                <p class="description">{{ selected_product_description.as_ref().unwrap() }}</p>
+                {% endif %}
+            </section>
+            {% endif %}
+            {% if has_plan_summary %}
+            <section>
+                <h3>Plan</h3>
+                <dl>
+                    {% for item in plan_summary %}
+                    <div>
+                        <dt>{{ item.term }}</dt>
+                        <dd>{{ item.value }}</dd>
+                    </div>
+                    {% endfor %}
+                </dl>
+            </section>
+            {% endif %}
+            {% if has_price_entries %}
+            <section>
+                <h3>Pricing</h3>
+                <dl>
+                    {% for entry in price_entries %}
+                    <div>
+                        <dt>{{ entry.term }}</dt>
+                        <dd>{{ entry.value }}</dd>
+                    </div>
+                    {% endfor %}
+                </dl>
+            </section>
+            {% endif %}
+            <section>
+                <h3>Operating System</h3>
+                <dl>
+                    <div>
+                        <dt>OS</dt>
+                        <dd>{{ selected_os_label }}</dd>
+                    </div>
+                </dl>
+            </section>
+            <section>
+                <h3>Networking</h3>
+                <dl>
+                    <div>
+                        <dt>Floating IPs</dt>
+                        <dd>{{ floating_ip_count }}</dd>
+                    </div>
+                    <div>
+                        <dt>Assign IPv4</dt>
+                        <dd>{% if base_state.assign_ipv4 %}Yes{% else %}No{% endif %}</dd>
+                    </div>
+                    <div>
+                        <dt>Assign IPv6</dt>
+                        <dd>{% if base_state.assign_ipv6 %}Yes{% else %}No{% endif %}</dd>
+                    </div>
+                    <div>
+                        <dt>SSH keys</dt>
+                        <dd>{{ ssh_keys_display }}</dd>
+                    </div>
+                </dl>
+            </section>
+        </div>
+        {% if has_footnote %}
+        <footer>
+            <p>{{ footnote_text }}</p>
+        </footer>
+        {% endif %}
+    </section>
+
+    <footer class="form-actions">
+        <button type="submit">Create instances</button>
+    </footer>
+</form>
+{% endblock %}
