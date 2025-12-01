@@ -22,44 +22,10 @@
         <a class="region-card" role="listitem" href="{{ base_url }}/products?region_id={{ region.id }}" {% if active_region_id == region.id %}aria-current="true"{% endif %}>
             <div class="region-heading">
                 <h3>{{ region.name }}</h3>
-                {% if region.abbr.is_some() %}
-                <span class="region-chip">{{ region.abbr.as_ref().unwrap() }}</span>
-                {% endif %}
+                <span class="region-chip">{{ region.country }}</span>
             </div>
             <p class="region-subtitle">Region ID {{ region.id }}</p>
-            {% if region.description.is_some() %}
-            <p class="region-description">{{ region.description.as_ref().unwrap() }}</p>
-            {% endif %}
-            <dl class="region-metrics">
-                <div>
-                    <dt>Status</dt>
-                    {% if region.is_active %}
-                    <dd>Active</dd>
-                    {% else %}
-                    <dd>Disabled</dd>
-                    {% endif %}
-                </div>
-                <div>
-                    <dt>Premium tier</dt>
-                    {% if region.is_premium %}
-                    <dd>Yes</dd>
-                    {% else %}
-                    <dd>No</dd>
-                    {% endif %}
-                </div>
-                {% if region.ram_threshold_gb.is_some() %}
-                <div>
-                    <dt>RAM threshold</dt>
-                    <dd>{{ region.ram_threshold_gb.as_ref().unwrap() }} GB</dd>
-                </div>
-                {% endif %}
-                {% if region.disk_threshold_gb.is_some() %}
-                <div>
-                    <dt>Disk threshold</dt>
-                    <dd>{{ region.disk_threshold_gb.as_ref().unwrap() }} GB</dd>
-                </div>
-                {% endif %}
-            </dl>
+            <p class="region-description">{{ region.city }}</p>
             <span class="region-cta" aria-hidden="true">{% if active_region_id == region.id %}Viewing products{% else %}View products →{% endif %}</span>
         </a>
         {% endfor %}
@@ -83,10 +49,6 @@
             {% for product in products %}
             <article class="product-card" role="listitem">
                 <div class="product-card-body">
-                    <h2>{{ product.display_name }}</h2>
-                    {% if product.tags != "" %}
-                    <p class="product-plan">{{ product.tags }}</p>
-                    {% endif %}
                     {% if product.price_entries.len() > 0 %}
                     {% for entry in product.price_entries %}
                     {% if loop.index == 1 %}
@@ -94,28 +56,22 @@
                     {% endif %}
                     {% endfor %}
                     {% endif %}
+                    <div class="product-highlights">
+                        {% if product.cpu.is_some() %}
+                        <span><strong>CPU:</strong> {{ product.cpu.as_ref().unwrap() }}</span>
+                        {% endif %}
+                        {% if product.ram.is_some() %}
+                        <span><strong>RAM:</strong> {{ product.ram.as_ref().unwrap() }}</span>
+                        {% endif %}
+                        {% if product.storage.is_some() %}
+                        <span><strong>Storage:</strong> {{ product.storage.as_ref().unwrap() }}</span>
+                        {% endif %}
+                        {% if product.bandwidth.is_some() %}
+                        <span><strong>Bandwidth:</strong> {{ product.bandwidth.as_ref().unwrap() }}</span>
+                        {% endif %}
+                    </div>
                     {% if product.description != "" %}
                     <p>{{ product.description }}</p>
-                    {% endif %}
-                    {% if product.spec_entries.len() > 0 %}
-                    <dl>
-                        {% for entry in product.spec_entries %}
-                        <div>
-                            <dt>{{ entry.term }}</dt>
-                            <dd>{{ entry.value }}</dd>
-                        </div>
-                        {% endfor %}
-                    </dl>
-                    {% endif %}
-                    {% if product.price_entries.len() > 0 %}
-                    <dl class="pricing">
-                        {% for entry in product.price_entries %}
-                        <div>
-                            <dt>{{ entry.term }}</dt>
-                            <dd>{{ entry.value }}</dd>
-                        </div>
-                        {% endfor %}
-                    </dl>
                     {% endif %}
                     {% if product.tags != "" %}
                     <footer>

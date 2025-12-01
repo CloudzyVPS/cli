@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+
+{% block title %}Create · Step 6{% endblock %}
+
+{% block content %}
+<header class="page-header">
+    <p class="breadcrumb"><a href="{{ back_url }}">← Previous step</a></p>
+    <h1>SSH Keys</h1>
+    <p>Step 6 of 7 · Select SSH keys for instance access</p>
+</header>
+
+<form method="get" action="{{ submit_url }}" class="surface" novalidate>
+    <input type="hidden" name="hostnames" value="{{ hostnames_csv }}">
+    <input type="hidden" name="region" value="{{ base_state.region }}">
+    <input type="hidden" name="instance_class" value="{{ base_state.instance_class }}">
+    <input type="hidden" name="plan_type" value="{{ base_state.plan_type }}">
+    <input type="hidden" name="assign_ipv4" value="{% if base_state.assign_ipv4 %}1{% else %}0{% endif %}">
+    <input type="hidden" name="assign_ipv6" value="{% if base_state.assign_ipv6 %}1{% else %}0{% endif %}">
+    <input type="hidden" name="floating_ip_count" value="{{ floating_ip_count }}">
+    <input type="hidden" name="os_id" value="{{ base_state.os_id }}">
+    {% if base_state.plan_type == "fixed" %}
+    <input type="hidden" name="product_id" value="{{ product_id }}">
+    <input type="hidden" name="extra_disk" value="{{ extra_disk }}">
+    <input type="hidden" name="extra_bandwidth" value="{{ extra_bandwidth }}">
+    {% else %}
+    <input type="hidden" name="cpu" value="{{ custom_plan.cpu }}">
+    <input type="hidden" name="ramInGB" value="{{ custom_plan.ram_in_gb }}">
+    <input type="hidden" name="diskInGB" value="{{ custom_plan.disk_in_gb }}">
+    <input type="hidden" name="bandwidthInTB" value="{{ custom_plan.bandwidth_in_tb }}">
+    {% endif %}
+    <fieldset class="form-section">
+        <legend>SSH Keys</legend>
+        {% if ssh_keys.len() > 0 %}
+        <div class="checkbox-group">
+            {% for key in ssh_keys %}
+            <label>
+                <input type="checkbox" name="ssh_key_ids" value="{{ key.id }}" {% if key.selected %}checked{% endif %}>
+                <span>{{ key.name }}</span>
+            </label>
+            {% endfor %}
+        </div>
+        {% else %}
+        <p class="help-text">No SSH keys are registered yet.</p>
+        {% endif %}
+        <p class="help-text">Selection is optional; continue without keys by leaving everything unchecked.</p>
+        <p class="help-text"><a href="{{ manage_keys_url }}">Manage SSH keys</a></p>
+    </fieldset>
+
+    <footer class="form-actions">
+        <button type="submit">Continue</button>
+    </footer>
+</form>
+{% endblock %}

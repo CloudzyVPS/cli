@@ -18,7 +18,7 @@ use rand::rngs::OsRng;
 use rand::RngCore;
 use pbkdf2::pbkdf2_hmac;
 use sha2::Sha256;
-use clap::{Parser, Subcommand};
+use clap::{Parser, Subcommand, CommandFactory};
 use tracing_subscriber::{fmt, EnvFilter};
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
@@ -322,7 +322,7 @@ fn build_app(state: AppState) -> Router {
             "/create/step-7",
             get(create_step_7_get).post(create_step_7_post),
         )
-        .route("/create/step-8", get(create_step_8))
+        .route("/create/result", get(create_step_8))
         .route("/instance/:instance_id", get(instance_detail))
         .route("/instance/:instance_id/poweron", get(instance_poweron))
         .route("/instance/:instance_id/poweroff", get(instance_poweroff))
@@ -352,9 +352,21 @@ async fn start_server(state: AppState, host: &str, port: u16) {
     let addr: SocketAddr = format!("{}:{}", host, port).parse().unwrap();
     let app = build_app(state.clone());
     tracing::info!(%addr, "Starting Zyffiliate Rust server");
-    axum::serve(tokio::net::TcpListener::bind(addr).await.unwrap(), app)
-        .await
-        .unwrap();
+    match tokio::net::TcpListener::bind(addr).await {
+        Ok(listener) => {
+            // Run the server and log any errors (do not panic with unwrap()).
+            if let Err(e) = axum::serve(listener, app).await {
+                tracing::error!(%e, "Server encountered an error while running");
+                eprintln!("Server error: {}", e);
+                process::exit(1);
+            }
+        }
+        Err(e) => {
+            tracing::error!(%e, "Failed to bind to address; is the port already in use?");
+            eprintln!("Failed to bind to {}: {}\nPlease stop any process using this port, or start the server with a different --port value.", addr, e);
+            process::exit(1);
+        }
+    }
 }
 
 // Individual route handlers (stubs). Later these will load data & real templates.
@@ -749,19 +761,17 @@ fn build_query_string(pairs: &[(String, String)]) -> String {
 struct Region {
     id: String,
     name: String,
-    abbr: Option<String>,
-    description: Option<String>,
-    is_active: bool,
-    is_premium: bool,
-    tags: Option<String>,
-    ram_threshold_gb: Option<f64>,
-    disk_threshold_gb: Option<f64>,
-    config: Value,
+    slug: String,
+    country: String,
+    city: String,
+    latitude: Option<f64>,
+    longitude: Option<f64>,
 }
 
 async fn load_regions(state: &AppState) -> (Vec<Region>, HashMap<String, Region>) {
     let payload = api_call(state, "GET", "/v1/regions", None, None).await;
     let mut regions = Vec::new();
+    let mut map = HashMap::new();
     if payload.get("code").and_then(|c| c.as_str()) == Some("OKAY") {
         if let Some(arr) = payload.get("data").and_then(|d| d.as_array()) {
             for r in arr {
@@ -776,59 +786,40 @@ async fn load_regions(state: &AppState) -> (Vec<Region>, HashMap<String, Region>
                         .and_then(|v| v.as_str())
                         .unwrap_or(&id)
                         .to_string();
-                    let is_active = obj
-                        .get("isActive")
-                        .and_then(|v| v.as_bool())
-                        .unwrap_or(false);
-                    let config = obj.get("config").cloned().unwrap_or(Value::Null);
-                    let ram_threshold_gb = config.get("ramThresholdInGB").and_then(|v| v.as_f64());
-                    let disk_threshold_gb =
-                        config.get("diskThresholdInGB").and_then(|v| v.as_f64());
-                    let abbr = obj
-                        .get("abbr")
+                    let slug = obj
+                        .get("slug")
                         .and_then(|v| v.as_str())
-                        .map(|s| s.to_string());
-                    let description = obj
-                        .get("description")
+                        .unwrap_or("")
+                        .to_string();
+                    let country = obj
+                        .get("country")
                         .and_then(|v| v.as_str())
-                        .map(|s| s.to_string());
-                    let is_premium = obj
-                        .get("isPremium")
-                        .and_then(|v| v.as_bool())
-                        .unwrap_or(false);
-                    let tags = obj
-                        .get("tags")
-                        .map(|t| {
-                            if let Some(arr) = t.as_array() {
-                                arr.iter()
-                                    .filter_map(|x| x.as_str())
-                                    .collect::<Vec<_>>()
-                                    .join(", ")
-                            } else {
-                                t.as_str().unwrap_or("").to_string()
-                            }
-                        })
-                        .filter(|s| !s.is_empty());
-                    if is_active {
-                        regions.push(Region {
-                            id,
-                            name,
-                            abbr,
-                            description,
-                            is_active,
-                            is_premium,
-                            tags,
-                            ram_threshold_gb,
-                            disk_threshold_gb,
-                            config,
-                        });
-                    }
+                        .unwrap_or("")
+                        .to_string();
+                    let city = obj
+                        .get("city")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("")
+                        .to_string();
+                    let latitude = obj.get("latitude").and_then(|v| v.as_f64());
+                    let longitude = obj.get("longitude").and_then(|v| v.as_f64());
+
+                    let region = Region {
+                        id: id.clone(),
+                        name,
+                        slug,
+                        country,
+                        city,
+                        latitude,
+                        longitude,
+                    };
+                    regions.push(region.clone());
+                    map.insert(id, region);
                 }
             }
         }
     }
-    let lookup = regions.iter().cloned().map(|r| (r.id.clone(), r)).collect();
-    (regions, lookup)
+    (regions, map)
 }
 
 // ---------- Wizard Step 1 Template ----------
@@ -840,7 +831,7 @@ struct Step1FormData {
 }
 
 #[derive(Template)]
-#[template(path = "create/start.html")]
+#[template(path = "step_1.html")]
 struct Step1Template<'a> {
     current_user: Option<CurrentUser>,
     api_hostname: String,
@@ -904,7 +895,7 @@ struct Step2FormData {
 }
 
 #[derive(Template)]
-#[template(path = "create/hostnames.html")]
+#[template(path = "step_2.html")]
 struct Step2Template<'a> {
     current_user: Option<CurrentUser>,
     api_hostname: String,
@@ -993,112 +984,16 @@ struct ProductView {
     tags: String,
     spec_entries: Vec<ProductEntry>,
     price_entries: Vec<ProductEntry>,
+    cpu: Option<String>,
+    ram: Option<String>,
+    storage: Option<String>,
+    bandwidth: Option<String>,
 }
 
-/// Build a user-friendly display name for a product from its specs.
-/// Uses CPU, RAM, Disk if available; falls back to name/tags/price or "Plan".
-fn build_product_display_name(
-    region: &str,
-    id: &str,
-    name: &str,
-    tags: &str,
-    spec_entries: &[ProductEntry],
-    price_entries: &[ProductEntry],
-) -> String {
-    // Try to extract CPU, RAM, Disk from spec_entries
-    let cpu = spec_entries
-        .iter()
-        .find(|e| {
-            let t = e.term.to_lowercase();
-            t.contains("cpu") || t.contains("vcpu") || t.contains("core")
-        })
-        .map(|e| e.value.clone());
-    let ram = spec_entries
-        .iter()
-        .find(|e| {
-            let t = e.term.to_lowercase();
-            t.contains("ram") || t.contains("memory")
-        })
-        .map(|e| e.value.clone());
-    let disk = spec_entries
-        .iter()
-        .find(|e| {
-            let t = e.term.to_lowercase();
-            t.contains("disk") || t.contains("storage") || t.contains("ssd") || t.contains("nvme")
-        })
-        .map(|e| e.value.clone());
 
-    // Build display name from specs if we have at least CPU or RAM
-    if cpu.is_some() || ram.is_some() {
-        let mut parts: Vec<String> = Vec::new();
-        if let Some(c) = cpu.as_ref() {
-            parts.push(c.clone());
-        }
-        if let Some(r) = ram.as_ref() {
-            parts.push(r.clone());
-        }
-        if let Some(d) = disk.as_ref() {
-            parts.push(d.clone());
-        }
-        if !parts.is_empty() {
-            return parts.join(" · ");
-        }
-    }
-
-    // Fallback: use name if it's different from id and not empty
-    if !name.is_empty() && name != id {
-        return name.to_string();
-    }
-
-    // Fallback: use tags if not empty
-    if !tags.is_empty() {
-        return tags.to_string();
-    }
-
-    // Fallback: use the first price
-    if let Some(entry) = price_entries.first() {
-        if !entry.value.is_empty() {
-            return entry.value.clone();
-        }
-    }
-
-    // Build a fallback that includes region and main resource counts when possible
-    let mut parts: Vec<String> = Vec::new();
-    if !region.trim().is_empty() {
-        parts.push(region.to_string());
-    }
-    if let Some(v) = cpu.as_ref() {
-        // Avoid adding units if the spec value already contains text like "vCPU".
-        if v.to_lowercase().contains("vcpu") || v.to_lowercase().contains("cpu") {
-            parts.push(v.clone());
-        } else {
-            parts.push(format!("{} vCPU", v));
-        }
-    }
-    if let Some(v) = ram.as_ref() {
-        // Keep unit if included already
-        if v.to_lowercase().contains("gb") || v.to_lowercase().contains("ram") {
-            parts.push(v.clone());
-        } else {
-            parts.push(format!("{} RAM", v));
-        }
-    }
-    if let Some(v) = disk.as_ref() {
-        if v.to_lowercase().contains("gb") || v.to_lowercase().contains("disk") || v.to_lowercase().contains("ssd") {
-            parts.push(v.clone());
-        } else {
-            parts.push(format!("{} Disk", v));
-        }
-    }
-    if !parts.is_empty() {
-        return parts.join(" · ");
-    }
-    // Final fallback
-    "Plan".to_string()
-}
 
 #[derive(Template)]
-#[template(path = "create/fixed.html")]
+#[template(path = "step_3_fixed.html")]
 struct Step3FixedTemplate<'a> {
     current_user: Option<CurrentUser>,
     api_hostname: String,
@@ -1127,7 +1022,7 @@ struct CustomPlanFormValues {
 }
 
 #[derive(Template)]
-#[template(path = "create/custom.html")]
+#[template(path = "step_3_custom.html")]
 struct Step3CustomTemplate<'a> {
     current_user: Option<CurrentUser>,
     api_hostname: String,
@@ -1168,78 +1063,7 @@ fn value_to_short_string(value: &Value) -> String {
     }
 }
 
-fn collect_product_entries(value: Option<&Value>) -> Vec<ProductEntry> {
-    match value {
-        Some(Value::Array(items)) => items
-            .iter()
-            .filter_map(|item| {
-                if let Some(obj) = item.as_object() {
-                    let term = obj
-                        .get("term")
-                        .or_else(|| obj.get("label"))
-                        .and_then(|v| v.as_str())
-                        .unwrap_or("Detail")
-                        .to_string();
-                    let val = obj
-                        .get("value")
-                        .or_else(|| obj.get("display"))
-                        .map(value_to_short_string)
-                        .unwrap_or_else(|| value_to_short_string(item));
-                    Some(ProductEntry { term, value: val })
-                } else if !item.is_null() {
-                    Some(ProductEntry {
-                        term: "Detail".into(),
-                        value: value_to_short_string(item),
-                    })
-                } else {
-                    None
-                }
-            })
-            .collect(),
-        Some(Value::Object(map)) => map
-            .iter()
-            .map(|(k, v)| ProductEntry {
-                term: k.clone(),
-                value: value_to_short_string(v),
-            })
-            .collect(),
-        Some(other) if !other.is_null() => vec![ProductEntry {
-            term: "Detail".into(),
-            value: value_to_short_string(other),
-        }],
-        _ => Vec::new(),
-    }
-}
 
-fn tags_from_value(value: Option<&Value>) -> Option<String> {
-    value.and_then(|val| {
-        if let Some(arr) = val.as_array() {
-            let joined = arr
-                .iter()
-                .filter_map(|v| v.as_str())
-                .collect::<Vec<_>>()
-                .join(", ");
-            if joined.trim().is_empty() {
-                None
-            } else {
-                Some(joined)
-            }
-        } else if let Some(s) = val.as_str() {
-            if s.trim().is_empty() {
-                None
-            } else {
-                Some(s.to_string())
-            }
-        } else {
-            let text = value_to_short_string(val);
-            if text.trim().is_empty() {
-                None
-            } else {
-                Some(text)
-            }
-        }
-    })
-}
 
 async fn load_products(state: &AppState, region_id: &str) -> Vec<ProductView> {
     let params = vec![("regionId".into(), region_id.to_string())];
@@ -1251,39 +1075,67 @@ async fn load_products(state: &AppState, region_id: &str) -> Vec<ProductView> {
                 if let Some(obj) = item.as_object() {
                     let id = obj
                         .get("id")
-                        .and_then(|v| v.as_i64())
-                        .map(|n| n.to_string())
-                        .or_else(|| {
-                            obj.get("id")
-                                .and_then(|v| v.as_str())
-                                .map(|s| s.to_string())
-                        })
-                        .unwrap_or_default();
-                    let plan = obj.get("plan").and_then(|v| v.as_object());
-                    let name = plan
-                        .and_then(|p| p.get("name"))
                         .and_then(|v| v.as_str())
-                        .unwrap_or(&id)
+                        .unwrap_or_default()
                         .to_string();
-                    let description = plan
-                        .and_then(|p| p.get("description"))
+
+                    let plan = obj.get("plan").and_then(|v| v.as_object());
+                    let price_items = obj.get("priceItems").and_then(|v| v.as_array());
+
+                    let name = id.clone();
+                    
+                    let display_name = name.clone();
+                    let description = obj
+                        .get("description")
                         .and_then(|v| v.as_str())
                         .unwrap_or("")
                         .to_string();
-                    let tags = tags_from_value(obj.get("tags")).unwrap_or_default();
-                    let spec_entries = collect_product_entries(plan.and_then(|p| p.get("specs")));
-                    let price_entries = collect_product_entries(
-                        plan.and_then(|p| p.get("prices"))
-                            .or_else(|| plan.and_then(|p| p.get("pricing"))),
-                    );
-                    let display_name = build_product_display_name(
-                        &region_id,
-                        &id,
-                        &name,
-                        &tags,
-                        &spec_entries,
-                        &price_entries,
-                    );
+                    let tags = obj
+                        .get("tags")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("")
+                        .to_string(); 
+
+                    let mut spec_entries = Vec::new();
+                    let mut cpu = None;
+                    let mut ram = None;
+                    let mut storage = None;
+                    let mut bandwidth = None;
+
+                    if let Some(p) = plan {
+                        if let Some(spec) = p.get("specification").and_then(|v| v.as_object()) {
+                            if let Some(c) = spec.get("cpu") {
+                                let val = value_to_short_string(c);
+                                cpu = Some(format!("{} vCPU", val));
+                                spec_entries.push(ProductEntry { term: "CPU".into(), value: format!("{} vCPU", val) });
+                            }
+                            if let Some(r) = spec.get("ram") {
+                                let val = value_to_short_string(r);
+                                ram = Some(format!("{} GB", val));
+                                spec_entries.push(ProductEntry { term: "RAM".into(), value: format!("{} GB", val) });
+                            }
+                            if let Some(s) = spec.get("storage") {
+                                let val = value_to_short_string(s);
+                                storage = Some(format!("{} GB", val));
+                                spec_entries.push(ProductEntry { term: "Storage".into(), value: format!("{} GB", val) });
+                            }
+                            if let Some(b) = spec.get("bandwidthInTB") {
+                                let val = value_to_short_string(b);
+                                bandwidth = Some(format!("{} TB", val));
+                                spec_entries.push(ProductEntry { term: "Bandwidth".into(), value: format!("{} TB", val) });
+                            }
+                        }
+                    }
+
+                    let mut price_entries = Vec::new();
+                    if let Some(items) = price_items {
+                        for item in items {
+                            if let Some(monthly) = item.get("monthlyPrice") {
+                                price_entries.push(ProductEntry { term: "Monthly".into(), value: format!("${}", value_to_short_string(monthly)) });
+                            }
+                        }
+                    }
+
                     out.push(ProductView {
                         id,
                         name,
@@ -1292,6 +1144,10 @@ async fn load_products(state: &AppState, region_id: &str) -> Vec<ProductView> {
                         tags,
                         spec_entries,
                         price_entries,
+                        cpu,
+                        ram,
+                        storage,
+                        bandwidth,
                     });
                 }
             }
@@ -1319,8 +1175,9 @@ async fn create_step_3(
     } else {
         absolute_url(&state, &format!("/create/step-2?{}", back_q))
     };
-    let ssh_key_ids_csv = base.ssh_key_ids.iter().map(|id| id.to_string()).collect::<Vec<_>>().join(",");
+    // Build the hostnames CSV and prepare ssh key CSV for the template where needed
     let hostnames_csv = base.hostnames.join(",");
+    let ssh_key_ids_csv = base.ssh_key_ids.iter().map(|id| id.to_string()).collect::<Vec<_>>().join(",");
 
     if base.plan_type == "fixed" {
         let products = load_products(&state, &base.region).await;
@@ -1414,7 +1271,7 @@ struct ExtrasFormValues {
 }
 
 #[derive(Template)]
-#[template(path = "create/extras.html")]
+#[template(path = "step_4.html")]
 struct Step4Template<'a> {
     current_user: Option<CurrentUser>,
     api_hostname: String,
@@ -1510,10 +1367,7 @@ struct OsItem {
     name: String,
     family: String,
     arch: Option<String>,
-    version: Option<String>,
     min_ram: Option<String>,
-    disk: Option<String>,
-    description: Option<String>,
     is_default: bool,
 }
 
@@ -1526,7 +1380,7 @@ struct CustomPlanCarry {
 }
 
 #[derive(Template)]
-#[template(path = "create/os.html")]
+#[template(path = "step_5.html")]
 struct Step5Template<'a> {
     current_user: Option<CurrentUser>,
     api_hostname: String,
@@ -1577,22 +1431,10 @@ async fn load_os_list(state: &AppState) -> Vec<OsItem> {
                         .get("arch")
                         .and_then(|v| v.as_str())
                         .map(|s| s.to_string());
-                    let version = obj
-                        .get("version")
-                        .and_then(|v| v.as_str())
-                        .map(|s| s.to_string());
                     let min_ram = obj
                         .get("minRam")
                         .map(value_to_short_string)
                         .filter(|s| !s.is_empty());
-                    let disk = obj
-                        .get("disk")
-                        .map(value_to_short_string)
-                        .filter(|s| !s.is_empty());
-                    let description = obj
-                        .get("description")
-                        .and_then(|v| v.as_str())
-                        .map(|s| s.to_string());
                     let is_default = obj
                         .get("isDefault")
                         .and_then(|v| v.as_bool())
@@ -1602,10 +1444,7 @@ async fn load_os_list(state: &AppState) -> Vec<OsItem> {
                         name,
                         family,
                         arch,
-                        version,
                         min_ram,
-                        disk,
-                        description,
                         is_default,
                     });
                 }
@@ -1620,10 +1459,8 @@ struct ApplicationView {
     id: String,
     name: String,
     description: String,
-    category: Option<String>,
     price: Option<String>,
     tags: Option<String>,
-    is_featured: bool,
 }
 
 async fn load_applications(state: &AppState) -> Vec<ApplicationView> {
@@ -1632,7 +1469,11 @@ async fn load_applications(state: &AppState) -> Vec<ApplicationView> {
     if payload.get("code").and_then(|c| c.as_str()) == Some("OKAY") {
         if let Some(arr) = payload
             .get("data")
-            .and_then(|d| d.get("applications"))
+            .and_then(|d| d.get("applications")) // Note: API spec says data is array of ApplicationSchema, but code expects data.applications. Checking spec again...
+            // Spec says: "data": {"type": "array", "items": {"$ref": "#/components/schemas/ApplicationSchema"}}
+            // So it should be payload.get("data").and_then(|d| d.as_array())
+            // But let's stick to what was working or try both.
+            .or_else(|| payload.get("data"))
             .and_then(|a| a.as_array())
         {
             for item in arr {
@@ -1657,28 +1498,19 @@ async fn load_applications(state: &AppState) -> Vec<ApplicationView> {
                         .and_then(|v| v.as_str())
                         .unwrap_or("")
                         .to_string();
-                    let category = obj
-                        .get("category")
-                        .and_then(|v| v.as_str())
-                        .map(|s| s.to_string());
                     let price = obj
                         .get("price")
                         .map(value_to_short_string)
                         .or_else(|| obj.get("pricing").map(value_to_short_string))
                         .filter(|s| !s.is_empty());
-                    let tags = tags_from_value(obj.get("tags"));
-                    let is_featured = obj
-                        .get("isFeatured")
-                        .and_then(|v| v.as_bool())
-                        .unwrap_or(false);
+                    let tags = obj.get("tag").and_then(|v| v.as_str()).map(|s| s.to_string());
+                    
                     apps.push(ApplicationView {
                         id,
                         name,
                         description,
-                        category,
                         price,
                         tags,
-                        is_featured,
                     });
                 }
             }
@@ -1795,7 +1627,7 @@ struct SelectableSshKey {
 }
 
 #[derive(Template)]
-#[template(path = "create/ssh_keys.html")]
+#[template(path = "step_6.html")]
 struct Step6Template<'a> {
     current_user: Option<CurrentUser>,
     api_hostname: String,
@@ -1892,7 +1724,7 @@ async fn create_step_6(
         })
         .collect();
     let hostnames_csv = base.hostnames.join(",");
-    let ssh_key_ids_csv = base.ssh_key_ids.iter().map(|id| id.to_string()).collect::<Vec<_>>().join(",");
+    let _ssh_key_ids_csv = base.ssh_key_ids.iter().map(|id| id.to_string()).collect::<Vec<_>>().join(",");
     inject_context(
         &state,
         &jar,
@@ -1932,7 +1764,7 @@ struct PlanReviewState {
 }
 
 #[derive(Template)]
-#[template(path = "create/review.html")]
+#[template(path = "step_7.html")]
 struct Step7Template<'a> {
     current_user: Option<CurrentUser>,
     api_hostname: String,
@@ -1963,7 +1795,7 @@ struct Step7Template<'a> {
 }
 
 #[derive(Template)]
-#[template(path = "create/result.html")]
+#[template(path = "step_8.html")]
 struct Step8Template {
     current_user: Option<CurrentUser>,
     api_hostname: String,
@@ -1975,7 +1807,6 @@ struct Step8Template {
     code: Option<String>,
     detail: Option<String>,
     errors: Vec<String>,
-    raw_json: String,
 }
 
 async fn create_step_7_core(
@@ -2124,9 +1955,9 @@ async fn create_step_7_core(
             }
             let code = resp.get("code").and_then(|c| c.as_str()).map(|s| s.to_string());
             let detail = resp.get("detail").and_then(|d| d.as_str()).map(|s| s.to_string());
-            let raw_json = serde_json::to_string_pretty(&resp).unwrap_or_else(|_| "{}".into());
+            // Do not expose raw JSON to rendered templates - keep UI friendly.
             let TemplateGlobals { current_user, api_hostname, base_url, flash_messages, has_flash_messages } = build_template_globals(&state, &jar);
-            return inject_context(
+                return inject_context(
                 &state,
                 &jar,
                 Step8Template {
@@ -2140,7 +1971,6 @@ async fn create_step_7_core(
                     code,
                     detail,
                     errors,
-                    raw_json,
                 }
                 .render()
                 .unwrap(),
@@ -2222,16 +2052,7 @@ async fn create_step_7_core(
     let selected_os_label = os_list
         .iter()
         .find(|os| os.id == base.os_id)
-        .map(|os| {
-            let mut label = os.name.clone();
-            if let Some(version) = &os.version {
-                if !version.is_empty() {
-                    label.push(' ');
-                    label.push_str(version);
-                }
-            }
-            label
-        })
+        .map(|os| os.name.clone())
         .unwrap_or_else(|| base.os_id.clone());
     let selected_key_ids: Vec<String> = base.ssh_key_ids.iter().map(|id| id.to_string()).collect();
     let ssh_keys_display = if selected_key_ids.is_empty() {
@@ -2346,7 +2167,7 @@ async fn create_step_8(
     let TemplateGlobals { current_user, api_hostname, base_url, flash_messages, has_flash_messages } = build_template_globals(&state, &jar);
     let code = q.get("code").cloned();
     let detail = q.get("detail").cloned();
-    let raw_json = q.get("raw").cloned().unwrap_or_default();
+    // Raw JSON is no longer rendered in the UI; any raw response can be logged by server
     let errors = q.get("errors").map(|s| s.split('|').map(|s| s.to_string()).collect()).unwrap_or_else(Vec::new);
     inject_context(&state, &jar, Step8Template {
         current_user,
@@ -2359,7 +2180,7 @@ async fn create_step_8(
         code,
         detail,
         errors,
-        raw_json,
+        
     }.render().unwrap())
 }
 
@@ -3709,12 +3530,13 @@ async fn main() {
     // Note: we avoid constructing a default `state` here; commands build the per-command state
     // using `build_state_from_env` so we can pass a custom `--env-file` when executing commands.
 
-    // Dispatch CLI commands
-    match cli.command.unwrap_or(Commands::Serve {
-        host: String::from("0.0.0.0"),
-        port: 5000,
-        env_file: None,
-    }) {
+    // Dispatch CLI commands. If no command provided, print help and exit.
+    if cli.command.is_none() {
+        Cli::command().print_help().unwrap_or(());
+        println!();
+        return;
+    }
+    match cli.command.unwrap() {
         Commands::Serve {
             host,
             port,

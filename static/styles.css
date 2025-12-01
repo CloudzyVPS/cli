@@ -1357,6 +1357,18 @@ form > footer {
   margin: 0;
 }
 
+.product-highlights {
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 0.5rem;
+  font-size: 0.9em;
+  color: var(--text-secondary);
+}
+
+.product-highlights span strong {
+  color: var(--text-primary);
+}
+
 .metric {
   display: inline-flex;
   align-items: center;

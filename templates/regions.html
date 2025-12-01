@@ -17,49 +17,10 @@
         <a class="region-card" role="listitem" href="{{ base_url }}/products?region_id={{ region.id }}">
             <div class="region-heading">
                 <h3>{{ region.name }}</h3>
-                    {% if region.abbr.is_some() %}
-                    <span class="region-chip">{{ region.abbr.as_ref().unwrap() }}</span>
-                    {% endif %}
+                <span class="region-chip">{{ region.country }}</span>
             </div>
             <p class="region-subtitle">Region ID {{ region.id }}</p>
-            {% if region.description.is_some() %}
-            <p class="region-description">{{ region.description.as_ref().unwrap() }}</p>
-            {% endif %}
-            <dl class="region-metrics">
-                <div>
-                    <dt>Status</dt>
-                    {% if region.is_active %}
-                    <dd>Active</dd>
-                    {% else %}
-                    <dd>Disabled</dd>
-                    {% endif %}
-                </div>
-                <div>
-                    <dt>Premium tier</dt>
-                    {% if region.is_premium %}
-                    <dd>Yes</dd>
-                    {% else %}
-                    <dd>No</dd>
-                    {% endif %}
-                </div>
-                {% if region.ram_threshold_gb.is_some() %}
-                <div>
-                    <dt>RAM threshold</dt>
-                    <dd>{{ region.ram_threshold_gb.as_ref().unwrap() }} GB</dd>
-                </div>
-                {% endif %}
-                {% if region.disk_threshold_gb.is_some() %}
-                <div>
-                    <dt>Disk threshold</dt>
-                    <dd>{{ region.disk_threshold_gb.as_ref().unwrap() }} GB</dd>
-                </div>
-                {% endif %}
-            </dl>
-                {% if region.tags.is_some() %}
-                <footer class="region-footer">
-                    <p>{{ region.tags.as_ref().unwrap() }}</p>
-                </footer>
-                {% endif %}
+            <p class="region-description">{{ region.city }}</p>
             <span class="region-cta" aria-hidden="true">Browse products →</span>
         </a>
         {% endfor %}

@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+
+{% block title %}Create · Step 3{% endblock %}
+
+{% block content %}
+<header class="page-header">
+    <p class="breadcrumb"><a href="{{ back_url }}">← Previous step</a></p>
+    <h1>Select a product</h1>
+    <p>Step 3 of 7 · Choose a plan for {{ region_name }}</p>
+</header>
+
+{% if has_products %}
+<form method="get" action="{{ submit_url }}" class="surface" novalidate>
+    <input type="hidden" name="hostnames" value="{{ hostnames_csv }}">
+    <input type="hidden" name="region" value="{{ base_state.region }}">
+    <input type="hidden" name="instance_class" value="{{ base_state.instance_class }}">
+    <input type="hidden" name="plan_type" value="{{ base_state.plan_type }}">
+    <input type="hidden" name="assign_ipv4" value="{% if base_state.assign_ipv4 %}1{% else %}0{% endif %}">
+    <input type="hidden" name="assign_ipv6" value="{% if base_state.assign_ipv6 %}1{% else %}0{% endif %}">
+    <input type="hidden" name="floating_ip_count" value="{{ floating_ip_count }}">
+    <input type="hidden" name="ssh_key_ids" value="{{ ssh_key_ids_csv }}">
+    <fieldset>
+        <legend>Plans for {{ region_name }}</legend>
+        <div class="product-grid" role="list">
+            {% for product in products %}
+            <label class="product-card" role="listitem" {% if selected_product_id == product.id %}aria-current="true"{% endif %}>
+                <input type="radio" name="product_id" value="{{ product.id }}" {% if selected_product_id == product.id %}checked{% endif %}>
+                <div class="product-card-body">
+                    {% if product.price_entries.len() > 0 %}
+                    {% for entry in product.price_entries %}
+                        {% if loop.index == 1 %}
+                        <div class="product-price">{{ entry.value }}</div>
+                        {% endif %}
+                    {% endfor %}
+                    {% endif %}
+                    <div class="product-highlights">
+                        {% if product.cpu.is_some() %}
+                        <span><strong>CPU:</strong> {{ product.cpu.as_ref().unwrap() }}</span>
+                        {% endif %}
+                        {% if product.ram.is_some() %}
+                        <span><strong>RAM:</strong> {{ product.ram.as_ref().unwrap() }}</span>
+                        {% endif %}
+                        {% if product.storage.is_some() %}
+                        <span><strong>Storage:</strong> {{ product.storage.as_ref().unwrap() }}</span>
+                        {% endif %}
+                        {% if product.bandwidth.is_some() %}
+                        <span><strong>Bandwidth:</strong> {{ product.bandwidth.as_ref().unwrap() }}</span>
+                        {% endif %}
+                    </div>
+                    {% if product.description != "" %}
+                    <p>{{ product.description }}</p>
+                    {% endif %}
+                    {% if product.tags != "" %}
+                    <footer>
+                        <p>{{ product.tags }}</p>
+                    </footer>
+                    {% endif %}
+                </div>
+            </label>
+            {% endfor %}
+        </div>
+    </fieldset>
+
+    <footer class="form-actions">
+        <button type="submit">Continue</button>
+    </footer>
+</form>
+{% else %}
+<section class="surface">
+    <p>No products were returned for the selected region. <a href="{{ restart_url }}">Go back</a> to pick another region.</p>
+</section>
+{% endif %}
+{% endblock %}

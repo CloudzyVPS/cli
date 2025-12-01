@@ -26,22 +26,7 @@
                     <dt>Min RAM</dt>
                     <dd>{% if os.min_ram.is_some() %}{{ os.min_ram.as_ref().unwrap() }}{% else %}n/a{% endif %}</dd>
                 </div>
-                {% if os.version.is_some() %}
-                <div>
-                    <dt>Version</dt>
-                    <dd>{{ os.version.as_ref().unwrap() }}</dd>
-                </div>
-                {% endif %}
-                {% if os.disk.is_some() %}
-                <div>
-                    <dt>Disk</dt>
-                    <dd>{{ os.disk.as_ref().unwrap() }}</dd>
-                </div>
-                {% endif %}
             </dl>
-            {% if os.description.is_some() %}
-            <p class="os-description">{{ os.description.as_ref().unwrap() }}</p>
-            {% endif %}
         </article>
         {% endfor %}
     </div>
