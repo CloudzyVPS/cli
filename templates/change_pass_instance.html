@@ -38,6 +38,16 @@
         <footer class="form-actions">
             <a class="button-secondary" href="{{ base_url }}/instance/{{ instance.id }}">Cancel</a>
             <button type="submit">Change password</button>
+            </footer>
+        </form>
+
+        {% if new_password %}
+        <div class="success-banner" style="margin-top:2em">
+            <h2>New Password</h2>
+            <p><code>{{ new_password }}</code></p>
+            <p>Please copy and store this password securely. It will not be shown again.</p>
+        </div>
+        {% endif %}
         </footer>
     </form>
 </section>

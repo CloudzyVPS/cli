@@ -324,6 +324,7 @@ fn build_app(state: AppState) -> Router {
         )
         .route("/create/result", get(create_step_8))
         .route("/instance/:instance_id", get(instance_detail))
+        .route("/instance/:instance_id/delete", post(instance_delete))
         .route("/instance/:instance_id/poweron", get(instance_poweron))
         .route("/instance/:instance_id/poweroff", get(instance_poweroff))
         .route("/instance/:instance_id/reset", get(instance_reset))
@@ -2479,6 +2480,7 @@ struct InstancesTemplate<'a> {
 struct InstanceView {
     id: String,
     hostname: String,
+    status: String,
 }
 
 async fn load_instances_for_user(state: &AppState, username: &str) -> Vec<InstanceView> {
@@ -2506,7 +2508,12 @@ async fn load_instances_for_user(state: &AppState, username: &str) -> Vec<Instan
                     .and_then(|v| v.as_str())
                     .map(|s| s.to_string())
                     .unwrap_or_else(|| "(no hostname)".into());
-                list.push(InstanceView { id, hostname });
+                let status = item
+                    .get("status")
+                    .and_then(|v| v.as_str())
+                    .map(|s| s.to_string())
+                    .unwrap_or_else(|| "?".into());
+                list.push(InstanceView { id, hostname, status });
             }
         }
     }
@@ -2612,7 +2619,12 @@ async fn access_get(State(state): State<AppState>, jar: CookieJar) -> impl IntoR
                     .and_then(|v| v.as_str())
                     .map(|s| s.to_string())
                     .unwrap_or_else(|| "(no hostname)".into());
-                list.push(InstanceView { id, hostname });
+                let status = item
+                    .get("status")
+                    .and_then(|v| v.as_str())
+                    .map(|s| s.to_string())
+                    .unwrap_or_else(|| "?".into());
+                list.push(InstanceView { id, hostname, status });
             }
         }
     }
@@ -2642,7 +2654,13 @@ async fn access_get(State(state): State<AppState>, jar: CookieJar) -> impl IntoR
         })
         .collect();
     admins.sort_by(|a, b| a.username.cmp(&b.username));
-    let TemplateGlobals { current_user, api_hostname, base_url, flash_messages, has_flash_messages } = build_template_globals(&state, &jar);
+    let TemplateGlobals {
+        current_user,
+        api_hostname,
+        base_url,
+        flash_messages,
+        has_flash_messages,
+    } = build_template_globals(&state, &jar);
     inject_context(
         &state,
         &jar,
@@ -3230,6 +3248,37 @@ async fn instance_reset(
     Redirect::to(&format!("/instance/{}", instance_id)).into_response()
 }
 
+async fn instance_delete(
+    State(state): State<AppState>,
+    jar: CookieJar,
+    axum::extract::Path(instance_id): axum::extract::Path<String>,
+) -> impl IntoResponse {
+    if !enforce_instance_access(&state, &jar, &instance_id).await {
+        return Redirect::to("/instances").into_response();
+    }
+    let endpoint = format!("/v1/instances/{}", instance_id);
+    let payload = api_call(&state, "DELETE", &endpoint, None, None).await;
+    // Optionally set flash message for success or failure
+    if let Some(sid) = jar.get("session_id") {
+        let mut flashes = state.flash_store.lock().unwrap();
+        let entry = flashes.entry(sid.value().to_string()).or_default();
+        if payload.get("code").and_then(|c| c.as_str()) == Some("OKAY") {
+            entry.push("Instance deleted successfully.".into());
+            return Redirect::to("/instances").into_response();
+        } else {
+            let detail = payload.get("detail").and_then(|d| d.as_str()).unwrap_or("Unknown error");
+            entry.push(format!("Delete failed: {}", detail));
+            return Redirect::to(&format!("/instance/{}", instance_id)).into_response();
+        }
+    }
+    // If no session-id in cookie, still redirect based on result
+    if payload.get("code").and_then(|c| c.as_str()) == Some("OKAY") {
+        Redirect::to("/instances").into_response()
+    } else {
+        Redirect::to(&format!("/instance/{}", instance_id)).into_response()
+    }
+}
+
 async fn instance_change_pass(
     State(state): State<AppState>,
     jar: CookieJar,
@@ -3468,7 +3517,7 @@ async fn main() {
                 }
             }
         } else {
-            // Create default owner user
+            // Create default owner
             // Generate werkzeug compatible hash for 'owner123' using pbkdf2 parameters
             let salt = {
                 let mut b = [0u8; 12];

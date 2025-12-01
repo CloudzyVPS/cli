@@ -37,22 +37,14 @@
                 <dt>Region</dt>
                 <dd>{{ instance.region }}</dd>
             </div>
-            <div>
-                <dt>IP Address</dt>
-                <dd>{{ instance.main_ip or '—' }}</dd>
-            </div>
-            <div>
-                <dt>Status</dt>
-                <dd>{{ instance.status }}</dd>
-            </div>
-            <div>
-                <dt>Resources</dt>
-                <dd>{{ instance.vcpu_count }} vCPU · {{ instance.ram }} MB RAM · {{ instance.disk }} GB Disk</dd>
-            </div>
-        </dl>
-    </fieldset>
+            </dl>
+        </fieldset>
+    </section>
 
-    <form method="post">
+    <form method="post" action="{{ base_url }}/instance/{{ instance.id }}/delete" style="margin-top:2em">
+        <button type="submit" class="danger">Confirm Delete</button>
+        <a class="button-secondary" href="{{ base_url }}/instance/{{ instance.id }}">Cancel</a>
+    </form>
         <footer class="form-actions">
             <a class="button-secondary" href="{{ base_url }}/instance/{{ instance.id }}">Cancel</a>
             <button type="submit" class="button-danger">Permanently delete instance</button>
