@@ -1,4 +1,4 @@
-# Zyffiliate
+# Zy — control and manage your Cloudzy services right from home.
 
 Generate binary (production):
 
