@@ -175,11 +175,43 @@ jobs:
       - name: Display structure of downloaded files
         run: ls -R artifacts
 
-      # Make packaging script executable and run it
-      - name: Create release packages
+      # Prepare binaries for release
+      - name: Prepare release binaries
         run: |
-          chmod +x scripts/package.sh
-          ./scripts/package.sh
+          # Get version from git tag or use a default
+          VERSION="${GITHUB_REF_NAME#v}"
+          if [[ -z "${VERSION}" || "${VERSION}" == "${GITHUB_REF_NAME}" ]]; then
+              VERSION="$(git describe --tags --always 2>/dev/null || echo 'dev')"
+              VERSION="${VERSION#v}"
+          fi
+          
+          echo "Preparing binaries for version: ${VERSION}"
+          
+          # Create dist directory
+          mkdir -p dist
+          
+          # Copy and rename binaries for each target
+          for artifact_dir in artifacts/binary-*; do
+            if [[ -d "$artifact_dir" ]]; then
+              target=$(basename "$artifact_dir" | sed 's/binary-//')
+              echo "Processing target: $target"
+              
+              if [[ -f "$artifact_dir/zy.exe" ]]; then
+                # Windows binary
+                cp "$artifact_dir/zy.exe" "dist/zy-${VERSION}-${target}.exe"
+                echo "Created zy-${VERSION}-${target}.exe"
+              elif [[ -f "$artifact_dir/zy" ]]; then
+                # Linux/macOS binary
+                cp "$artifact_dir/zy" "dist/zy-${VERSION}-${target}"
+                chmod +x "dist/zy-${VERSION}-${target}"
+                echo "Created zy-${VERSION}-${target}"
+              fi
+            fi
+          done
+          
+          echo ""
+          echo "Binaries prepared:"
+          ls -lh dist/
 
       # Generate combined SHA256 checksums file
       - name: Generate checksums
