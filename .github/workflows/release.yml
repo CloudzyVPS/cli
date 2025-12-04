@@ -185,7 +185,7 @@ jobs:
       - name: Generate checksums
         run: |
           cd dist
-          sha256sum zy-*-*.tar.gz zy-*-*.zip > SHA256SUMS.txt
+          sha256sum zy-* > SHA256SUMS.txt
           cat SHA256SUMS.txt
 
       # Get version from tag or use a default
@@ -214,8 +214,7 @@ jobs:
           prerelease: ${{ contains(github.ref, 'alpha') || contains(github.ref, 'beta') || contains(github.ref, 'rc') }}
           generate_release_notes: true
           files: |
-            dist/*.tar.gz
-            dist/*.zip
+            dist/zy-*
             dist/SHA256SUMS.txt
 
       # Upload artifacts to existing release (if triggered by release event)
@@ -226,8 +225,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           files: |
-            dist/*.tar.gz
-            dist/*.zip
+            dist/zy-*
             dist/SHA256SUMS.txt
 
       # For workflow_dispatch, just upload as workflow artifacts
@@ -237,6 +235,5 @@ jobs:
         with:
           name: release-packages
           path: |
-            dist/*.tar.gz
-            dist/*.zip
+            dist/zy-*
             dist/SHA256SUMS.txt

@@ -10,13 +10,13 @@ Download the latest release from the [Releases page](https://github.com/CloudzyV
 
 Available platforms:
 - **Linux**: x86_64 and aarch64 (GNU libc)
-  - `zy-{version}-x86_64-unknown-linux-gnu.tar.gz` - Linux x86_64
-  - `zy-{version}-aarch64-unknown-linux-gnu.tar.gz` - Linux ARM64
+  - `zy-{version}-x86_64-unknown-linux-gnu` - Linux x86_64
+  - `zy-{version}-aarch64-unknown-linux-gnu` - Linux ARM64
 - **macOS**: Intel and Apple Silicon
-  - `zy-{version}-x86_64-apple-darwin.tar.gz` - macOS Intel
-  - `zy-{version}-aarch64-apple-darwin.tar.gz` - macOS Apple Silicon
+  - `zy-{version}-x86_64-apple-darwin` - macOS Intel
+  - `zy-{version}-aarch64-apple-darwin` - macOS Apple Silicon
 - **Windows**: x86_64
-  - `zy-{version}-x86_64-pc-windows-msvc.zip` - Windows 64-bit
+  - `zy-{version}-x86_64-pc-windows-msvc.exe` - Windows 64-bit
 
 ### Platform Notes
 
@@ -38,7 +38,7 @@ Each release includes a `SHA256SUMS.txt` file containing checksums for all relea
 sha256sum -c SHA256SUMS.txt --ignore-missing
 
 # Or verify a specific file
-sha256sum zy-{version}-{target}.tar.gz
+sha256sum zy-{version}-{target}
 # Compare with the checksum in SHA256SUMS.txt
 ```
 
@@ -46,11 +46,14 @@ sha256sum zy-{version}-{target}.tar.gz
 
 **Linux/macOS:**
 ```bash
-# Download and extract
-tar -xzf zy-{version}-{target}.tar.gz
+# Download the binary
+# wget or curl: curl -LO https://github.com/CloudzyVPS/cli/releases/download/v{version}/zy-{version}-{target}
+
+# Make it executable
+chmod +x zy-{version}-{target}
 
 # Move to a location in your PATH
-sudo mv zy /usr/local/bin/
+sudo mv zy-{version}-{target} /usr/local/bin/zy
 
 # Verify installation
 zy --help
@@ -58,7 +61,7 @@ zy --help
 
 **Windows:**
 ```powershell
-# Extract the zip file
+# Download the .exe file
 # Add the directory containing zy.exe to your PATH
 # Or move zy.exe to a directory already in your PATH
 
