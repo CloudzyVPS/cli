@@ -3959,7 +3959,26 @@ async fn bulk_subscription_refund_get(
 }
 
 #[derive(Parser)]
-#[command(author, version, about = "Zyffiliate command-line tool")]
+#[command(
+     name = "zyffiliate",
+     author,
+     version,
+     about = "Zyffiliate command-line tool",
+     long_about = r#"Zyffiliate CLI — control and manage the Zyffiliate server and its resources.
+
+This tool surfaces a small set of commands to run the server, validate configuration, manage local users and manage instances through the API. Use the `--env-file` option or environment variables to provide API credentials.
+
+Examples:
+  1) Build & run (dev):
+      cargo run -- serve --host 127.0.0.1 --port 5000
+  2) Build a release binary:
+      cargo build --release
+    3) Manage instances:
+            zyffiliate instances list
+            zyffiliate instances show 12345
+"#, 
+     after_help = "Use `zyffiliate <subcommand> --help` to get subcommand specific options and usage examples."
+)]
 struct Cli {
     #[command(subcommand)]
     command: Option<Commands>,
@@ -3980,33 +3999,85 @@ enum Commands {
         env_file: Option<String>,
     },
     /// Validate configuration (env vars / API credentials)
+    #[command(about = "Validate configuration and ensure API connectivity.", long_about = "Validate environment variables required for the Zyffiliate server, and optionally validate the configured API token by attempting to fetch regions from the remote API.")]
     CheckConfig { env_file: Option<String> },
     /// Manage local users (users.json)
     Users {
         #[command(subcommand)]
         sub: UserCommands,
     },
+    /// Manage instances via the configured API
+    #[command(about = "Manage compute instances via the API (list, show, power, delete, etc.)", long_about = "These commands perform the same actions that the web UI's instance actions perform; they make API requests using the current API configuration and token. Be careful with commands that mutate state (delete, reset). Use `--help` on a subcommand for detailed examples.")]
+    Instances {
+        #[command(subcommand)]
+        sub: InstanceCommands,
+    },
 }
 
 #[derive(Subcommand)]
 enum UserCommands {
+    #[command(about = "List current users", long_about = "Enumerate users stored in users.json (username, role, assigned_instances).")]
     List,
+    #[command(about = "Add a new user", long_about = "Add a user with a role (owner|admin). The password will be hashed and saved to users.json.")]
     Add {
         username: String,
         password: String,
         role: String,
     },
     /// Add a new owner user (use --force to overwrite existing owner user(s))
+    #[command(about = "Add an owner user", long_about = "Create a new owner user. Use --force to overwrite an existing owner user or create another owner.")]
     AddOwner {
         username: String,
         password: String,
         #[arg(long, default_value_t = false)]
         force: bool,
     },
+    #[command(about = "Reset a user's password", long_about = "Set a new password for an existing user; password will be hashed.")]
     ResetPassword {
         username: String,
         password: String,
     },
+}
+
+#[derive(Subcommand)]
+enum InstanceCommands {
+    /// List instances (optional --username to filter)
+    #[command(about = "List instances", long_about = "List instances the configured API user may access. Provide `--username` to filter instances assigned to a local user.")]
+    List {
+        /// Optional username to filter instances by assigned user (use empty to list all)
+        #[arg(long)]
+        username: Option<String>,
+    },
+    /// Show instance details
+    #[command(about = "Show instance details", long_about = "Show the raw JSON payload returned by the API for an instance ID.")]
+    Show { instance_id: String },
+    /// Power on an instance
+    #[command(about = "Power on an instance", long_about = "Request an asynchronous power-on operation for an instance; the API may perform the action asynchronously.")]
+    PowerOn { instance_id: String },
+    /// Power off an instance
+    #[command(about = "Power off an instance", long_about = "Request an asynchronous power-off operation for an instance; follow up with `show` to confirm state.")]
+    PowerOff { instance_id: String },
+    /// Reset an instance
+    #[command(about = "Reset an instance", long_about = "Request an immediate reset/reboot of the instance. This is destructive to running state but usually preserves disks.")]
+    Reset { instance_id: String },
+    /// Delete an instance
+    #[command(about = "Delete an instance", long_about = "Permanently delete an instance. Use with care and confirm `id` and `username` if necessary.")]
+    Delete { instance_id: String },
+    /// Change the instance password (prints the generated password)
+    #[command(about = "Change root/console password", long_about = "Generate and set a new root/console password for an instance and print the generated value (if API returns it).")]
+    ChangePass { instance_id: String },
+    /// Change the instance OS
+    #[command(about = "Change the instance OS", long_about = "Trigger an OS distribution and image change. Provide a valid `os_id` from the remote API.")]
+    ChangeOs { instance_id: String, os_id: String },
+    /// Resize the instance (type: FIXED|CUSTOM — for CUSTOM specify cpu,ram,disk etc.)
+    #[command(about = "Resize an instance", long_about = "Change a plan; specify `--type FIXED` with `--product-id` or `--type CUSTOM` with specific resource values (cpu, ram-in-gb, disk-in-gb, bandwidth-in-tb).")]
+    Resize { instance_id: String, #[arg(long)] r#type: String, #[arg(long)] product_id: Option<String>, #[arg(long)] cpu: Option<i64>, #[arg(long)] ram_in_gb: Option<i64>, #[arg(long)] disk_in_gb: Option<i64>, #[arg(long)] bandwidth_in_tb: Option<i64> },
+    /// Add traffic amount (e.g., 50) to an instance
+    #[command(about = "Add traffic to an instance", long_about = "Add additional traffic capacity to an instance using a numeric `--amount` (e.g., 50).")]
+    AddTraffic { instance_id: String, amount: f64 },
+    /// Trigger subscription refund (idempotent API query)
+    #[command(about = "Request a subscription refund", long_about = "Trigger a subscription refund for an instance; results are returned as the API response and may contain success/failure codes.")]
+    SubscriptionRefund { instance_id: String },
 }
 
 #[tokio::main]
@@ -4232,6 +4303,96 @@ async fn main() {
                         process::exit(1);
                     }
                     println!("Owner '{}' created", uname);
+                    return;
+                }
+            }
+        }
+        Commands::Instances { sub } => {
+            let state = build_state_from_env(None);
+            match sub {
+                InstanceCommands::List { username } => {
+                    let uname = username.unwrap_or_default();
+                    let list = load_instances_for_user(&state, &uname).await;
+                    println!("id\thostname\tstatus");
+                    for i in list {
+                        println!("{}\t{}\t{}", i.id, i.hostname, i.status);
+                    }
+                    return;
+                }
+                InstanceCommands::Show { instance_id } => {
+                    let endpoint = format!("/v1/instances/{}", instance_id);
+                    let payload = api_call(&state, "GET", &endpoint, None, None).await;
+                    println!("{}", serde_json::to_string_pretty(&payload).unwrap_or_else(|_| "<non-json>".into()));
+                    return;
+                }
+                InstanceCommands::PowerOn { instance_id } => {
+                    let payload = simple_instance_action(&state, "poweron", &instance_id).await;
+                    println!("{}", serde_json::to_string_pretty(&payload).unwrap_or_else(|_| "<non-json>".into()));
+                    return;
+                }
+                InstanceCommands::PowerOff { instance_id } => {
+                    let payload = simple_instance_action(&state, "poweroff", &instance_id).await;
+                    println!("{}", serde_json::to_string_pretty(&payload).unwrap_or_else(|_| "<non-json>".into()));
+                    return;
+                }
+                InstanceCommands::Reset { instance_id } => {
+                    let payload = simple_instance_action(&state, "reset", &instance_id).await;
+                    println!("{}", serde_json::to_string_pretty(&payload).unwrap_or_else(|_| "<non-json>".into()));
+                    return;
+                }
+                InstanceCommands::Delete { instance_id } => {
+                    let endpoint = format!("/v1/instances/{}", instance_id);
+                    let payload = api_call(&state, "DELETE", &endpoint, None, None).await;
+                    println!("{}", serde_json::to_string_pretty(&payload).unwrap_or_else(|_| "<non-json>".into()));
+                    return;
+                }
+                InstanceCommands::ChangePass { instance_id } => {
+                    let endpoint = format!("/v1/instances/{}/change-pass", instance_id);
+                    let payload = api_call(&state, "POST", &endpoint, None, None).await;
+                    if let Some(pass) = payload.get("data").and_then(|d| d.get("password")).and_then(|v| v.as_str()) {
+                        println!("New password for {}: {}", instance_id, pass);
+                    } else {
+                        println!("{}", serde_json::to_string_pretty(&payload).unwrap_or_else(|_| "<non-json>".into()));
+                    }
+                    return;
+                }
+                InstanceCommands::ChangeOs { instance_id, os_id } => {
+                    let endpoint = format!("/v1/instances/{}/change-os", instance_id);
+                    let payload = serde_json::json!({"osId": os_id});
+                    let resp = api_call(&state, "POST", &endpoint, Some(payload), None).await;
+                    println!("{}", serde_json::to_string_pretty(&resp).unwrap_or_else(|_| "<non-json>".into()));
+                    return;
+                }
+                InstanceCommands::Resize { instance_id, r#type, product_id, cpu, ram_in_gb, disk_in_gb, bandwidth_in_tb } => {
+                    let endpoint = format!("/v1/instances/{}/resize", instance_id);
+                    let mut payload = serde_json::json!({"type": r#type});
+                    if payload.get("type").and_then(|t| t.as_str()).unwrap_or("") == "FIXED" {
+                        if let Some(pid) = product_id {
+                            payload["productId"] = serde_json::Value::from(pid);
+                        }
+                    } else {
+                        let mut obj = serde_json::Map::new();
+                        if let Some(cpu) = cpu { obj.insert("cpu".into(), serde_json::Value::from(cpu)); }
+                        if let Some(ram) = ram_in_gb { obj.insert("ramInGB".into(), serde_json::Value::from(ram)); }
+                        if let Some(disk) = disk_in_gb { obj.insert("diskInGB".into(), serde_json::Value::from(disk)); }
+                        if let Some(bw) = bandwidth_in_tb { obj.insert("bandwidthInTB".into(), serde_json::Value::from(bw)); }
+                        if !obj.is_empty() { payload["resource"] = serde_json::Value::Object(obj); }
+                    }
+                    let resp = api_call(&state, "POST", &endpoint, Some(payload), None).await;
+                    println!("{}", serde_json::to_string_pretty(&resp).unwrap_or_else(|_| "<non-json>".into()));
+                    return;
+                }
+                InstanceCommands::AddTraffic { instance_id, amount } => {
+                    let endpoint = format!("/v1/instances/{}/add-traffic", instance_id);
+                    let payload = serde_json::json!({"amount": amount});
+                    let resp = api_call(&state, "POST", &endpoint, Some(payload), None).await;
+                    println!("{}", serde_json::to_string_pretty(&resp).unwrap_or_else(|_| "<non-json>".into()));
+                    return;
+                }
+                InstanceCommands::SubscriptionRefund { instance_id } => {
+                    let endpoint = format!("/v1/instances/{}/subscription-refund", instance_id);
+                    let resp = api_call(&state, "GET", &endpoint, None, None).await;
+                    println!("{}", serde_json::to_string_pretty(&resp).unwrap_or_else(|_| "<non-json>".into()));
                     return;
                 }
             }
