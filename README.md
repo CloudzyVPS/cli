@@ -20,24 +20,24 @@ Get the latest pre-built binary for your platform from the [Releases page](https
 **Linux/macOS:**
 ```bash
 # Download the appropriate binary for your platform from the Releases page
-# For example (replace VERSION and TARGET with your platform):
-# Linux x86_64:   zy-VERSION-x86_64-unknown-linux-gnu
-# Linux ARM64:    zy-VERSION-aarch64-unknown-linux-gnu
-# macOS Intel:    zy-VERSION-x86_64-apple-darwin
-# macOS Apple:    zy-VERSION-aarch64-apple-darwin
+# For example (replace with your actual version and platform):
+# Linux x86_64:   zy-1.0.0-x86_64-unknown-linux-gnu
+# Linux ARM64:    zy-1.0.0-aarch64-unknown-linux-gnu
+# macOS Intel:    zy-1.0.0-x86_64-apple-darwin
+# macOS Apple Silicon: zy-1.0.0-aarch64-apple-darwin
 
-# Make it executable (use the actual filename)
-chmod +x zy-VERSION-TARGET
+# Make it executable (use the actual filename you downloaded)
+chmod +x zy-1.0.0-x86_64-unknown-linux-gnu
 
 # Move to a location in your PATH
-sudo mv zy-VERSION-TARGET /usr/local/bin/zy
+sudo mv zy-1.0.0-x86_64-unknown-linux-gnu /usr/local/bin/zy
 
 # Verify
 zy --help
 ```
 
 **Windows:**
-1. Download the `zy-VERSION-x86_64-pc-windows-msvc.exe` file from the [Releases page](https://github.com/CloudzyVPS/cli/releases)
+1. Download the `zy-1.0.0-x86_64-pc-windows-msvc.exe` file from the [Releases page](https://github.com/CloudzyVPS/cli/releases) (use your actual version)
 2. Rename it to `zy.exe`
 3. Move it to a directory in your PATH:
    ```powershell
