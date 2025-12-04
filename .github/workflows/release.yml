@@ -29,14 +29,14 @@
 # The workflow:
 # 1. Builds release binaries for all target platforms
 # 2. Runs tests to ensure quality
-# 3. Packages artifacts with README.md and LICENSE (if present)
-# 4. Generates SHA256 checksums for all artifacts
-# 5. Uploads artifacts to GitHub Releases
+# 3. Prepares binaries with proper naming for each platform
+# 4. Generates SHA256 checksums for all binaries
+# 5. Uploads binaries to GitHub Releases
 #
 # To extend this workflow:
 # - Add new targets to the matrix carefully (test dependencies and cross-compilation)
-# - Modify the package script to include additional files
-# - Add code signing steps in the package job (requires secrets setup)
+# - Modify the binary preparation step to adjust naming or add metadata
+# - Add code signing steps before uploading binaries (requires secrets setup)
 
 name: Release
 
