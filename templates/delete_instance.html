@@ -41,9 +41,22 @@
         </fieldset>
     </section>
 
+    {% if is_disabled %}
+    <div class="warning-banner" style="margin-top:1em">
+        <div>
+            <h2>Instance locked</h2>
+            <p>Actions are disabled for this instance.</p>
+        </div>
+    </div>
+    <form method="post" action="{{ base_url }}/instance/{{ instance.id }}/delete" style="margin-top:2em">
+        <button type="button" class="danger" disabled>Confirm Delete</button>
+        <a class="button-secondary" href="{{ base_url }}/instance/{{ instance.id }}">Cancel</a>
+    </form>
+    {% else %}
     <form method="post" action="{{ base_url }}/instance/{{ instance.id }}/delete" style="margin-top:2em">
         <button type="submit" class="danger">Confirm Delete</button>
         <a class="button-secondary" href="{{ base_url }}/instance/{{ instance.id }}">Cancel</a>
     </form>
+    {% endif %}
 </section>
 {% endblock %}

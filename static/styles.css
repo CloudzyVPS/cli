@@ -2128,6 +2128,13 @@ section[aria-labelledby="regions-heading"] > div[role="list"] > article > footer
   line-height: 1.5;
 }
 
+.disabled {
+  color: var(--text-muted);
+  opacity: 0.7;
+  cursor: default;
+  pointer-events: none;
+}
+
 section dl > div {
   display: grid;
   grid-template-columns: 140px 1fr;

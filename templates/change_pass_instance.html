@@ -32,6 +32,22 @@
         </dl>
     </fieldset>
 
+    {% if is_disabled %}
+    <div>
+        <div>
+            <h2>Instance locked</h2>
+            <p>Actions are disabled for this instance.</p>
+        </div>
+    </div>
+    <form method="post">
+        <p><small>A new random password will be generated and displayed after confirmation. Make sure to save it securely.</small></p>
+        
+        <footer>
+            <a href="{{ base_url }}/instance/{{ instance.id }}">Cancel</a>
+            <button type="button" disabled>Change password</button>
+        </footer>
+    </form>
+    {% else %}
     <form method="post">
         <p><small>A new random password will be generated and displayed after confirmation. Make sure to save it securely.</small></p>
         
@@ -40,6 +56,7 @@
             <button type="submit">Change password</button>
         </footer>
     </form>
+    {% endif %}
 
     {% if new_password.is_some() %}
     <div class="success-banner" style="margin-top:2em">

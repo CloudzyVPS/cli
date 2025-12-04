@@ -39,7 +39,14 @@
         </dl>
     </fieldset>
 
-    <form method="post" action="{{ base_url }}/instance/{{ instance.id }}/resize" style="margin-top:2em">
+    {% if is_disabled %}
+    <div>
+        <div>
+            <h2>Instance locked</h2>
+            <p>Actions are disabled for this instance.</p>
+        </div>
+    </div>
+    <form method="post" action="{{ base_url }}/instance/{{ instance.id }}/resize">
         <fieldset>
             <legend>Resize options</legend>
             <div>
@@ -49,14 +56,14 @@
                     <option value="CUSTOM">Custom configuration</option>
                 </select>
             </div>
-            <div style="margin-top:1em">
+            <div>
                 <h3>Fixed plan</h3>
                 <label for="product_id">Product ID</label>
                 <input id="product_id" name="product_id" type="text" placeholder="Enter product ID" />
                 <small>Enter the product id to upgrade to a fixed plan.</small>
             </div>
 
-            <div style="margin-top:1em">
+            <div>
                 <h3>Custom configuration</h3>
                 <label for="region_id">Region</label>
                 <select id="region_id" name="region_id">
@@ -79,10 +86,18 @@
             </div>
         </fieldset>
 
-        <footer class="form-actions" style="margin-top:1.5em">
-            <a class="button-secondary" href="{{ base_url }}/instance/{{ instance.id }}">Cancel</a>
+        <footer style="margin-top:1.5em">
+            <a href="{{ base_url }}/instance/{{ instance.id }}">Cancel</a>
+            <button type="button" disabled>Resize instance</button>
+        </footer>
+    </form>
+    {% else %}
+    <form method="post" action="{{ base_url }}/instance/{{ instance.id }}/resize">
+        <footer style="margin-top:1.5em">
+            <a href="{{ base_url }}/instance/{{ instance.id }}">Cancel</a>
             <button type="submit">Resize instance</button>
         </footer>
     </form>
+    {% endif %}
 </section>
 {% endblock %}
