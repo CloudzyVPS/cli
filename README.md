@@ -20,11 +20,13 @@ Get the latest pre-built binary for your platform from the [Releases page](https
 **Linux/macOS:**
 ```bash
 # Download the appropriate binary for your platform from the Releases page
-# Replace {VERSION} with the actual version (e.g., 0.1.0) you downloaded:
-# Linux x86_64:        zy-{VERSION}-x86_64-unknown-linux-gnu
-# Linux ARM64:         zy-{VERSION}-aarch64-unknown-linux-gnu
-# macOS Intel:         zy-{VERSION}-x86_64-apple-darwin
-# macOS Apple Silicon: zy-{VERSION}-aarch64-apple-darwin
+# Replace {VERSION} with the actual version (e.g., 0.1.0) you downloaded
+# Replace {TARGET} with your platform target from the list below:
+#
+# Linux x86_64:        x86_64-unknown-linux-gnu
+# Linux ARM64:         aarch64-unknown-linux-gnu
+# macOS Intel:         x86_64-apple-darwin
+# macOS Apple Silicon: aarch64-apple-darwin
 
 # Make it executable (use the actual filename you downloaded)
 chmod +x zy-{VERSION}-{TARGET}
@@ -63,7 +65,7 @@ Create a `.env` file or set environment variables:
 ```bash
 # Required - Get your API token from Cloudzy dashboard
 API_BASE_URL=https://api.cloudzy.com/developers
-API_TOKEN=your_api_token_here  # ⚠️ Replace with your actual token
+API_TOKEN=YOUR_ACTUAL_API_TOKEN_HERE  # ⚠️ Replace with your real token
 
 # Optional
 PUBLIC_BASE_URL=http://localhost:5000
@@ -91,7 +93,10 @@ zy serve --env-file /path/to/.env
 
 Access the web interface at `http://localhost:5000`. 
 
-**⚠️ Security Note:** On first run, a default owner account is created with username `owner` and password `owner123` (stored in `users.json`). **Change this password immediately** after your first login using the web interface or the `zy users reset-password owner <new-password>` command.
+**⚠️ Security Note:** On first run, a default owner account is created with username `owner` and password `owner123` (stored in `users.json`). **Change this password immediately** after your first login using the web interface or the command:
+```bash
+zy users reset-password owner YOUR_NEW_SECURE_PASSWORD
+```
 
 ### CLI Commands
 
