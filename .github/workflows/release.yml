@@ -9,18 +9,22 @@
 # - Manual workflow dispatch
 #
 # Build Matrix:
-# - Linux: x86_64 and aarch64 with both gnu and musl targets
+# - Linux: x86_64 (gnu) and aarch64 (gnu) - MUSL targets removed due to cross-compilation complexity
 # - macOS: Intel (x86_64) and Apple Silicon (aarch64)
 # - Windows: x86_64
 #
-# Cross-compilation Strategy:
-# - For Linux musl targets (x86_64-unknown-linux-musl, aarch64-unknown-linux-musl):
-#   We use the 'cross' tool to resolve OpenSSL dependency issues. The musl libc doesn't
-#   include OpenSSL, and cross provides pre-configured Docker containers with all necessary
-#   dependencies for building static binaries with OpenSSL support.
-# - For Linux GNU targets and other platforms: We use native runners with cargo directly.
-# - We use taiki-e/install-action for installing cross, which provides better caching
-#   and is the recommended approach over cargo install.
+# Platform Strategy:
+# - Linux GNU targets (x86_64, aarch64): Use native/cross compilation as appropriate
+# - macOS targets: Use native runners with cargo directly
+# - Windows targets: Use native runners with cargo directly
+# - MUSL targets removed: Cross-compilation with musl and pkg-config/OpenSSL proved problematic
+#   and adds maintenance burden. Users needing static binaries can build locally or use containers.
+#
+# Cross-compilation Notes:
+# - aarch64-unknown-linux-gnu: Uses cross tool for reliable cross-compilation with proper
+#   dependencies and toolchain setup.
+# - For adding new targets: Consider native compilation first; use cross only when necessary
+#   and test thoroughly with all project dependencies.
 #
 # The workflow:
 # 1. Builds release binaries for all target platforms
@@ -30,7 +34,7 @@
 # 5. Uploads artifacts to GitHub Releases
 #
 # To extend this workflow:
-# - Add new targets to the matrix (e.g., Windows aarch64)
+# - Add new targets to the matrix carefully (test dependencies and cross-compilation)
 # - Modify the package script to include additional files
 # - Add code signing steps in the package job (requires secrets setup)
 
@@ -69,20 +73,9 @@ jobs:
             os: ubuntu-latest
             use_cross: false
             
-          # Linux x86_64 MUSL (static binary)
-          # Note: Using cross to handle OpenSSL dependencies for musl targets
-          - target: x86_64-unknown-linux-musl
-            os: ubuntu-latest
-            use_cross: true
-            
           # Linux aarch64 GNU (cross-compilation)
+          # Note: Uses cross tool for reliable ARM64 cross-compilation
           - target: aarch64-unknown-linux-gnu
-            os: ubuntu-latest
-            use_cross: true
-            
-          # Linux aarch64 MUSL (static binary, cross-compilation)
-          # Note: Using cross to handle OpenSSL dependencies for musl targets
-          - target: aarch64-unknown-linux-musl
             os: ubuntu-latest
             use_cross: true
             
@@ -118,7 +111,6 @@ jobs:
       # Install cross for cross-compilation targets using taiki-e/install-action
       # This provides better caching and is the recommended approach
       # Cross is used for:
-      # - Linux musl targets (both x86_64 and aarch64) to handle OpenSSL dependencies
       # - Linux aarch64 GNU target for cross-compilation
       - name: Install cross
         if: matrix.use_cross
