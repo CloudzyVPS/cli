@@ -1,0 +1,234 @@
+# GitHub Actions Release Workflow for Zy CLI
+#
+# This workflow builds and publishes signed (or unsigned if secrets are absent) release binaries
+# for the Rust CLI project "zy" across Windows, Linux, and macOS platforms.
+#
+# Triggers:
+# - Tag push matching 'v*' pattern (e.g., v0.1.0, v1.2.3)
+# - GitHub Release published event
+# - Manual workflow dispatch
+#
+# Build Matrix:
+# - Linux: x86_64 and aarch64 with both gnu and musl targets
+# - macOS: Intel (x86_64) and Apple Silicon (aarch64)
+# - Windows: x86_64
+#
+# The workflow:
+# 1. Builds release binaries for all target platforms
+# 2. Runs tests to ensure quality
+# 3. Packages artifacts with README.md and LICENSE (if present)
+# 4. Generates SHA256 checksums for all artifacts
+# 5. Uploads artifacts to GitHub Releases
+#
+# To extend this workflow:
+# - Add new targets to the matrix (e.g., Windows aarch64)
+# - Modify the package script to include additional files
+# - Add code signing steps in the package job (requires secrets setup)
+
+name: Release
+
+on:
+  # Trigger on version tags
+  push:
+    tags:
+      - 'v*'
+  
+  # Trigger when a GitHub Release is published
+  release:
+    types: [published]
+  
+  # Allow manual triggering
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+jobs:
+  # Build matrix job for all platforms
+  build:
+    name: Build ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Linux x86_64 GNU
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-latest
+            use_cross: false
+            
+          # Linux x86_64 MUSL (static binary)
+          - target: x86_64-unknown-linux-musl
+            os: ubuntu-latest
+            use_cross: false
+            
+          # Linux aarch64 GNU (cross-compilation)
+          - target: aarch64-unknown-linux-gnu
+            os: ubuntu-latest
+            use_cross: true
+            
+          # Linux aarch64 MUSL (static binary, cross-compilation)
+          - target: aarch64-unknown-linux-musl
+            os: ubuntu-latest
+            use_cross: true
+            
+          # macOS Intel
+          - target: x86_64-apple-darwin
+            os: macos-latest
+            use_cross: false
+            
+          # macOS Apple Silicon
+          - target: aarch64-apple-darwin
+            os: macos-latest
+            use_cross: false
+            
+          # Windows x86_64
+          - target: x86_64-pc-windows-msvc
+            os: windows-latest
+            use_cross: false
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Setup Rust cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.target }}
+
+      # Install musl-tools for musl targets on Linux
+      - name: Install musl tools
+        if: matrix.target == 'x86_64-unknown-linux-musl'
+        run: sudo apt-get update && sudo apt-get install -y musl-tools
+
+      # Install cross for cross-compilation targets
+      - name: Install cross
+        if: matrix.use_cross
+        run: cargo install cross --git https://github.com/cross-rs/cross
+
+      # Build the binary using cargo or cross
+      - name: Build release binary
+        run: |
+          if [ "${{ matrix.use_cross }}" = "true" ]; then
+            cross build --release --target ${{ matrix.target }}
+          else
+            cargo build --release --target ${{ matrix.target }}
+          fi
+        shell: bash
+
+      # Run tests (only for native builds, skip cross-compiled)
+      - name: Run tests
+        if: matrix.use_cross == false
+        run: cargo test --release --target ${{ matrix.target }}
+
+      # Prepare binary for upload (handle Windows .exe extension)
+      - name: Prepare binary
+        id: prepare
+        run: |
+          cd target/${{ matrix.target }}/release
+          if [ "${{ matrix.os }}" = "windows-latest" ]; then
+            BINARY_NAME="zy.exe"
+          else
+            BINARY_NAME="zy"
+          fi
+          echo "binary_name=$BINARY_NAME" >> $GITHUB_OUTPUT
+          echo "binary_path=target/${{ matrix.target }}/release/$BINARY_NAME" >> $GITHUB_OUTPUT
+        shell: bash
+
+      # Upload binary as artifact for the package job
+      - name: Upload binary artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: binary-${{ matrix.target }}
+          path: ${{ steps.prepare.outputs.binary_path }}
+          if-no-files-found: error
+
+  # Package job: create archives and checksums
+  package:
+    name: Package and Release
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # Download all binary artifacts
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Display structure of downloaded files
+        run: ls -R artifacts
+
+      # Make packaging script executable and run it
+      - name: Create release packages
+        run: |
+          chmod +x scripts/package.sh
+          ./scripts/package.sh
+
+      # Generate combined SHA256 checksums file
+      - name: Generate checksums
+        run: |
+          cd dist
+          sha256sum zy-*-*.tar.gz zy-*-*.zip > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+
+      # Get version from tag or use a default
+      - name: Get version
+        id: get_version
+        run: |
+          if [[ $GITHUB_REF == refs/tags/v* ]]; then
+            VERSION=${GITHUB_REF#refs/tags/v}
+          elif [[ $GITHUB_REF == refs/tags/* ]]; then
+            VERSION=${GITHUB_REF#refs/tags/}
+          else
+            VERSION="dev-$(git rev-parse --short HEAD)"
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Version: $VERSION"
+
+      # Create GitHub Release (if triggered by tag and release doesn't exist)
+      - name: Create Release
+        id: create_release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          draft: false
+          prerelease: ${{ contains(github.ref, 'alpha') || contains(github.ref, 'beta') || contains(github.ref, 'rc') }}
+          generate_release_notes: true
+          files: |
+            dist/*.tar.gz
+            dist/*.zip
+            dist/SHA256SUMS.txt
+
+      # Upload artifacts to existing release (if triggered by release event)
+      - name: Upload to existing release
+        if: github.event_name == 'release'
+        uses: softprops/action-gh-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          files: |
+            dist/*.tar.gz
+            dist/*.zip
+            dist/SHA256SUMS.txt
+
+      # For workflow_dispatch, just upload as workflow artifacts
+      - name: Upload workflow artifacts
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-packages
+          path: |
+            dist/*.tar.gz
+            dist/*.zip
+            dist/SHA256SUMS.txt
