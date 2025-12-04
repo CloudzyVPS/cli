@@ -3,13 +3,13 @@
 {% block title %}{{ hostname }}{% endblock %}
 
 {% block content %}
-<header class="page-header">
+<header>
     <h1>{{ hostname }}</h1>
     <p>Instance ID: <code>{{ instance_id }}</code></p>
 </header>
 
-<section class="surface">
-    <dl class="instance-details">
+<section>
+    <dl>
     {% for kv in details %}
         <div>
             <dt>{{ kv.0 }}</dt>
@@ -18,30 +18,16 @@
     {% endfor %}
     </dl>
 </section>
-    <section class="surface">
+    <section>
         <h2>Actions</h2>
-        <div class="instance-actions">
-            <form method="post" action="{{ base_url }}/instance/{{ instance_id }}/poweron" style="display:inline">
-                <button type="submit">Power On</button>
-            </form>
-            <form method="post" action="{{ base_url }}/instance/{{ instance_id }}/poweroff" style="display:inline">
-                <button type="submit">Power Off</button>
-            </form>
-            <form method="post" action="{{ base_url }}/instance/{{ instance_id }}/reset" style="display:inline">
-                <button type="submit">Reset</button>
-            </form>
-            <form method="get" action="{{ base_url }}/instance/{{ instance_id }}/change-os" style="display:inline">
-                <button type="submit">Change OS</button>
-            </form>
-            <form method="get" action="{{ base_url }}/instance/{{ instance_id }}/resize" style="display:inline">
-                <button type="submit">Resize</button>
-            </form>
-            <form method="post" action="{{ base_url }}/instance/{{ instance_id }}/change-pass" style="display:inline">
-                <button type="submit">Change Password</button>
-            </form>
-            <form method="post" action="{{ base_url }}/instance/{{ instance_id }}/delete" style="display:inline" onsubmit="return confirm('Are you sure you want to delete this instance? This action cannot be undone.');">
-                <button type="submit" class="danger">Delete</button>
-            </form>
+        <div>
+            <a href="{{ base_url }}/instance/{{ instance_id }}/poweron">Power On</a>
+            <a href="{{ base_url }}/instance/{{ instance_id }}/poweroff">Power Off</a>
+            <a href="{{ base_url }}/instance/{{ instance_id }}/reset">Reset</a>
+            <a href="{{ base_url }}/instance/{{ instance_id }}/change-os">Change OS</a>
+            <a href="{{ base_url }}/instance/{{ instance_id }}/resize">Resize</a>
+            <a href="{{ base_url }}/instance/{{ instance_id }}/change-pass">Change Password</a>
+            <a href="{{ base_url }}/instance/{{ instance_id }}/delete">Delete</a>
         </div>
     </section>
 {% endblock %}

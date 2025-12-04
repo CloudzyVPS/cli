@@ -35,12 +35,12 @@
             </div>
             <div>
                 <dt>Current OS</dt>
-                <dd>{{ instance.os.name if instance.os else 'N/A' }}</dd>
+                <dd>{% if instance.os.is_some() %}{{ instance.os.as_ref().unwrap().name }}{% else %}N/A{% endif %}</dd>
             </div>
         </dl>
     </fieldset>
 
-    <form method="post">
+    <form method="post" action="{{ base_url }}/instance/{{ instance.id }}/change-os">
         <fieldset>
             <legend>Select new operating system</legend>
             <label for="os_id">Operating system</label>

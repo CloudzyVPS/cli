@@ -23,7 +23,7 @@
             </div>
             <div>
                 <dt>Operating system</dt>
-                <dd>{{ instance.os.name if instance.os else 'N/A' }}</dd>
+                <dd>{% if instance.os.is_some() %}{{ instance.os.as_ref().unwrap().name }}{% else %}N/A{% endif %}</dd>
             </div>
             <div>
                 <dt>Current status</dt>
@@ -38,17 +38,15 @@
         <footer class="form-actions">
             <a class="button-secondary" href="{{ base_url }}/instance/{{ instance.id }}">Cancel</a>
             <button type="submit">Change password</button>
-            </footer>
-        </form>
-
-        {% if new_password %}
-        <div class="success-banner" style="margin-top:2em">
-            <h2>New Password</h2>
-            <p><code>{{ new_password }}</code></p>
-            <p>Please copy and store this password securely. It will not be shown again.</p>
-        </div>
-        {% endif %}
         </footer>
     </form>
+
+    {% if new_password.is_some() %}
+    <div class="success-banner" style="margin-top:2em">
+        <h2>New Password</h2>
+        <p><code>{{ new_password.as_ref().unwrap() }}</code></p>
+        <p>Please copy and store this password securely. It will not be shown again.</p>
+    </div>
+    {% endif %}
 </section>
 {% endblock %}

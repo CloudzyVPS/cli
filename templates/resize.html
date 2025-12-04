@@ -3,37 +3,86 @@
 {% block title %}Resize Instance{% endblock %}
 
 {% block content %}
-<h1>Resize Instance: {{ instance.hostname }}</h1>
-<form method="post" class="card">
-    <div class="mb-3">
-        <label for="type" class="form-label">Resize Type</label>
-        <select class="form-select" id="type" name="type" required>
-            <option value="FIXED">Fixed Plan</option>
-            <option value="CUSTOM">Custom Configuration</option>
-        </select>
+<header class="page-header">
+    <p class="breadcrumb"><a href="{{ base_url }}/instance/{{ instance.id }}">← Back to instance</a></p>
+    <h1>Resize instance</h1>
+    <p>Change the CPU, RAM, disk, or switch to a different fixed plan.</p>
+</header>
+
+<div class="warning-banner">
+    <div>
+        <h2>Warning: Service interruption</h2>
+        <p>Resizing an instance may require a reboot or cause temporary downtime. Make sure you have backups and schedule maintenance windows if required.</p>
     </div>
-    <div class="mb-3">
-        <h3>For Fixed Plan:</h3>
-        <label for="product_id" class="form-label">Product ID</label>
-        <input type="text" class="form-control" id="product_id" name="product_id" placeholder="Enter product ID">
-    </div>
-    <div class="mb-3">
-        <h3>For Custom Configuration:</h3>
-        <label for="region_id" class="form-label">Region ID</label>
-        <select class="form-select" id="region_id" name="region_id">
-            {% for region in regions %}
-            <option value="{{ region.id }}">{{ region.name }}</option>
-            {% endfor %}
-        </select>
-        <label for="cpu" class="form-label">CPU</label>
-        <input type="number" class="form-control" id="cpu" name="cpu">
-        <label for="ramInGB" class="form-label">RAM in GB</label>
-        <input type="number" class="form-control" id="ramInGB" name="ramInGB">
-        <label for="diskInGB" class="form-label">Disk in GB</label>
-        <input type="number" class="form-control" id="diskInGB" name="diskInGB">
-        <label for="bandwidthInTB" class="form-label">Bandwidth in TB</label>
-        <input type="number" class="form-control" id="bandwidthInTB" name="bandwidthInTB">
-    </div>
-    <button type="submit" class="btn btn-primary">Resize</button>
-</form>
+</div>
+
+<section>
+    <fieldset>
+        <legend>Instance details</legend>
+        <dl>
+            <div>
+                <dt>Hostname</dt>
+                <dd><strong>{{ instance.hostname }}</strong></dd>
+            </div>
+            <div>
+                <dt>Instance ID</dt>
+                <dd><code>{{ instance.id }}</code></dd>
+            </div>
+            <div>
+                <dt>Current status</dt>
+                <dd>{{ instance.status }}</dd>
+            </div>
+            <div>
+                <dt>Region</dt>
+                <dd>{{ instance.region }}</dd>
+            </div>
+        </dl>
+    </fieldset>
+
+    <form method="post" action="{{ base_url }}/instance/{{ instance.id }}/resize" style="margin-top:2em">
+        <fieldset>
+            <legend>Resize options</legend>
+            <div>
+                <label for="type">Resize type</label>
+                <select id="type" name="type" required>
+                    <option value="FIXED">Fixed plan</option>
+                    <option value="CUSTOM">Custom configuration</option>
+                </select>
+            </div>
+            <div style="margin-top:1em">
+                <h3>Fixed plan</h3>
+                <label for="product_id">Product ID</label>
+                <input id="product_id" name="product_id" type="text" placeholder="Enter product ID" />
+                <small>Enter the product id to upgrade to a fixed plan.</small>
+            </div>
+
+            <div style="margin-top:1em">
+                <h3>Custom configuration</h3>
+                <label for="region_id">Region</label>
+                <select id="region_id" name="region_id">
+                    {% for region in regions %}
+                    <option value="{{ region.id }}">{{ region.name }}</option>
+                    {% endfor %}
+                </select>
+
+                <label for="cpu">CPU (cores)</label>
+                <input id="cpu" name="cpu" type="number" />
+
+                <label for="ramInGB">RAM (GB)</label>
+                <input id="ramInGB" name="ramInGB" type="number" />
+
+                <label for="diskInGB">Disk (GB)</label>
+                <input id="diskInGB" name="diskInGB" type="number" />
+
+                <label for="bandwidthInTB">Bandwidth (TB)</label>
+                <input id="bandwidthInTB" name="bandwidthInTB" type="number" />
+            </div>
+        </fieldset>
+
+        <footer class="form-actions" style="margin-top:1.5em">
+            <a class="button-secondary" href="{{ base_url }}/instance/{{ instance.id }}">Cancel</a>
+            <button type="submit">Resize instance</button>
+        </footer>
+    </form>
+</section>
 {% endblock %}
