@@ -26,11 +26,11 @@ Get the latest pre-built binary for your platform from the [Releases page](https
 # macOS Intel:    zy-VERSION-x86_64-apple-darwin
 # macOS Apple:    zy-VERSION-aarch64-apple-darwin
 
-# Make it executable
-chmod +x zy-*
+# Make it executable (use the actual filename)
+chmod +x zy-VERSION-TARGET
 
 # Move to a location in your PATH
-sudo mv zy-* /usr/local/bin/zy
+sudo mv zy-VERSION-TARGET /usr/local/bin/zy
 
 # Verify
 zy --help
@@ -39,13 +39,20 @@ zy --help
 **Windows:**
 1. Download the `zy-VERSION-x86_64-pc-windows-msvc.exe` file from the [Releases page](https://github.com/CloudzyVPS/cli/releases)
 2. Rename it to `zy.exe`
-3. Move it to a directory in your PATH, or add its location to PATH:
+3. Move it to a directory in your PATH:
    ```powershell
-   # Option 1: Move to an existing PATH location
+   # Option 1: User-specific location (recommended, no admin required)
+   New-Item -ItemType Directory -Force -Path "$env:LOCALAPPDATA\Programs\zy"
+   Move-Item zy.exe "$env:LOCALAPPDATA\Programs\zy\"
+   
+   # Add to PATH permanently (User level)
+   $userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
+   [Environment]::SetEnvironmentVariable('Path', "$userPath;$env:LOCALAPPDATA\Programs\zy", 'User')
+   
+   # Restart your terminal after this step
+   
+   # Option 2: System-wide (requires admin)
    Move-Item zy.exe C:\Windows\System32\
-
-   # Option 2: Add current directory to PATH (requires admin)
-   $env:Path += ";C:\path\to\zy"
    ```
 4. Verify: `zy --help`
 
@@ -82,7 +89,9 @@ zy serve --host 127.0.0.1 --port 8080
 zy serve --env-file /path/to/.env
 ```
 
-Access the web interface at `http://localhost:5000`. On first run, a default owner account will be created (check `users.json` for credentials).
+Access the web interface at `http://localhost:5000`. 
+
+**⚠️ Security Note:** On first run, a default owner account will be created with credentials stored in `users.json`. For security, change the default password immediately after your first login using the web interface or the `zy users reset-password` command.
 
 ### CLI Commands
 
