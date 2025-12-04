@@ -9,30 +9,34 @@
 # - Manual workflow dispatch
 #
 # Build Matrix:
-# - Linux: x86_64 and aarch64 with both gnu and musl targets
+# - Linux: x86_64 (gnu) and aarch64 (gnu) - MUSL targets removed due to cross-compilation complexity
 # - macOS: Intel (x86_64) and Apple Silicon (aarch64)
 # - Windows: x86_64
 #
-# Cross-compilation Strategy:
-# - For Linux musl targets (x86_64-unknown-linux-musl, aarch64-unknown-linux-musl):
-#   We use the 'cross' tool to resolve OpenSSL dependency issues. The musl libc doesn't
-#   include OpenSSL, and cross provides pre-configured Docker containers with all necessary
-#   dependencies for building static binaries with OpenSSL support.
-# - For Linux GNU targets and other platforms: We use native runners with cargo directly.
-# - We use taiki-e/install-action for installing cross, which provides better caching
-#   and is the recommended approach over cargo install.
+# Platform Strategy:
+# - Linux GNU targets (x86_64, aarch64): Use native/cross compilation as appropriate
+# - macOS targets: Use native runners with cargo directly
+# - Windows targets: Use native runners with cargo directly
+# - MUSL targets removed: Cross-compilation with musl and pkg-config/OpenSSL proved problematic
+#   and adds maintenance burden. Users needing static binaries can build locally or use containers.
+#
+# Cross-compilation Notes:
+# - aarch64-unknown-linux-gnu: Uses cross tool for reliable cross-compilation with proper
+#   dependencies and toolchain setup.
+# - For adding new targets: Consider native compilation first; use cross only when necessary
+#   and test thoroughly with all project dependencies.
 #
 # The workflow:
 # 1. Builds release binaries for all target platforms
 # 2. Runs tests to ensure quality
-# 3. Packages artifacts with README.md and LICENSE (if present)
-# 4. Generates SHA256 checksums for all artifacts
-# 5. Uploads artifacts to GitHub Releases
+# 3. Prepares binaries with proper naming for each platform
+# 4. Generates SHA256 checksums for all binaries
+# 5. Uploads binaries to GitHub Releases
 #
 # To extend this workflow:
-# - Add new targets to the matrix (e.g., Windows aarch64)
-# - Modify the package script to include additional files
-# - Add code signing steps in the package job (requires secrets setup)
+# - Add new targets to the matrix carefully (test dependencies and cross-compilation)
+# - Modify the binary preparation step to adjust naming or add metadata
+# - Add code signing steps before uploading binaries (requires secrets setup)
 
 name: Release
 
@@ -69,20 +73,9 @@ jobs:
             os: ubuntu-latest
             use_cross: false
             
-          # Linux x86_64 MUSL (static binary)
-          # Note: Using cross to handle OpenSSL dependencies for musl targets
-          - target: x86_64-unknown-linux-musl
-            os: ubuntu-latest
-            use_cross: true
-            
           # Linux aarch64 GNU (cross-compilation)
+          # Note: Uses cross tool for reliable ARM64 cross-compilation
           - target: aarch64-unknown-linux-gnu
-            os: ubuntu-latest
-            use_cross: true
-            
-          # Linux aarch64 MUSL (static binary, cross-compilation)
-          # Note: Using cross to handle OpenSSL dependencies for musl targets
-          - target: aarch64-unknown-linux-musl
             os: ubuntu-latest
             use_cross: true
             
@@ -118,7 +111,6 @@ jobs:
       # Install cross for cross-compilation targets using taiki-e/install-action
       # This provides better caching and is the recommended approach
       # Cross is used for:
-      # - Linux musl targets (both x86_64 and aarch64) to handle OpenSSL dependencies
       # - Linux aarch64 GNU target for cross-compilation
       - name: Install cross
         if: matrix.use_cross
@@ -183,17 +175,49 @@ jobs:
       - name: Display structure of downloaded files
         run: ls -R artifacts
 
-      # Make packaging script executable and run it
-      - name: Create release packages
+      # Prepare binaries for release
+      - name: Prepare release binaries
         run: |
-          chmod +x scripts/package.sh
-          ./scripts/package.sh
+          # Get version from git tag or use a default
+          VERSION="${GITHUB_REF_NAME#v}"
+          if [[ -z "${VERSION}" || "${VERSION}" == "${GITHUB_REF_NAME}" ]]; then
+              VERSION="$(git describe --tags --always 2>/dev/null || echo 'dev')"
+              VERSION="${VERSION#v}"
+          fi
+          
+          echo "Preparing binaries for version: ${VERSION}"
+          
+          # Create dist directory
+          mkdir -p dist
+          
+          # Copy and rename binaries for each target
+          for artifact_dir in artifacts/binary-*; do
+            if [[ -d "$artifact_dir" ]]; then
+              target=$(basename "$artifact_dir" | sed 's/binary-//')
+              echo "Processing target: $target"
+              
+              if [[ -f "$artifact_dir/zy.exe" ]]; then
+                # Windows binary
+                cp "$artifact_dir/zy.exe" "dist/zy-${VERSION}-${target}.exe"
+                echo "Created zy-${VERSION}-${target}.exe"
+              elif [[ -f "$artifact_dir/zy" ]]; then
+                # Linux/macOS binary
+                cp "$artifact_dir/zy" "dist/zy-${VERSION}-${target}"
+                chmod +x "dist/zy-${VERSION}-${target}"
+                echo "Created zy-${VERSION}-${target}"
+              fi
+            fi
+          done
+          
+          echo ""
+          echo "Binaries prepared:"
+          ls -lh dist/
 
       # Generate combined SHA256 checksums file
       - name: Generate checksums
         run: |
           cd dist
-          sha256sum zy-*-*.tar.gz zy-*-*.zip > SHA256SUMS.txt
+          sha256sum zy-* > SHA256SUMS.txt
           cat SHA256SUMS.txt
 
       # Get version from tag or use a default
@@ -222,8 +246,7 @@ jobs:
           prerelease: ${{ contains(github.ref, 'alpha') || contains(github.ref, 'beta') || contains(github.ref, 'rc') }}
           generate_release_notes: true
           files: |
-            dist/*.tar.gz
-            dist/*.zip
+            dist/zy-*
             dist/SHA256SUMS.txt
 
       # Upload artifacts to existing release (if triggered by release event)
@@ -234,8 +257,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           files: |
-            dist/*.tar.gz
-            dist/*.zip
+            dist/zy-*
             dist/SHA256SUMS.txt
 
       # For workflow_dispatch, just upload as workflow artifacts
@@ -245,6 +267,5 @@ jobs:
         with:
           name: release-packages
           path: |
-            dist/*.tar.gz
-            dist/*.zip
+            dist/zy-*
             dist/SHA256SUMS.txt

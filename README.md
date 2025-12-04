@@ -9,16 +9,25 @@ Pre-built binaries for Zy are automatically built and published through GitHub R
 Download the latest release from the [Releases page](https://github.com/CloudzyVPS/cli/releases).
 
 Available platforms:
-- **Linux**: x86_64 and aarch64 (both GNU and MUSL variants)
-  - `zy-{version}-x86_64-unknown-linux-gnu.tar.gz` - Standard Linux x86_64
-  - `zy-{version}-x86_64-unknown-linux-musl.tar.gz` - Static Linux x86_64 (no dependencies)
-  - `zy-{version}-aarch64-unknown-linux-gnu.tar.gz` - Standard Linux ARM64
-  - `zy-{version}-aarch64-unknown-linux-musl.tar.gz` - Static Linux ARM64 (no dependencies)
+- **Linux**: x86_64 and aarch64 (GNU libc)
+  - `zy-{version}-x86_64-unknown-linux-gnu` - Linux x86_64
+  - `zy-{version}-aarch64-unknown-linux-gnu` - Linux ARM64
 - **macOS**: Intel and Apple Silicon
-  - `zy-{version}-x86_64-apple-darwin.tar.gz` - macOS Intel
-  - `zy-{version}-aarch64-apple-darwin.tar.gz` - macOS Apple Silicon
+  - `zy-{version}-x86_64-apple-darwin` - macOS Intel
+  - `zy-{version}-aarch64-apple-darwin` - macOS Apple Silicon
 - **Windows**: x86_64
-  - `zy-{version}-x86_64-pc-windows-msvc.zip` - Windows 64-bit
+  - `zy-{version}-x86_64-pc-windows-msvc.exe` - Windows 64-bit
+
+### Platform Notes
+
+**Linux**: We provide binaries for systems with GNU libc (glibc). These binaries work on most modern Linux distributions including Ubuntu, Debian, Fedora, CentOS, and others. MUSL-based static binaries are not provided due to cross-compilation complexity with dependencies. If you need a static binary or use a MUSL-based distribution (like Alpine Linux), please build from source.
+
+**aarch64 (ARM64)**: ARM64 Linux binaries are cross-compiled and should work on ARM64 Linux systems with glibc. If you encounter issues, please report them or build from source on your target platform.
+
+**Compatibility**: The binaries require:
+- Linux: glibc 2.31+ (Ubuntu 20.04+, Debian 11+, or equivalent)
+- macOS: macOS 10.15+ (Catalina or later)
+- Windows: Windows 10 or later
 
 ### Verification
 
@@ -29,7 +38,7 @@ Each release includes a `SHA256SUMS.txt` file containing checksums for all relea
 sha256sum -c SHA256SUMS.txt --ignore-missing
 
 # Or verify a specific file
-sha256sum zy-{version}-{target}.tar.gz
+sha256sum zy-{version}-{target}
 # Compare with the checksum in SHA256SUMS.txt
 ```
 
@@ -37,11 +46,14 @@ sha256sum zy-{version}-{target}.tar.gz
 
 **Linux/macOS:**
 ```bash
-# Download and extract
-tar -xzf zy-{version}-{target}.tar.gz
+# Download the binary
+# wget or curl: curl -LO https://github.com/CloudzyVPS/cli/releases/download/v{version}/zy-{version}-{target}
+
+# Make it executable
+chmod +x zy-{version}-{target}
 
 # Move to a location in your PATH
-sudo mv zy /usr/local/bin/
+sudo mv zy-{version}-{target} /usr/local/bin/zy
 
 # Verify installation
 zy --help
@@ -49,7 +61,7 @@ zy --help
 
 **Windows:**
 ```powershell
-# Extract the zip file
+# Download the .exe file
 # Add the directory containing zy.exe to your PATH
 # Or move zy.exe to a directory already in your PATH
 
@@ -70,6 +82,24 @@ When a version tag is pushed (e.g., `v0.1.0`), the workflow:
 3. Packages each binary with README and LICENSE (if present)
 4. Generates SHA256 checksums
 5. Creates a GitHub Release with all artifacts attached
+
+### Platform Support Decisions
+
+**Why no MUSL targets?**
+MUSL-based static binaries were removed from CI/releases due to cross-compilation complexity. While Rust projects can target MUSL, managing dependencies (especially when involving pkg-config and various system libraries) during cross-compilation proved problematic and increased maintenance burden. Users needing static binaries or MUSL support can:
+- Build from source on their target system
+- Use containerized builds with appropriate toolchains
+- Request specific target support through GitHub issues if there's sufficient demand
+
+**aarch64 (ARM64) Support:**
+ARM64 Linux builds use the `cross` tool for reliable cross-compilation. These binaries are tested in CI but may encounter issues with specific ARM64 configurations. If you experience problems, please report them via GitHub issues or build from source on your native ARM64 system.
+
+**Future Target Extensions:**
+To add new platforms or architectures:
+1. Test thoroughly with all project dependencies
+2. Prefer native compilation when possible
+3. Document any special build requirements
+4. Consider maintenance burden vs. user demand
 
 ## Building from Source
 
