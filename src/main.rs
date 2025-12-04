@@ -6,6 +6,10 @@ use axum::{
     Router,
 };
 use tower_http::services::ServeDir;
+use tower_http::set_header::SetResponseHeaderLayer;
+use axum::http::header::CACHE_CONTROL;
+use axum::http::HeaderValue;
+use tower::ServiceBuilder;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::net::SocketAddr;
@@ -53,6 +57,8 @@ struct AppState {
     api_token: String,
     public_base_url: String,
     client: reqwest::Client,
+    // Instances which should have actions disabled (read-only)
+    disabled_instances: std::sync::Arc<std::collections::HashSet<String>>,
 }
 
 #[derive(Deserialize, Debug)]
@@ -210,6 +216,18 @@ fn build_state_from_env(env_file: Option<&str>) -> AppState {
         );
     }
 
+    // parse comma separated instance ids from DISABLED_INSTANCE_IDS env var
+    let disabled_instance_ids_raw = env::var("DISABLED_INSTANCE_IDS").unwrap_or_default();
+    let mut disabled_set: HashSet<String> = HashSet::new();
+    if !disabled_instance_ids_raw.trim().is_empty() {
+        for id in disabled_instance_ids_raw.split(',') {
+            let t = id.trim();
+            if !t.is_empty() {
+                disabled_set.insert(t.to_string());
+            }
+        }
+    }
+
     AppState {
         users: Arc::new(Mutex::new(map)),
         sessions: Arc::new(Mutex::new(HashMap::new())),
@@ -219,6 +237,13 @@ fn build_state_from_env(env_file: Option<&str>) -> AppState {
         api_token,
         public_base_url,
         client,
+        disabled_instances: std::sync::Arc::new(disabled_set),
+    }
+}
+
+impl AppState {
+    fn is_instance_disabled(&self, id: &str) -> bool {
+        self.disabled_instances.contains(id)
     }
 }
 
@@ -283,6 +308,7 @@ struct InstanceDetailTemplate {
     instance_id: String,
     hostname: String,
     details: Vec<(String, String)>,
+    is_disabled: bool,
 }
 
 #[derive(Template)]
@@ -346,7 +372,16 @@ fn build_app(state: AppState) -> Router {
             "/bulk-subscription-refund",
             get(bulk_subscription_refund_get).post(bulk_subscription_refund),
         )
-        .nest_service("/static", ServeDir::new("static"))
+        // Serve static files with cache-control header to avoid reloading stylesheets on each request
+        .nest_service(
+            "/static",
+            ServiceBuilder::new()
+                .layer(SetResponseHeaderLayer::if_not_present(
+                    CACHE_CONTROL,
+                    HeaderValue::from_static("public, max-age=31536000, immutable"),
+                ))
+                .service(ServeDir::new("static")),
+        )
         .with_state(state)
 }
 
@@ -2533,6 +2568,7 @@ struct PowerOffInstanceTemplate {
     flash_messages: Vec<String>,
     has_flash_messages: bool,
     instance: InstanceForAction,
+    is_disabled: bool,
 }
 
 #[derive(Template)]
@@ -2544,6 +2580,7 @@ struct PowerOnInstanceTemplate {
     flash_messages: Vec<String>,
     has_flash_messages: bool,
     instance: InstanceForAction,
+    is_disabled: bool,
 }
 
 #[derive(Template)]
@@ -2555,6 +2592,7 @@ struct ResetInstanceTemplate {
     flash_messages: Vec<String>,
     has_flash_messages: bool,
     instance: InstanceForAction,
+    is_disabled: bool,
 }
 
 #[derive(Template)]
@@ -2566,6 +2604,7 @@ struct DeleteInstanceTemplate {
     flash_messages: Vec<String>,
     has_flash_messages: bool,
     instance: InstanceForAction,
+    is_disabled: bool,
 }
 
 #[derive(Template)]
@@ -2578,6 +2617,7 @@ struct ChangeOsTemplate<'a> {
     has_flash_messages: bool,
     instance: InstanceForAction,
     os_list: &'a [OsItem],
+    is_disabled: bool,
 }
 
 #[derive(Template)]
@@ -2590,6 +2630,7 @@ struct ResizeTemplate<'a> {
     has_flash_messages: bool,
     instance: InstanceForAction,
     regions: &'a [Region],
+    is_disabled: bool,
 }
 
 #[derive(Template)]
@@ -2602,6 +2643,7 @@ struct ChangePassInstanceTemplate {
     has_flash_messages: bool,
     instance: InstanceForAction,
     new_password: Option<String>,
+    is_disabled: bool,
 }
 
 async fn load_instances_for_user(state: &AppState, username: &str) -> Vec<InstanceView> {
@@ -3330,6 +3372,7 @@ async fn instance_detail(
             instance_id: instance_id.clone(),
             hostname,
             details,
+            is_disabled: state.is_instance_disabled(&instance_id),
         }
         .render()
         .unwrap(),
@@ -3379,7 +3422,7 @@ async fn instance_poweron_get(
         }
     }
     let TemplateGlobals { current_user, api_hostname, base_url, flash_messages, has_flash_messages } = build_template_globals(&state, &jar);
-    inject_context(&state, &jar, PowerOnInstanceTemplate { current_user, api_hostname, base_url, flash_messages, has_flash_messages, instance }.render().unwrap())
+    inject_context(&state, &jar, PowerOnInstanceTemplate { current_user, api_hostname, base_url, flash_messages, has_flash_messages, instance, is_disabled: state.is_instance_disabled(&instance_id) }.render().unwrap())
 }
 
 // POST handler for poweron
@@ -3393,6 +3436,14 @@ async fn instance_poweron_post(
     }
     if !enforce_instance_access(&state, &jar, &instance_id).await {
         return Redirect::to("/instances").into_response();
+    }
+    if state.is_instance_disabled(&instance_id) {
+        if let Some(sid) = jar.get("session_id") {
+            let mut flashes = state.flash_store.lock().unwrap();
+            let entry = flashes.entry(sid.value().to_string()).or_default();
+            entry.push("Actions are disabled for this instance.".into());
+        }
+        return Redirect::to(&format!("/instance/{}", instance_id)).into_response();
     }
     let _ = simple_instance_action(&state, "poweron", &instance_id).await;
     Redirect::to(&format!("/instance/{}", instance_id)).into_response()
@@ -3440,7 +3491,7 @@ async fn instance_delete_get(
         }
     }
     let TemplateGlobals { current_user, api_hostname, base_url, flash_messages, has_flash_messages } = build_template_globals(&state, &jar);
-    inject_context(&state, &jar, DeleteInstanceTemplate { current_user, api_hostname, base_url, flash_messages, has_flash_messages, instance }.render().unwrap())
+    inject_context(&state, &jar, DeleteInstanceTemplate { current_user, api_hostname, base_url, flash_messages, has_flash_messages, instance, is_disabled: state.is_instance_disabled(&instance_id) }.render().unwrap())
 }
 
 // Render confirm page for poweroff (GET) and perform poweroff (POST handler below)
@@ -3467,7 +3518,7 @@ async fn instance_poweroff_get(
         }
     }
     let TemplateGlobals { current_user, api_hostname, base_url, flash_messages, has_flash_messages } = build_template_globals(&state, &jar);
-    inject_context(&state, &jar, PowerOffInstanceTemplate { current_user, api_hostname, base_url, flash_messages, has_flash_messages, instance }.render().unwrap())
+    inject_context(&state, &jar, PowerOffInstanceTemplate { current_user, api_hostname, base_url, flash_messages, has_flash_messages, instance, is_disabled: state.is_instance_disabled(&instance_id) }.render().unwrap())
 }
 
 // POST handler for poweroff
@@ -3481,6 +3532,14 @@ async fn instance_poweroff_post(
     }
     if !enforce_instance_access(&state, &jar, &instance_id).await {
         return Redirect::to("/instances").into_response();
+    }
+    if state.is_instance_disabled(&instance_id) {
+        if let Some(sid) = jar.get("session_id") {
+            let mut flashes = state.flash_store.lock().unwrap();
+            let entry = flashes.entry(sid.value().to_string()).or_default();
+            entry.push("Actions are disabled for this instance.".into());
+        }
+        return Redirect::to(&format!("/instance/{}", instance_id)).into_response();
     }
     let _ = simple_instance_action(&state, "poweroff", &instance_id).await;
     Redirect::to(&format!("/instance/{}", instance_id)).into_response()
@@ -3510,7 +3569,7 @@ async fn instance_reset_get(
         }
     }
     let TemplateGlobals { current_user, api_hostname, base_url, flash_messages, has_flash_messages } = build_template_globals(&state, &jar);
-    inject_context(&state, &jar, ResetInstanceTemplate { current_user, api_hostname, base_url, flash_messages, has_flash_messages, instance }.render().unwrap())
+    inject_context(&state, &jar, ResetInstanceTemplate { current_user, api_hostname, base_url, flash_messages, has_flash_messages, instance, is_disabled: state.is_instance_disabled(&instance_id) }.render().unwrap())
 }
 
 // POST handler for reset
@@ -3524,6 +3583,14 @@ async fn instance_reset_post(
     }
     if !enforce_instance_access(&state, &jar, &instance_id).await {
         return Redirect::to("/instances").into_response();
+    }
+    if state.is_instance_disabled(&instance_id) {
+        if let Some(sid) = jar.get("session_id") {
+            let mut flashes = state.flash_store.lock().unwrap();
+            let entry = flashes.entry(sid.value().to_string()).or_default();
+            entry.push("Actions are disabled for this instance.".into());
+        }
+        return Redirect::to(&format!("/instance/{}", instance_id)).into_response();
     }
     let _ = simple_instance_action(&state, "reset", &instance_id).await;
     Redirect::to(&format!("/instance/{}", instance_id)).into_response()
@@ -3553,7 +3620,7 @@ async fn instance_change_pass_get(
         }
     }
     let TemplateGlobals { current_user, api_hostname, base_url, flash_messages, has_flash_messages } = build_template_globals(&state, &jar);
-    inject_context(&state, &jar, ChangePassInstanceTemplate { current_user, api_hostname, base_url, flash_messages, has_flash_messages, instance, new_password: None }.render().unwrap())
+    inject_context(&state, &jar, ChangePassInstanceTemplate { current_user, api_hostname, base_url, flash_messages, has_flash_messages, instance, new_password: None, is_disabled: state.is_instance_disabled(&instance_id) }.render().unwrap())
 }
 
 // POST handler for change-pass; display generated password in template
@@ -3567,6 +3634,14 @@ async fn instance_change_pass_post(
     }
     if !enforce_instance_access(&state, &jar, &instance_id).await {
         return Redirect::to("/instances").into_response();
+    }
+    if state.is_instance_disabled(&instance_id) {
+        if let Some(sid) = jar.get("session_id") {
+            let mut flashes = state.flash_store.lock().unwrap();
+            let entry = flashes.entry(sid.value().to_string()).or_default();
+            entry.push("Actions are disabled for this instance.".into());
+        }
+        return Redirect::to(&format!("/instance/{}/change-pass", instance_id)).into_response();
     }
     let endpoint = format!("/v1/instances/{}/change-pass", instance_id);
     let payload = api_call(&state, "POST", &endpoint, None, None).await;
@@ -3584,7 +3659,7 @@ async fn instance_change_pass_post(
         }
     }
     let TemplateGlobals { current_user, api_hostname, base_url, flash_messages, has_flash_messages } = build_template_globals(&state, &jar);
-    inject_context(&state, &jar, ChangePassInstanceTemplate { current_user, api_hostname, base_url, flash_messages, has_flash_messages, instance, new_password }.render().unwrap())
+    inject_context(&state, &jar, ChangePassInstanceTemplate { current_user, api_hostname, base_url, flash_messages, has_flash_messages, instance, new_password, is_disabled: state.is_instance_disabled(&instance_id) }.render().unwrap())
 }
 
 async fn instance_delete(
@@ -3597,6 +3672,14 @@ async fn instance_delete(
     }
     if !enforce_instance_access(&state, &jar, &instance_id).await {
         return Redirect::to("/instances").into_response();
+    }
+    if state.is_instance_disabled(&instance_id) {
+        if let Some(sid) = jar.get("session_id") {
+            let mut flashes = state.flash_store.lock().unwrap();
+            let entry = flashes.entry(sid.value().to_string()).or_default();
+            entry.push("Actions are disabled for this instance.".into());
+        }
+        return Redirect::to(&format!("/instance/{}", instance_id)).into_response();
     }
     let endpoint = format!("/v1/instances/{}", instance_id);
     let payload = api_call(&state, "DELETE", &endpoint, None, None).await;
@@ -3634,6 +3717,14 @@ async fn instance_add_traffic(
 ) -> impl IntoResponse {
     if !enforce_instance_access(&state, &jar, &instance_id).await {
         return Redirect::to("/instances").into_response();
+    }
+    if state.is_instance_disabled(&instance_id) {
+        if let Some(sid) = jar.get("session_id") {
+            let mut flashes = state.flash_store.lock().unwrap();
+            let entry = flashes.entry(sid.value().to_string()).or_default();
+            entry.push("Actions are disabled for this instance.".into());
+        }
+        return Redirect::to(&format!("/instance/{}", instance_id)).into_response();
     }
     if let Ok(amount) = form.traffic_amount.parse::<f64>() {
         if amount > 0.0 {
@@ -3684,7 +3775,7 @@ async fn instance_change_os_get(
     }
     let os_list = load_os_list(&state).await;
     let TemplateGlobals { current_user, api_hostname, base_url, flash_messages, has_flash_messages } = build_template_globals(&state, &jar);
-    inject_context(&state, &jar, ChangeOsTemplate { current_user, api_hostname, base_url, flash_messages, has_flash_messages, instance, os_list: &os_list }.render().unwrap())
+    inject_context(&state, &jar, ChangeOsTemplate { current_user, api_hostname, base_url, flash_messages, has_flash_messages, instance, os_list: &os_list, is_disabled: state.is_instance_disabled(&instance_id) }.render().unwrap())
 }
 
 async fn instance_change_os_post(
@@ -3698,6 +3789,14 @@ async fn instance_change_os_post(
     }
     if !enforce_instance_access(&state, &jar, &instance_id).await {
         return Redirect::to("/instances").into_response();
+    }
+    if state.is_instance_disabled(&instance_id) {
+        if let Some(sid) = jar.get("session_id") {
+            let mut flashes = state.flash_store.lock().unwrap();
+            let entry = flashes.entry(sid.value().to_string()).or_default();
+            entry.push("Actions are disabled for this instance.".into());
+        }
+        return Redirect::to(&format!("/instance/{}/change-os", instance_id)).into_response();
     }
     if form.os_id.trim().is_empty() {
         return Redirect::to(&format!("/instance/{}/change-os", instance_id)).into_response();
@@ -3714,9 +3813,12 @@ struct ResizeForm {
     product_id: Option<String>,
     region_id: Option<String>,
     cpu: Option<String>,
-    ramInGB: Option<String>,
-    diskInGB: Option<String>,
-    bandwidthInTB: Option<String>,
+    #[serde(rename = "ramInGB")]
+    ram_in_gb: Option<String>,
+    #[serde(rename = "diskInGB")]
+    disk_in_gb: Option<String>,
+    #[serde(rename = "bandwidthInTB")]
+    bandwidth_in_tb: Option<String>,
 }
 
 async fn instance_resize_get(
@@ -3743,7 +3845,7 @@ async fn instance_resize_get(
     }
     let (regions, _map) = load_regions(&state).await;
     let TemplateGlobals { current_user, api_hostname, base_url, flash_messages, has_flash_messages } = build_template_globals(&state, &jar);
-    inject_context(&state, &jar, ResizeTemplate { current_user, api_hostname, base_url, flash_messages, has_flash_messages, instance, regions: &regions }.render().unwrap())
+    inject_context(&state, &jar, ResizeTemplate { current_user, api_hostname, base_url, flash_messages, has_flash_messages, instance, regions: &regions, is_disabled: state.is_instance_disabled(&instance_id) }.render().unwrap())
 }
 
 async fn instance_resize_post(
@@ -3758,6 +3860,14 @@ async fn instance_resize_post(
     if !enforce_instance_access(&state, &jar, &instance_id).await {
         return Redirect::to("/instances").into_response();
     }
+    if state.is_instance_disabled(&instance_id) {
+        if let Some(sid) = jar.get("session_id") {
+            let mut flashes = state.flash_store.lock().unwrap();
+            let entry = flashes.entry(sid.value().to_string()).or_default();
+            entry.push("Actions are disabled for this instance.".into());
+        }
+        return Redirect::to(&format!("/instance/{}/resize", instance_id)).into_response();
+    }
     let endpoint = format!("/v1/instances/{}/resize", instance_id);
     let mut payload = serde_json::json!({"type": form.r#type});
     if form.r#type.to_uppercase() == "FIXED" {
@@ -3768,9 +3878,9 @@ async fn instance_resize_post(
         let mut obj = serde_json::Map::new();
         if let Some(rid) = form.region_id { obj.insert("regionId".into(), Value::from(rid)); }
         if let Some(cpu) = form.cpu { if let Ok(n) = cpu.parse::<i64>() { obj.insert("cpu".into(), Value::from(n)); }}
-        if let Some(ram) = form.ramInGB { if let Ok(n) = ram.parse::<i64>() { obj.insert("ramInGB".into(), Value::from(n)); }}
-        if let Some(disk) = form.diskInGB { if let Ok(n) = disk.parse::<i64>() { obj.insert("diskInGB".into(), Value::from(n)); }}
-        if let Some(bw) = form.bandwidthInTB { if let Ok(n) = bw.parse::<i64>() { obj.insert("bandwidthInTB".into(), Value::from(n)); }}
+        if let Some(ram) = form.ram_in_gb { if let Ok(n) = ram.parse::<i64>() { obj.insert("ramInGB".into(), Value::from(n)); }}
+        if let Some(disk) = form.disk_in_gb { if let Ok(n) = disk.parse::<i64>() { obj.insert("diskInGB".into(), Value::from(n)); }}
+        if let Some(bw) = form.bandwidth_in_tb { if let Ok(n) = bw.parse::<i64>() { obj.insert("bandwidthInTB".into(), Value::from(n)); }}
         if !obj.is_empty() {
             payload["resource"] = Value::Object(obj);
         }

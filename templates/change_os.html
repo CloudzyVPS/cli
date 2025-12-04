@@ -40,6 +40,32 @@
         </dl>
     </fieldset>
 
+    {% if is_disabled %}
+    <div>
+        <div>
+            <h2>Instance locked</h2>
+            <p>Actions are disabled for this instance.</p>
+        </div>
+    </div>
+    <form method="post" action="{{ base_url }}/instance/{{ instance.id }}/change-os">
+        <fieldset>
+            <legend>Select new operating system</legend>
+            <label for="os_id">Operating system</label>
+            <select id="os_id" name="os_id" required>
+                <option value="">Choose an operating system...</option>
+                {% for os in os_list %}
+                <option value="{{ os.id }}">{{ os.name }} ({{ os.family }})</option>
+                {% endfor %}
+            </select>
+            <small>Select the operating system you want to install on this instance.</small>
+        </fieldset>
+
+        <footer>
+            <a href="{{ base_url }}/instance/{{ instance.id }}">Cancel</a>
+            <button type="button" disabled>Change operating system</button>
+        </footer>
+    </form>
+    {% else %}
     <form method="post" action="{{ base_url }}/instance/{{ instance.id }}/change-os">
         <fieldset>
             <legend>Select new operating system</legend>
@@ -58,5 +84,6 @@
             <button type="submit">Change operating system</button>
         </footer>
     </form>
+    {% endif %}
 </section>
 {% endblock %}
