@@ -1,130 +1,158 @@
-# Zy — control and manage your Cloudzy services right from home.
+# Zy CLI
 
-## Releases
+**Zy** — Control and manage your Cloudzy services from the command line or web interface.
 
-Pre-built binaries for Zy are automatically built and published through GitHub Releases for multiple platforms.
+Zy is a command-line tool and web server that allows you to manage Cloudzy VPS instances, regions, products, and more. Whether you prefer a web UI or CLI commands, Zy gives you full control over your Cloudzy infrastructure.
+
+## 🚀 Quick Start
 
 ### Download
 
-Download the latest release from the [Releases page](https://github.com/CloudzyVPS/cli/releases).
+Get the latest pre-built binary for your platform from the [Releases page](https://github.com/CloudzyVPS/cli/releases).
 
-Available platforms:
-- **Linux**: x86_64 and aarch64 (GNU libc)
-  - `zy-{version}-x86_64-unknown-linux-gnu` - Linux x86_64
-  - `zy-{version}-aarch64-unknown-linux-gnu` - Linux ARM64
-- **macOS**: Intel and Apple Silicon
-  - `zy-{version}-x86_64-apple-darwin` - macOS Intel
-  - `zy-{version}-aarch64-apple-darwin` - macOS Apple Silicon
-- **Windows**: x86_64
-  - `zy-{version}-x86_64-pc-windows-msvc.exe` - Windows 64-bit
-
-### Platform Notes
-
-**Linux**: We provide binaries for systems with GNU libc (glibc). These binaries work on most modern Linux distributions including Ubuntu, Debian, Fedora, CentOS, and others. MUSL-based static binaries are not provided due to cross-compilation complexity with dependencies. If you need a static binary or use a MUSL-based distribution (like Alpine Linux), please build from source.
-
-**aarch64 (ARM64)**: ARM64 Linux binaries are cross-compiled and should work on ARM64 Linux systems with glibc. If you encounter issues, please report them or build from source on your target platform.
-
-**Compatibility**: The binaries require:
-- Linux: glibc 2.31+ (Ubuntu 20.04+, Debian 11+, or equivalent)
-- macOS: macOS 10.15+ (Catalina or later)
-- Windows: Windows 10 or later
-
-### Verification
-
-Each release includes a `SHA256SUMS.txt` file containing checksums for all release artifacts. To verify your download:
-
-```bash
-# Linux/macOS
-sha256sum -c SHA256SUMS.txt --ignore-missing
-
-# Or verify a specific file
-sha256sum zy-{version}-{target}
-# Compare with the checksum in SHA256SUMS.txt
-```
+**Available platforms:**
+- **Linux** (x86_64, ARM64)
+- **macOS** (Intel, Apple Silicon)
+- **Windows** (x86_64)
 
 ### Installation
 
 **Linux/macOS:**
 ```bash
-# Download the binary
-# wget or curl: curl -LO https://github.com/CloudzyVPS/cli/releases/download/v{version}/zy-{version}-{target}
-
-# Make it executable
+# Download and install
+curl -LO https://github.com/CloudzyVPS/cli/releases/latest/download/zy-{version}-{target}
 chmod +x zy-{version}-{target}
-
-# Move to a location in your PATH
 sudo mv zy-{version}-{target} /usr/local/bin/zy
 
-# Verify installation
+# Verify
 zy --help
 ```
 
 **Windows:**
-```powershell
-# Download the .exe file
-# Add the directory containing zy.exe to your PATH
-# Or move zy.exe to a directory already in your PATH
+Download the `.exe` file from the [Releases page](https://github.com/CloudzyVPS/cli/releases) and add it to your PATH.
 
-# Verify installation
-zy --help
+### Configuration
+
+Create a `.env` file or set environment variables:
+
+```bash
+# Required
+API_BASE_URL=https://api.cloudzy.com/developers
+API_TOKEN=your_api_token_here
+
+# Optional
+PUBLIC_BASE_URL=http://localhost:5000
+DISABLED_INSTANCE_IDS=
 ```
 
-### Release Triggers
+See [.env.example](.env.example) for a complete configuration template.
 
-New releases are automatically triggered by:
-- **Tag Push**: Pushing a tag matching `v*` (e.g., `v0.1.0`, `v1.2.3`)
-- **GitHub Release**: Publishing a new GitHub Release
-- **Manual**: Using the "Run workflow" button in the Actions tab
+## 📖 Usage
 
-When a version tag is pushed (e.g., `v0.1.0`), the workflow:
-1. Builds binaries for all supported platforms
-2. Runs tests to ensure quality
-3. Packages each binary with README and LICENSE (if present)
-4. Generates SHA256 checksums
-5. Creates a GitHub Release with all artifacts attached
+### Web Server
 
-### Platform Support Decisions
+Start the web interface to manage your instances through a browser:
 
-**Why no MUSL targets?**
-MUSL-based static binaries were removed from CI/releases due to cross-compilation complexity. While Rust projects can target MUSL, managing dependencies (especially when involving pkg-config and various system libraries) during cross-compilation proved problematic and increased maintenance burden. Users needing static binaries or MUSL support can:
-- Build from source on their target system
-- Use containerized builds with appropriate toolchains
-- Request specific target support through GitHub issues if there's sufficient demand
+```bash
+# Using defaults (0.0.0.0:5000)
+zy serve
 
-**aarch64 (ARM64) Support:**
-ARM64 Linux builds use the `cross` tool for reliable cross-compilation. These binaries are tested in CI but may encounter issues with specific ARM64 configurations. If you experience problems, please report them via GitHub issues or build from source on your native ARM64 system.
+# Custom host and port
+zy serve --host 127.0.0.1 --port 8080
 
-**Future Target Extensions:**
-To add new platforms or architectures:
-1. Test thoroughly with all project dependencies
-2. Prefer native compilation when possible
-3. Document any special build requirements
-4. Consider maintenance burden vs. user demand
+# With custom .env file
+zy serve --env-file /path/to/.env
+```
 
-## Building from Source
+Access the web interface at `http://localhost:5000` (default credentials: `owner` / `owner123`).
 
-Generate binary (production):
+### CLI Commands
 
-1. Build a release binary:
+Manage instances directly from the command line:
 
-	```bash
-	cargo build --release
-	```
+```bash
+# List instances
+zy instances list
 
-2. The produced binary is located at `target/release/zy`.
+# Show instance details
+zy instances show <instance-id>
 
-Run the server (serve command):
+# Power management
+zy instances power-on <instance-id>
+zy instances power-off <instance-id>
+zy instances reset <instance-id>
 
-1. Use the built binary and the `serve` subcommand:
+# Delete an instance
+zy instances delete <instance-id>
+```
 
-	```bash
-	./target/release/zy serve --host 0.0.0.0 --port 5000 --env-file /path/to/.env
-	```
+### User Management
 
-2. For development, you can run through cargo directly:
+```bash
+# List users
+zy users list
 
-	```bash
-	cargo run -- serve --host 127.0.0.1 --port 5000
-	```
+# Add a user
+zy users add <username> <password> <role>
 
-Only the binary generation and `serve` command are documented here. For additional commands and configuration, consult the source or CLI help.
+# Reset password
+zy users reset-password <username> <new-password>
+```
+
+### Configuration Check
+
+```bash
+# Validate your configuration
+zy check-config
+```
+
+For complete command documentation, use:
+```bash
+zy --help
+zy <command> --help
+```
+
+## 🔧 Building from Source
+
+**Prerequisites:**
+- Rust 1.91.1 or later
+- Cargo
+
+**Build:**
+```bash
+# Clone the repository
+git clone https://github.com/CloudzyVPS/cli.git
+cd cli
+
+# Build release binary
+cargo build --release
+
+# Binary location
+./target/release/zy
+```
+
+**Development:**
+```bash
+# Run directly with cargo
+cargo run -- serve --host 127.0.0.1 --port 5000
+```
+
+## 📋 Requirements
+
+- **Linux**: glibc 2.31+ (Ubuntu 20.04+, Debian 11+, or equivalent)
+- **macOS**: macOS 10.15+ (Catalina or later)
+- **Windows**: Windows 10 or later
+
+## 🤝 Contributing
+
+Contributions are welcome! Please feel free to submit issues or pull requests.
+
+## 📝 License
+
+See [LICENSE](LICENSE) for details.
+
+## 🔗 Links
+
+- [Cloudzy Website](https://cloudzy.com)
+- [API Documentation](https://api.cloudzy.com/developers)
+- [GitHub Releases](https://github.com/CloudzyVPS/cli/releases)
