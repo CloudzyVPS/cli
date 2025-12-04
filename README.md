@@ -20,24 +20,24 @@ Get the latest pre-built binary for your platform from the [Releases page](https
 **Linux/macOS:**
 ```bash
 # Download the appropriate binary for your platform from the Releases page
-# For example (replace with your actual version and platform):
-# Linux x86_64:   zy-1.0.0-x86_64-unknown-linux-gnu
-# Linux ARM64:    zy-1.0.0-aarch64-unknown-linux-gnu
-# macOS Intel:    zy-1.0.0-x86_64-apple-darwin
-# macOS Apple Silicon: zy-1.0.0-aarch64-apple-darwin
+# Replace {VERSION} with the actual version (e.g., 0.1.0) you downloaded:
+# Linux x86_64:        zy-{VERSION}-x86_64-unknown-linux-gnu
+# Linux ARM64:         zy-{VERSION}-aarch64-unknown-linux-gnu
+# macOS Intel:         zy-{VERSION}-x86_64-apple-darwin
+# macOS Apple Silicon: zy-{VERSION}-aarch64-apple-darwin
 
 # Make it executable (use the actual filename you downloaded)
-chmod +x zy-1.0.0-x86_64-unknown-linux-gnu
+chmod +x zy-{VERSION}-{TARGET}
 
 # Move to a location in your PATH
-sudo mv zy-1.0.0-x86_64-unknown-linux-gnu /usr/local/bin/zy
+sudo mv zy-{VERSION}-{TARGET} /usr/local/bin/zy
 
 # Verify
 zy --help
 ```
 
 **Windows:**
-1. Download the `zy-1.0.0-x86_64-pc-windows-msvc.exe` file from the [Releases page](https://github.com/CloudzyVPS/cli/releases) (use your actual version)
+1. Download the `zy-{VERSION}-x86_64-pc-windows-msvc.exe` file from the [Releases page](https://github.com/CloudzyVPS/cli/releases)
 2. Rename it to `zy.exe`
 3. Move it to a directory in your PATH:
    ```powershell
@@ -61,9 +61,9 @@ zy --help
 Create a `.env` file or set environment variables:
 
 ```bash
-# Required
+# Required - Get your API token from Cloudzy dashboard
 API_BASE_URL=https://api.cloudzy.com/developers
-API_TOKEN=your_api_token_here
+API_TOKEN=your_api_token_here  # ⚠️ Replace with your actual token
 
 # Optional
 PUBLIC_BASE_URL=http://localhost:5000
@@ -91,7 +91,7 @@ zy serve --env-file /path/to/.env
 
 Access the web interface at `http://localhost:5000`. 
 
-**⚠️ Security Note:** On first run, a default owner account will be created with credentials stored in `users.json`. For security, change the default password immediately after your first login using the web interface or the `zy users reset-password` command.
+**⚠️ Security Note:** On first run, a default owner account is created with username `owner` and password `owner123` (stored in `users.json`). **Change this password immediately** after your first login using the web interface or the `zy users reset-password owner <new-password>` command.
 
 ### CLI Commands
 
