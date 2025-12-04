@@ -19,17 +19,35 @@ Get the latest pre-built binary for your platform from the [Releases page](https
 
 **Linux/macOS:**
 ```bash
-# Download and install
-curl -LO https://github.com/CloudzyVPS/cli/releases/latest/download/zy-{version}-{target}
-chmod +x zy-{version}-{target}
-sudo mv zy-{version}-{target} /usr/local/bin/zy
+# Download the appropriate binary for your platform from the Releases page
+# For example (replace VERSION and TARGET with your platform):
+# Linux x86_64:   zy-VERSION-x86_64-unknown-linux-gnu
+# Linux ARM64:    zy-VERSION-aarch64-unknown-linux-gnu
+# macOS Intel:    zy-VERSION-x86_64-apple-darwin
+# macOS Apple:    zy-VERSION-aarch64-apple-darwin
+
+# Make it executable
+chmod +x zy-*
+
+# Move to a location in your PATH
+sudo mv zy-* /usr/local/bin/zy
 
 # Verify
 zy --help
 ```
 
 **Windows:**
-Download the `.exe` file from the [Releases page](https://github.com/CloudzyVPS/cli/releases) and add it to your PATH.
+1. Download the `zy-VERSION-x86_64-pc-windows-msvc.exe` file from the [Releases page](https://github.com/CloudzyVPS/cli/releases)
+2. Rename it to `zy.exe`
+3. Move it to a directory in your PATH, or add its location to PATH:
+   ```powershell
+   # Option 1: Move to an existing PATH location
+   Move-Item zy.exe C:\Windows\System32\
+
+   # Option 2: Add current directory to PATH (requires admin)
+   $env:Path += ";C:\path\to\zy"
+   ```
+4. Verify: `zy --help`
 
 ### Configuration
 
@@ -64,7 +82,7 @@ zy serve --host 127.0.0.1 --port 8080
 zy serve --env-file /path/to/.env
 ```
 
-Access the web interface at `http://localhost:5000` (default credentials: `owner` / `owner123`).
+Access the web interface at `http://localhost:5000`. On first run, a default owner account will be created (check `users.json` for credentials).
 
 ### CLI Commands
 
