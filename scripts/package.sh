@@ -108,15 +108,6 @@ if [[ -d "artifacts/binary-aarch64-unknown-linux-gnu" ]]; then
     create_tar_archive "aarch64-unknown-linux-gnu" "zy"
 fi
 
-# Linux MUSL targets (static binaries)
-if [[ -d "artifacts/binary-x86_64-unknown-linux-musl" ]]; then
-    create_tar_archive "x86_64-unknown-linux-musl" "zy"
-fi
-
-if [[ -d "artifacts/binary-aarch64-unknown-linux-musl" ]]; then
-    create_tar_archive "aarch64-unknown-linux-musl" "zy"
-fi
-
 # macOS targets
 if [[ -d "artifacts/binary-x86_64-apple-darwin" ]]; then
     create_tar_archive "x86_64-apple-darwin" "zy"
