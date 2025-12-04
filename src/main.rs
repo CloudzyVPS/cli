@@ -3960,11 +3960,11 @@ async fn bulk_subscription_refund_get(
 
 #[derive(Parser)]
 #[command(
-     name = "zyffiliate",
+    name = "zy",
      author,
      version,
-     about = "Zyffiliate command-line tool",
-     long_about = r#"Zyffiliate CLI — control and manage the Zyffiliate server and its resources.
+    about = "Zy command-line tool",
+    long_about = r#"Zy — control and manage your Cloudzy services right from home.
 
 This tool surfaces a small set of commands to run the server, validate configuration, manage local users and manage instances through the API. Use the `--env-file` option or environment variables to provide API credentials.
 
@@ -3974,10 +3974,10 @@ Examples:
   2) Build a release binary:
       cargo build --release
     3) Manage instances:
-            zyffiliate instances list
-            zyffiliate instances show 12345
+          zy instances list
+          zy instances show 12345
 "#, 
-     after_help = "Use `zyffiliate <subcommand> --help` to get subcommand specific options and usage examples."
+    after_help = "Use `zy <subcommand> --help` to get subcommand specific options and usage examples."
 )]
 struct Cli {
     #[command(subcommand)]
@@ -3999,7 +3999,7 @@ enum Commands {
         env_file: Option<String>,
     },
     /// Validate configuration (env vars / API credentials)
-    #[command(about = "Validate configuration and ensure API connectivity.", long_about = "Validate environment variables required for the Zyffiliate server, and optionally validate the configured API token by attempting to fetch regions from the remote API.")]
+    #[command(about = "Validate configuration and ensure API connectivity.", long_about = "Validate environment variables required for the Zy server, and optionally validate the configured API token by attempting to fetch regions from the remote API.")]
     CheckConfig { env_file: Option<String> },
     /// Manage local users (users.json)
     Users {
