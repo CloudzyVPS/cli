@@ -13,6 +13,15 @@
 # - macOS: Intel (x86_64) and Apple Silicon (aarch64)
 # - Windows: x86_64
 #
+# Cross-compilation Strategy:
+# - For Linux musl targets (x86_64-unknown-linux-musl, aarch64-unknown-linux-musl):
+#   We use the 'cross' tool to resolve OpenSSL dependency issues. The musl libc doesn't
+#   include OpenSSL, and cross provides pre-configured Docker containers with all necessary
+#   dependencies for building static binaries with OpenSSL support.
+# - For Linux GNU targets and other platforms: We use native runners with cargo directly.
+# - We use taiki-e/install-action for installing cross, which provides better caching
+#   and is the recommended approach over cargo install.
+#
 # The workflow:
 # 1. Builds release binaries for all target platforms
 # 2. Runs tests to ensure quality
@@ -61,9 +70,10 @@ jobs:
             use_cross: false
             
           # Linux x86_64 MUSL (static binary)
+          # Note: Using cross to handle OpenSSL dependencies for musl targets
           - target: x86_64-unknown-linux-musl
             os: ubuntu-latest
-            use_cross: false
+            use_cross: true
             
           # Linux aarch64 GNU (cross-compilation)
           - target: aarch64-unknown-linux-gnu
@@ -71,6 +81,7 @@ jobs:
             use_cross: true
             
           # Linux aarch64 MUSL (static binary, cross-compilation)
+          # Note: Using cross to handle OpenSSL dependencies for musl targets
           - target: aarch64-unknown-linux-musl
             os: ubuntu-latest
             use_cross: true
@@ -104,15 +115,16 @@ jobs:
         with:
           key: ${{ matrix.target }}
 
-      # Install musl-tools for musl targets on Linux
-      - name: Install musl tools
-        if: matrix.target == 'x86_64-unknown-linux-musl'
-        run: sudo apt-get update && sudo apt-get install -y musl-tools
-
-      # Install cross for cross-compilation targets
+      # Install cross for cross-compilation targets using taiki-e/install-action
+      # This provides better caching and is the recommended approach
+      # Cross is used for:
+      # - Linux musl targets (both x86_64 and aarch64) to handle OpenSSL dependencies
+      # - Linux aarch64 GNU target for cross-compilation
       - name: Install cross
         if: matrix.use_cross
-        run: cargo install cross --git https://github.com/cross-rs/cross
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cross
 
       # Build the binary using cargo or cross
       - name: Build release binary
