@@ -4,6 +4,7 @@ use serde_json::Value;
 
 use crate::api::{api_call, load_os_list, load_products, load_regions, InstanceView, OsItem};
 
+#[derive(Clone)]
 pub struct AppState {
     pub users: std::sync::Arc<std::sync::Mutex<std::collections::HashMap<String, crate::users::UserRecord>>>,
     pub sessions: std::sync::Arc<std::sync::Mutex<std::collections::HashMap<String, String>>>,
