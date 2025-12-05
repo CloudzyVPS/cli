@@ -1,5 +1,5 @@
 use askama::Template;
-use crate::models::{CurrentUser, BaseState, Step1FormData, Step2FormData, CustomPlanFormValues, Region, ProductView, OsItem};
+use crate::models::CurrentUser;
 
 #[derive(Template)]
 #[template(path = "step_8.html")]
@@ -9,7 +9,9 @@ pub struct Step8Template {
     pub base_url: String,
     pub flash_messages: Vec<String>,
     pub has_flash_messages: bool,
-    pub success: bool,
-    pub message: String,
-    pub instances_url: String,
+    pub status_label: String,
+    pub code: Option<String>,
+    pub detail: Option<String>,
+    pub errors: Vec<String>,
+    pub back_url: String,
 }

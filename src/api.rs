@@ -234,7 +234,10 @@ pub async fn load_applications(
                         id: obj.get("id").and_then(|v| v.as_str()).unwrap_or("").to_string(),
                         name: obj.get("name").and_then(|v| v.as_str()).unwrap_or("").to_string(),
                         short_description: obj.get("shortDescription").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+                        description: obj.get("description").and_then(|v| v.as_str()).unwrap_or("").to_string(),
                         support_level: obj.get("supportLevel").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+                        price: obj.get("price").and_then(|v| v.as_str()).map(|s| s.to_string()),
+                        tags: obj.get("tags").and_then(|v| v.as_str()).map(|s| s.to_string()),
                     });
                 }
             }

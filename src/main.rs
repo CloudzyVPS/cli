@@ -17,7 +17,7 @@ use tower_http::set_header::SetResponseHeaderLayer;
 use axum::http::header::CACHE_CONTROL;
 use axum::http::HeaderValue;
 use tower::ServiceBuilder;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use serde_json::Value;
 use std::net::SocketAddr;
 use std::sync::{Arc, Mutex};
@@ -30,8 +30,8 @@ use tracing_subscriber::util::SubscriberInitExt;
 use axum_extra::extract::cookie::{CookieJar, Cookie};
 
 use config::{DEFAULT_HOST, DEFAULT_PORT, DEFAULT_PBKDF2_ITERATIONS};
-use models::{UserRecord, CurrentUser, AppState, AddTrafficForm, ChangeOsForm, ResizeForm, BaseState, Step1FormData, Step2FormData, CustomPlanFormValues, Step7Form, Region, ProductView, ProductEntry, OsItem, ApplicationView, InstanceView};
-use services::{generate_password_hash, verify_password, random_session_id, load_users_from_file, persist_users_file, simple_instance_action, enforce_instance_access, get_instance_for_action, parse_wizard_base, build_base_query_pairs};
+use models::{UserRecord, CurrentUser, AppState, AddTrafficForm, ChangeOsForm, ResizeForm, Step1FormData, Step2FormData, CustomPlanFormValues, Region, ProductView, ProductEntry, OsItem, ApplicationView, InstanceView, SshKeyView, SshKeyDisplay, Extras, PlanState, UserRow, AdminView, InstanceCheckbox};
+use services::{generate_password_hash, verify_password, random_session_id, load_users_from_file, persist_users_file, simple_instance_action, enforce_instance_access, parse_wizard_base, build_base_query_pairs};
 use utils::{hostname_from_url, absolute_url, build_query_string, parse_urlencoded_body};
 use api::{api_call, load_regions, load_products, load_os_list, load_applications, load_instances_for_user};
 use templates::*;
@@ -613,11 +613,7 @@ async fn create_step_3(
 }
 
 // ---------- Wizard Step 4 (Extras for fixed plans) ----------
-#[derive(Clone)]
-struct ExtrasFormValues {
-    extra_disk: String,
-    extra_bandwidth: String,
-}
+// Now using Extras from models
 
 async fn create_step_4(
     State(state): State<AppState>,
@@ -661,7 +657,7 @@ async fn create_step_4(
         flash_messages,
         has_flash_messages,
     } = build_template_globals(&state, &jar);
-    let extras = ExtrasFormValues {
+    let extras = Extras {
         extra_disk: q.get("extra_disk").cloned().unwrap_or_else(|| "0".into()),
         extra_bandwidth: q
             .get("extra_bandwidth")
@@ -692,14 +688,7 @@ async fn create_step_4(
 }
 
 // ---------- Wizard Step 5 (OS selection) ----------
-
-#[derive(Clone, Default)]
-struct CustomPlanCarry {
-    cpu: String,
-    ram_in_gb: String,
-    disk_in_gb: String,
-    bandwidth_in_tb: String,
-}
+// Now using CustomPlanFormValues from models
 
 async fn create_step_5(
     State(state): State<AppState>,
@@ -729,7 +718,7 @@ async fn create_step_5(
         .get("extra_bandwidth")
         .cloned()
         .unwrap_or_else(|| "0".into());
-    let custom_plan = CustomPlanCarry {
+    let custom_plan = CustomPlanFormValues {
         cpu: q.get("cpu").cloned().unwrap_or_else(|| "2".into()),
         ram_in_gb: q.get("ramInGB").cloned().unwrap_or_else(|| "4".into()),
         disk_in_gb: q.get("diskInGB").cloned().unwrap_or_else(|| "50".into()),
@@ -802,11 +791,7 @@ async fn create_step_5(
 }
 
 // ---------- Wizard Step 6 (SSH key selection) ----------
-struct SelectableSshKey {
-    id: String,
-    name: String,
-    selected: bool,
-}
+// Now using SshKeyDisplay from models
 
 async fn create_step_6(
     State(state): State<AppState>,
@@ -839,7 +824,7 @@ async fn create_step_6(
         .get("extra_bandwidth")
         .cloned()
         .unwrap_or_else(|| "0".into());
-    let custom_plan = CustomPlanCarry {
+    let custom_plan = CustomPlanFormValues {
         cpu: q.get("cpu").cloned().unwrap_or_else(|| "2".into()),
         ram_in_gb: q.get("ramInGB").cloned().unwrap_or_else(|| "4".into()),
         disk_in_gb: q.get("diskInGB").cloned().unwrap_or_else(|| "50".into()),
@@ -873,11 +858,11 @@ async fn create_step_6(
     let ssh_keys = load_ssh_keys_api(&state, customer_id).await;
     let selected_ids: HashSet<String> =
         base.ssh_key_ids.iter().map(|id| id.to_string()).collect();
-    let selectable: Vec<SelectableSshKey> = ssh_keys
+    let selectable: Vec<SshKeyDisplay> = ssh_keys
         .into_iter()
         .map(|key| {
             let is_selected = selected_ids.contains(&key.id);
-            SelectableSshKey {
+            SshKeyDisplay {
                 id: key.id,
                 name: key.name,
                 selected: is_selected,
@@ -897,7 +882,7 @@ async fn create_step_6(
             has_flash_messages,
             base_state: &base,
             floating_ip_count: base.floating_ip_count.to_string(),
-            ssh_keys: selectable,
+            ssh_keys: &selectable,
             product_id,
             extra_disk,
             extra_bandwidth,
@@ -913,16 +898,7 @@ async fn create_step_6(
 }
 
 // ---------- Wizard Step 7 (Review & Create) ----------
-#[derive(Clone, Default)]
-struct PlanReviewState {
-    product_id: String,
-    extra_disk: String,
-    extra_bandwidth: String,
-    cpu: String,
-    ram_in_gb: String,
-    disk_in_gb: String,
-    bandwidth_in_tb: String,
-}
+// Now using PlanState from models
 
 async fn create_step_7_core(
     state: AppState,
@@ -946,7 +922,7 @@ async fn create_step_7_core(
     if base.os_id.is_empty() {
         return Redirect::to("/create/step-5").into_response();
     }
-    let mut plan_state = PlanReviewState::default();
+    let mut plan_state = PlanState::default();
     if base.plan_type == "fixed" {
         plan_state.product_id = source.get("product_id").cloned().unwrap_or_default();
         if plan_state.product_id.is_empty() {
@@ -1331,11 +1307,7 @@ async fn load_instances_for_user_wrapper(state: &AppState, username: &str) -> Ve
     let users_map = state.users.lock().unwrap().clone();
     load_instances_for_user(&state.client, &state.api_base_url, &state.api_token, &users_map, username).await
 }
-struct UserTableRow {
-    username: String,
-    role: String,
-    assigned: String,
-}
+// Now using UserRow from models
 
 #[derive(Deserialize)]
 struct CreateUserForm {
@@ -1386,7 +1358,7 @@ async fn users_list(State(state): State<AppState>, jar: CookieJar) -> impl IntoR
         return r.into_response();
     }
     let users = state.users.lock().unwrap();
-    let mut rows: Vec<UserTableRow> = users
+    let mut rows: Vec<UserRow> = users
         .iter()
         .map(|(k, v)| {
             let assigned = if v.assigned_instances.is_empty() {
@@ -1394,7 +1366,7 @@ async fn users_list(State(state): State<AppState>, jar: CookieJar) -> impl IntoR
             } else {
                 v.assigned_instances.join(", ")
             };
-            UserTableRow {
+            UserRow {
                 username: k.clone(),
                 role: v.role.clone(),
                 assigned,
@@ -1419,7 +1391,7 @@ async fn users_list(State(state): State<AppState>, jar: CookieJar) -> impl IntoR
             base_url,
             flash_messages,
             has_flash_messages,
-            rows,
+            rows: &rows,
         }
         .render()
         .unwrap(),
@@ -1590,18 +1562,7 @@ async fn delete_user(
     );
     Redirect::to("/users").into_response()
 }
-#[derive(Clone)]
-struct InstanceForAction {
-    id: String,
-    hostname: String,
-    region: String,
-    main_ip: Option<String>,
-    status: String,
-    vcpu_count_display: String,
-    ram_display: String,
-    disk_display: String,
-    os: Option<OsItem>,
-}
+// Now using InstanceView from models
 
 async fn instances_real(State(state): State<AppState>, jar: CookieJar) -> impl IntoResponse {
     let Some(username) = current_username_from_jar(&state, &jar) else {
@@ -1626,16 +1587,7 @@ async fn instances_real(State(state): State<AppState>, jar: CookieJar) -> impl I
 }
 
 // Access management (owner only): list admins and assign instances
-struct AdminView {
-    username: String,
-    instances: Vec<AdminInstanceRow>,
-}
-
-struct AdminInstanceRow {
-    id: String,
-    hostname: String,
-    checked: bool,
-}
+// Removed - now using AdminView from models
 
 async fn access_get(State(state): State<AppState>, jar: CookieJar) -> impl IntoResponse {
     if let Some(r) = ensure_owner(&state, &jar) {
@@ -1671,7 +1623,22 @@ async fn access_get(State(state): State<AppState>, jar: CookieJar) -> impl IntoR
                     .and_then(|v| v.as_str())
                     .map(|s| s.to_string())
                     .unwrap_or_else(|| "?".into());
-                list.push(InstanceView { id, hostname, status });
+                let region = item
+                    .get("region")
+                    .and_then(|v| v.as_str())
+                    .map(|s| s.to_string())
+                    .unwrap_or_default();
+                list.push(InstanceView { 
+                    id, 
+                    hostname, 
+                    region,
+                    status,
+                    vcpu_count_display: "—".into(),
+                    ram_display: "—".into(),
+                    disk_display: "—".into(),
+                    main_ip: None,
+                    os: None,
+                });
             }
         }
     }
@@ -1687,7 +1654,7 @@ async fn access_get(State(state): State<AppState>, jar: CookieJar) -> impl IntoR
                 .iter()
                 .map(|inst| {
                     let checked = assigned.contains(inst.id.as_str());
-                    AdminInstanceRow {
+                    InstanceCheckbox {
                         id: inst.id.clone(),
                         hostname: inst.hostname.clone(),
                         checked,
@@ -1711,7 +1678,7 @@ async fn access_get(State(state): State<AppState>, jar: CookieJar) -> impl IntoR
     inject_context(
         &state,
         &jar,
-        AccessTemplate { current_user, api_hostname, base_url, flash_messages, has_flash_messages, admins }.render().unwrap(),
+        AccessTemplate { current_user, api_hostname, base_url, flash_messages, has_flash_messages, admins: &admins }.render().unwrap(),
     )
 }
 
@@ -1760,14 +1727,7 @@ async fn update_access(
     Redirect::to("/access").into_response()
 }
 // SSH Keys CRUD (owner only)
-#[derive(Serialize, Deserialize, Clone)]
-struct SshKeyView {
-    id: String,
-    name: String,
-    fingerprint: String,
-    public_key: String,
-    customer_id: Option<String>,
-}
+// Removed - now using SshKeyView from models
 
 #[derive(Deserialize)]
 struct SshKeysForm {
@@ -1832,7 +1792,7 @@ async fn fetch_default_customer_id(state: &AppState) -> Option<String> {
     }
     let endpoints = ["/v1/customers", "/v1/profile"];
     for endpoint in endpoints {
-        let payload = api_call(state, "GET", endpoint, None, None).await;
+        let payload = api_call_wrapper(state, "GET", endpoint, None, None).await;
         if let Some(id) = extract_customer_id_from_value(&payload) {
             let mut cache = state.default_customer_cache.lock().unwrap();
             *cache = Some(id.clone());
@@ -1844,7 +1804,7 @@ async fn fetch_default_customer_id(state: &AppState) -> Option<String> {
 
 async fn load_ssh_keys_api(state: &AppState, customer_id: Option<String>) -> Vec<SshKeyView> {
     let params = customer_id.map(|cid| vec![("customerId".to_string(), cid)]);
-    let payload = api_call(state, "GET", "/v1/ssh-keys", None, params).await;
+    let payload = api_call_wrapper(state, "GET", "/v1/ssh-keys", None, params).await;
     if payload.get("code").and_then(|c| c.as_str()) != Some("OKAY") {
         return vec![];
     }
@@ -1956,7 +1916,7 @@ async fn ssh_keys_post(
             if let Some(detail) = payload.get("detail").and_then(|d| d.as_str()) {
                 if detail_requires_customer(detail) {
                     if let Some(cid) = fetch_default_customer_id(&state).await {
-                        let _ = api_call(
+                        let _ = api_call_wrapper(
                             &state,
                             "DELETE",
                             &endpoint,
@@ -2137,7 +2097,7 @@ async fn instance_detail(
     if let Some(r) = ensure_logged_in(&state, &jar) {
         return r.into_response();
     }
-    if !enforce_instance_access(&state, &jar, &instance_id).await {
+    if !enforce_instance_access(&state, current_username_from_jar(&state, &jar).as_deref(), &instance_id).await {
         return Redirect::to("/instances").into_response();
     }
     let endpoint = format!("/v1/instances/{}", instance_id);
@@ -2250,12 +2210,12 @@ async fn instance_poweron_get(
     if let Some(r) = ensure_logged_in(&state, &jar) {
         return r.into_response();
     }
-    if !enforce_instance_access(&state, &jar, &instance_id).await {
+    if !enforce_instance_access(&state, current_username_from_jar(&state, &jar).as_deref(), &instance_id).await {
         return Redirect::to("/instances").into_response();
     }
     let endpoint = format!("/v1/instances/{}", instance_id);
     let payload = api_call_wrapper(&state, "GET", &endpoint, None, None).await;
-    let mut instance = InstanceForAction { id: instance_id.clone(), hostname: "(no hostname)".into(), region: "".into(), main_ip: None, status: "".into(), vcpu_count_display: "—".into(), ram_display: "—".into(), disk_display: "—".into(), os: None };
+    let mut instance = InstanceView { id: instance_id.clone(), hostname: "(no hostname)".into(), region: "".into(), main_ip: None, status: "".into(), vcpu_count_display: "—".into(), ram_display: "—".into(), disk_display: "—".into(), os: None };
     if let Some(obj) = payload.as_object() {
         if let Some(data) = obj.get("data").and_then(|d| d.as_object()) {
             instance.hostname = data.get("hostname").and_then(|v| v.as_str()).unwrap_or(&instance.hostname).to_string();
@@ -2290,7 +2250,7 @@ async fn instance_poweron_post(
     if let Some(r) = ensure_logged_in(&state, &jar) {
         return r.into_response();
     }
-    if !enforce_instance_access(&state, &jar, &instance_id).await {
+    if !enforce_instance_access(&state, current_username_from_jar(&state, &jar).as_deref(), &instance_id).await {
         return Redirect::to("/instances").into_response();
     }
     if state.is_instance_disabled(&instance_id) {
@@ -2316,12 +2276,12 @@ async fn instance_delete_get(
     if let Some(r) = ensure_logged_in(&state, &jar) {
         return r.into_response();
     }
-    if !enforce_instance_access(&state, &jar, &instance_id).await {
+    if !enforce_instance_access(&state, current_username_from_jar(&state, &jar).as_deref(), &instance_id).await {
         return Redirect::to("/instances").into_response();
     }
     let endpoint = format!("/v1/instances/{}", instance_id);
     let payload = api_call_wrapper(&state, "GET", &endpoint, None, None).await;
-    let mut instance = InstanceForAction { id: instance_id.clone(), hostname: "(no hostname)".into(), region: "".into(), main_ip: None, status: "".into(), vcpu_count_display: "—".into(), ram_display: "—".into(), disk_display: "—".into(), os: None };
+    let mut instance = InstanceView { id: instance_id.clone(), hostname: "(no hostname)".into(), region: "".into(), main_ip: None, status: "".into(), vcpu_count_display: "—".into(), ram_display: "—".into(), disk_display: "—".into(), os: None };
     if let Some(obj) = payload.as_object() {
         if let Some(data) = obj.get("data").and_then(|d| d.as_object()) {
             instance.hostname = data.get("hostname").and_then(|v| v.as_str()).unwrap_or(&instance.hostname).to_string();
@@ -2359,12 +2319,12 @@ async fn instance_poweroff_get(
     if let Some(r) = ensure_logged_in(&state, &jar) {
         return r.into_response();
     }
-    if !enforce_instance_access(&state, &jar, &instance_id).await {
+    if !enforce_instance_access(&state, current_username_from_jar(&state, &jar).as_deref(), &instance_id).await {
         return Redirect::to("/instances").into_response();
     }
     let endpoint = format!("/v1/instances/{}", instance_id);
     let payload = api_call_wrapper(&state, "GET", &endpoint, None, None).await;
-    let mut instance = InstanceForAction { id: instance_id.clone(), hostname: "(no hostname)".into(), region: "".into(), main_ip: None, status: "".into(), vcpu_count_display: "—".into(), ram_display: "—".into(), disk_display: "—".into(), os: None };
+    let mut instance = InstanceView { id: instance_id.clone(), hostname: "(no hostname)".into(), region: "".into(), main_ip: None, status: "".into(), vcpu_count_display: "—".into(), ram_display: "—".into(), disk_display: "—".into(), os: None };
     if let Some(obj) = payload.as_object() {
         if let Some(data) = obj.get("data").and_then(|d| d.as_object()) {
             instance.hostname = data.get("hostname").and_then(|v| v.as_str()).unwrap_or(&instance.hostname).to_string();
@@ -2386,7 +2346,7 @@ async fn instance_poweroff_post(
     if let Some(r) = ensure_logged_in(&state, &jar) {
         return r.into_response();
     }
-    if !enforce_instance_access(&state, &jar, &instance_id).await {
+    if !enforce_instance_access(&state, current_username_from_jar(&state, &jar).as_deref(), &instance_id).await {
         return Redirect::to("/instances").into_response();
     }
     if state.is_instance_disabled(&instance_id) {
@@ -2410,12 +2370,12 @@ async fn instance_reset_get(
     if let Some(r) = ensure_logged_in(&state, &jar) {
         return r.into_response();
     }
-    if !enforce_instance_access(&state, &jar, &instance_id).await {
+    if !enforce_instance_access(&state, current_username_from_jar(&state, &jar).as_deref(), &instance_id).await {
         return Redirect::to("/instances").into_response();
     }
     let endpoint = format!("/v1/instances/{}", instance_id);
     let payload = api_call_wrapper(&state, "GET", &endpoint, None, None).await;
-    let mut instance = InstanceForAction { id: instance_id.clone(), hostname: "(no hostname)".into(), region: "".into(), main_ip: None, status: "".into(), vcpu_count_display: "—".into(), ram_display: "—".into(), disk_display: "—".into(), os: None };
+    let mut instance = InstanceView { id: instance_id.clone(), hostname: "(no hostname)".into(), region: "".into(), main_ip: None, status: "".into(), vcpu_count_display: "—".into(), ram_display: "—".into(), disk_display: "—".into(), os: None };
     if let Some(obj) = payload.as_object() {
         if let Some(data) = obj.get("data").and_then(|d| d.as_object()) {
             instance.hostname = data.get("hostname").and_then(|v| v.as_str()).unwrap_or(&instance.hostname).to_string();
@@ -2437,7 +2397,7 @@ async fn instance_reset_post(
     if let Some(r) = ensure_logged_in(&state, &jar) {
         return r.into_response();
     }
-    if !enforce_instance_access(&state, &jar, &instance_id).await {
+    if !enforce_instance_access(&state, current_username_from_jar(&state, &jar).as_deref(), &instance_id).await {
         return Redirect::to("/instances").into_response();
     }
     if state.is_instance_disabled(&instance_id) {
@@ -2461,12 +2421,12 @@ async fn instance_change_pass_get(
     if let Some(r) = ensure_logged_in(&state, &jar) {
         return r.into_response();
     }
-    if !enforce_instance_access(&state, &jar, &instance_id).await {
+    if !enforce_instance_access(&state, current_username_from_jar(&state, &jar).as_deref(), &instance_id).await {
         return Redirect::to("/instances").into_response();
     }
     let endpoint = format!("/v1/instances/{}", instance_id);
     let payload = api_call_wrapper(&state, "GET", &endpoint, None, None).await;
-    let mut instance = InstanceForAction { id: instance_id.clone(), hostname: "(no hostname)".into(), region: "".into(), main_ip: None, status: "".into(), vcpu_count_display: "—".into(), ram_display: "—".into(), disk_display: "—".into(), os: None };
+    let mut instance = InstanceView { id: instance_id.clone(), hostname: "(no hostname)".into(), region: "".into(), main_ip: None, status: "".into(), vcpu_count_display: "—".into(), ram_display: "—".into(), disk_display: "—".into(), os: None };
     if let Some(obj) = payload.as_object() {
         if let Some(data) = obj.get("data").and_then(|d| d.as_object()) {
             instance.hostname = data.get("hostname").and_then(|v| v.as_str()).unwrap_or(&instance.hostname).to_string();
@@ -2488,7 +2448,7 @@ async fn instance_change_pass_post(
     if let Some(r) = ensure_logged_in(&state, &jar) {
         return r.into_response();
     }
-    if !enforce_instance_access(&state, &jar, &instance_id).await {
+    if !enforce_instance_access(&state, current_username_from_jar(&state, &jar).as_deref(), &instance_id).await {
         return Redirect::to("/instances").into_response();
     }
     if state.is_instance_disabled(&instance_id) {
@@ -2505,7 +2465,7 @@ async fn instance_change_pass_post(
     // Fetch instance details for rendering
     let get_endpoint = format!("/v1/instances/{}", instance_id);
     let payload2 = api_call_wrapper(&state, "GET", &get_endpoint, None, None).await;
-    let mut instance = InstanceForAction { id: instance_id.clone(), hostname: "(no hostname)".into(), region: "".into(), main_ip: None, status: "".into(), vcpu_count_display: "—".into(), ram_display: "—".into(), disk_display: "—".into(), os: None };
+    let mut instance = InstanceView { id: instance_id.clone(), hostname: "(no hostname)".into(), region: "".into(), main_ip: None, status: "".into(), vcpu_count_display: "—".into(), ram_display: "—".into(), disk_display: "—".into(), os: None };
     if let Some(obj) = payload2.as_object() {
         if let Some(data) = obj.get("data").and_then(|d| d.as_object()) {
             instance.hostname = data.get("hostname").and_then(|v| v.as_str()).unwrap_or(&instance.hostname).to_string();
@@ -2526,7 +2486,7 @@ async fn instance_delete(
     if let Some(r) = ensure_logged_in(&state, &jar) {
         return r.into_response();
     }
-    if !enforce_instance_access(&state, &jar, &instance_id).await {
+    if !enforce_instance_access(&state, current_username_from_jar(&state, &jar).as_deref(), &instance_id).await {
         return Redirect::to("/instances").into_response();
     }
     if state.is_instance_disabled(&instance_id) {
@@ -2567,7 +2527,7 @@ async fn instance_add_traffic(
     axum::extract::Path(instance_id): axum::extract::Path<String>,
     Form(form): Form<AddTrafficForm>,
 ) -> impl IntoResponse {
-    if !enforce_instance_access(&state, &jar, &instance_id).await {
+    if !enforce_instance_access(&state, current_username_from_jar(&state, &jar).as_deref(), &instance_id).await {
         return Redirect::to("/instances").into_response();
     }
     if state.is_instance_disabled(&instance_id) {
@@ -2597,12 +2557,12 @@ async fn instance_change_os_get(
     if let Some(r) = ensure_logged_in(&state, &jar) {
         return r.into_response();
     }
-    if !enforce_instance_access(&state, &jar, &instance_id).await {
+    if !enforce_instance_access(&state, current_username_from_jar(&state, &jar).as_deref(), &instance_id).await {
         return Redirect::to("/instances").into_response();
     }
     let endpoint = format!("/v1/instances/{}", instance_id);
     let payload = api_call_wrapper(&state, "GET", &endpoint, None, None).await;
-    let mut instance = InstanceForAction { id: instance_id.clone(), hostname: "(no hostname)".into(), region: "".into(), main_ip: None, status: "".into(), vcpu_count_display: "—".into(), ram_display: "—".into(), disk_display: "—".into(), os: None };
+    let mut instance = InstanceView { id: instance_id.clone(), hostname: "(no hostname)".into(), region: "".into(), main_ip: None, status: "".into(), vcpu_count_display: "—".into(), ram_display: "—".into(), disk_display: "—".into(), os: None };
     if let Some(obj) = payload.as_object() {
         if let Some(data) = obj.get("data").and_then(|d| d.as_object()) {
             instance.hostname = data.get("hostname").and_then(|v| v.as_str()).unwrap_or(&instance.hostname).to_string();
@@ -2635,7 +2595,7 @@ async fn instance_change_os_post(
     if let Some(r) = ensure_logged_in(&state, &jar) {
         return r.into_response();
     }
-    if !enforce_instance_access(&state, &jar, &instance_id).await {
+    if !enforce_instance_access(&state, current_username_from_jar(&state, &jar).as_deref(), &instance_id).await {
         return Redirect::to("/instances").into_response();
     }
     if state.is_instance_disabled(&instance_id) {
@@ -2664,12 +2624,12 @@ async fn instance_resize_get(
     if let Some(r) = ensure_logged_in(&state, &jar) {
         return r.into_response();
     }
-    if !enforce_instance_access(&state, &jar, &instance_id).await {
+    if !enforce_instance_access(&state, current_username_from_jar(&state, &jar).as_deref(), &instance_id).await {
         return Redirect::to("/instances").into_response();
     }
     let endpoint = format!("/v1/instances/{}", instance_id);
     let payload = api_call_wrapper(&state, "GET", &endpoint, None, None).await;
-    let mut instance = InstanceForAction { id: instance_id.clone(), hostname: "(no hostname)".into(), region: "".into(), main_ip: None, status: "".into(), vcpu_count_display: "—".into(), ram_display: "—".into(), disk_display: "—".into(), os: None };
+    let mut instance = InstanceView { id: instance_id.clone(), hostname: "(no hostname)".into(), region: "".into(), main_ip: None, status: "".into(), vcpu_count_display: "—".into(), ram_display: "—".into(), disk_display: "—".into(), os: None };
     if let Some(obj) = payload.as_object() {
         if let Some(data) = obj.get("data").and_then(|d| d.as_object()) {
             instance.hostname = data.get("hostname").and_then(|v| v.as_str()).unwrap_or(&instance.hostname).to_string();
@@ -2692,7 +2652,7 @@ async fn instance_resize_post(
     if let Some(r) = ensure_logged_in(&state, &jar) {
         return r.into_response();
     }
-    if !enforce_instance_access(&state, &jar, &instance_id).await {
+    if !enforce_instance_access(&state, current_username_from_jar(&state, &jar).as_deref(), &instance_id).await {
         return Redirect::to("/instances").into_response();
     }
     if state.is_instance_disabled(&instance_id) {
@@ -2730,7 +2690,7 @@ async fn instance_subscription_refund(
     jar: CookieJar,
     axum::extract::Path(instance_id): axum::extract::Path<String>,
 ) -> impl IntoResponse {
-    if !enforce_instance_access(&state, &jar, &instance_id).await {
+    if !enforce_instance_access(&state, current_username_from_jar(&state, &jar).as_deref(), &instance_id).await {
         return Redirect::to("/instances").into_response();
     }
     let endpoint = format!("/v1/instances/{}/subscription-refund", instance_id);
@@ -2761,7 +2721,7 @@ async fn bulk_subscription_refund(
         .filter(|s| !s.is_empty())
         .collect();
     let payload = serde_json::json!({"ids": ids});
-    let resp = api_call(
+    let resp = api_call_wrapper(
         &state,
         "POST",
         "/v1/instances/bulk-subscription-refund",

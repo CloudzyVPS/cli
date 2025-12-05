@@ -28,7 +28,6 @@ pub mod step5_template;
 pub mod step6_template;
 pub mod step7_template;
 pub mod step8_template;
-pub mod ssh_key_display;
 
 // Re-export all templates
 pub use login_template::LoginTemplate;
@@ -60,4 +59,9 @@ pub use step5_template::Step5Template;
 pub use step6_template::Step6Template;
 pub use step7_template::Step7Template;
 pub use step8_template::Step8Template;
-pub use ssh_key_display::SshKeyDisplay;
+
+// Type aliases for shorter names used in main.rs
+pub type UsersTemplate<'a> = UsersPageTemplate<'a>;
+pub type InstancesTemplate<'a> = InstancesPageTemplate<'a>;
+pub type AccessTemplate<'a> = AccessPageTemplate<'a>;
+pub type SshKeysTemplate<'a> = SshKeysPageTemplate<'a>;

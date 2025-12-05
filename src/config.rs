@@ -10,6 +10,7 @@ pub const DEFAULT_PUBLIC_BASE_URL: &str = "";
 pub const DEFAULT_OWNER_USERNAME: &str = "owner";
 pub const DEFAULT_OWNER_PASSWORD: &str = "owner123";
 pub const DEFAULT_OWNER_ROLE: &str = "owner";
+#[allow(dead_code)]
 pub const DEFAULT_ADMIN_ROLE: &str = "admin";
 pub const DEFAULT_PBKDF2_ITERATIONS: u32 = 100_000;
 
