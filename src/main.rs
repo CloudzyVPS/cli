@@ -31,13 +31,14 @@ use tracing_subscriber::util::SubscriberInitExt;
 use axum_extra::extract::cookie::{CookieJar, Cookie};
 
 use config::{DEFAULT_HOST, DEFAULT_PORT, DEFAULT_PBKDF2_ITERATIONS};
-use users::{UserRecord, CurrentUser, generate_password_hash, verify_password, random_session_id, load_users_from_file, persist_users_file};
-use util::{hostname_from_url, absolute_url, build_query_string, parse_flag, parse_optional_int, parse_int_list, parse_urlencoded_body};
+use users::models::{UserRecord, CurrentUser, generate_password_hash, verify_password, random_session_id, load_users_from_file, persist_users_file};
+use util::{hostname_from_url, absolute_url, build_query_string, parse_urlencoded_body};
 use api::{api_call, load_regions, load_products, load_os_list, load_applications, load_instances_for_user, Region, ProductView, ProductEntry, OsItem, ApplicationView, InstanceView};
-use instances::{AppState, simple_instance_action, enforce_instance_access, get_instance_for_action, AddTrafficForm, ChangeOsForm, ResizeForm};
-use wizard::{parse_wizard_base, build_base_query_pairs, BaseState, Step1FormData, Step2FormData, CustomPlanFormValues, Step7Form};
+use instances::models::{AppState, simple_instance_action, enforce_instance_access, get_instance_for_action, AddTrafficForm, ChangeOsForm, ResizeForm};
+use wizard::models::{parse_wizard_base, build_base_query_pairs, BaseState, Step1FormData, Step2FormData, CustomPlanFormValues, Step7Form};
+use wizard::templates::{Step1Template, Step2Template, Step3FixedTemplate, Step3CustomTemplate, Step4Template, Step5Template, Step6Template, Step7Template, Step8Template, SshKeyDisplay};
+use templates::{LoginTemplate, RegionsPageTemplate, ProductsPageTemplate, OsCatalogTemplate, ApplicationsTemplate, InstanceDetailTemplate, BulkRefundTemplate, UsersPageTemplate, AccessPageTemplate, SshKeysPageTemplate, InstancesPageTemplate, DeleteInstanceTemplate, PowerOnInstanceTemplate, PowerOffInstanceTemplate, ResetInstanceTemplate, ChangePassInstanceTemplate, ChangeOsTemplate, ResizeTemplate};
 use templates::*;
-use urlencoding::encode;
 use std::collections::HashSet;
 use rand::rngs::OsRng;
 use rand::RngCore;
@@ -81,80 +82,12 @@ fn build_state_from_env(env_file: Option<&str>) -> AppState {
     }
 }
 
+fn plain_html<S: AsRef<str>>(s: S) -> Response {
+    Html(format!("<!DOCTYPE html><html><body><p>{}</p></body></html>", s.as_ref())).into_response()
+}
+
 // Global template context injected into most page templates
 // (already implemented via build_template_globals/TemplateGlobals)
-#[derive(Template)]
-#[template(path = "regions.html")]
-struct RegionsPageTemplate<'a> {
-    current_user: Option<CurrentUser>,
-    api_hostname: String,
-    base_url: String,
-    flash_messages: Vec<String>,
-    has_flash_messages: bool,
-    regions: &'a [Region],
-}
-
-#[derive(Template)]
-#[template(path = "products.html")]
-struct ProductsPageTemplate<'a> {
-    current_user: Option<CurrentUser>,
-    api_hostname: String,
-    base_url: String,
-    flash_messages: Vec<String>,
-    has_flash_messages: bool,
-    regions: &'a [Region],
-    selected_region: Option<&'a Region>,
-    active_region_id: String,
-    requested_region: Option<String>,
-    products: &'a [ProductView],
-}
-
-#[derive(Template)]
-#[template(path = "os.html")]
-struct OsCatalogTemplate<'a> {
-    current_user: Option<CurrentUser>,
-    api_hostname: String,
-    base_url: String,
-    flash_messages: Vec<String>,
-    has_flash_messages: bool,
-    os_list: &'a [OsItem],
-}
-
-#[derive(Template)]
-#[template(path = "applications.html")]
-struct ApplicationsTemplate<'a> {
-    current_user: Option<CurrentUser>,
-    api_hostname: String,
-    base_url: String,
-    flash_messages: Vec<String>,
-    has_flash_messages: bool,
-    apps: &'a [ApplicationView],
-}
-
-#[derive(Template)]
-#[template(path = "instance_detail.html")]
-struct InstanceDetailTemplate {
-    current_user: Option<CurrentUser>,
-    api_hostname: String,
-    base_url: String,
-    flash_messages: Vec<String>,
-    has_flash_messages: bool,
-    instance_id: String,
-    hostname: String,
-    details: Vec<(String, String)>,
-    is_disabled: bool,
-}
-
-#[derive(Template)]
-#[template(path = "bulk_refund.html")]
-struct BulkRefundTemplate {
-    current_user: Option<CurrentUser>,
-    api_hostname: String,
-    base_url: String,
-    flash_messages: Vec<String>,
-    has_flash_messages: bool,
-}
-
 fn build_app(state: AppState) -> Router {
     Router::new()
         .route("/", get(root_get))
@@ -245,17 +178,6 @@ async fn start_server(state: AppState, host: &str, port: u16) {
 struct LoginForm {
     username: String,
     password: String,
-}
-
-#[derive(Template)]
-#[template(path = "login.html")]
-struct LoginTemplate {
-    current_user: Option<CurrentUser>,
-    api_hostname: String,
-    base_url: String,
-    flash_messages: Vec<String>,
-    has_flash_messages: bool,
-    error: Option<String>,
 }
 
 async fn login_get(State(state): State<AppState>, jar: CookieJar) -> impl IntoResponse {
@@ -435,6 +357,11 @@ fn inject_context(state: &AppState, jar: &CookieJar, mut html: String) -> Respon
     Html(html).into_response()
 }
 
+// Wrapper for absolute_url that extracts base_url from AppState
+fn absolute_url_from_state(state: &AppState, path: &str) -> String {
+    absolute_url(&state.public_base_url, path)
+}
+
 // ---------- Helper Parsing Functions (Wizard) ----------
 
 
@@ -447,18 +374,6 @@ fn inject_context(state: &AppState, jar: &CookieJar, mut html: String) -> Respon
 
 
 // ---------- Wizard Step 1 Template ----------
-
-#[derive(Template)]
-#[template(path = "step_1.html")]
-struct Step1Template<'a> {
-    current_user: Option<CurrentUser>,
-    api_hostname: String,
-    base_url: String,
-    flash_messages: Vec<String>,
-    has_flash_messages: bool,
-    regions: &'a [Region],
-    form_data: Step1FormData,
-}
 
 async fn create_step_1(
     State(state): State<AppState>,
@@ -505,20 +420,6 @@ async fn create_step_1(
 
 // ---------- Wizard Step 2 (Hostnames & IP Assignment) ----------
 
-#[derive(Template)]
-#[template(path = "step_2.html")]
-struct Step2Template<'a> {
-    current_user: Option<CurrentUser>,
-    api_hostname: String,
-    base_url: String,
-    flash_messages: Vec<String>,
-    has_flash_messages: bool,
-    base_state: &'a BaseState,
-    form_data: Step2FormData,
-    back_url: String,
-    submit_url: String,
-}
-
 async fn create_step_2(
     State(state): State<AppState>,
     jar: CookieJar,
@@ -542,9 +443,9 @@ async fn create_step_2(
     let back_pairs = build_base_query_pairs(&base);
     let back_q = build_query_string(&back_pairs);
     let back_url = if back_q.is_empty() {
-        absolute_url(&state, "/create/step-1")
+        absolute_url_from_state(&state, "/create/step-1")
     } else {
-        absolute_url(&state, &format!("/create/step-1?{}", back_q))
+        absolute_url_from_state(&state, &format!("/create/step-1?{}", back_q))
     };
     let hostnames_text = base.hostnames.join(", ");
     let TemplateGlobals {
@@ -572,7 +473,7 @@ async fn create_step_2(
             base_state: &base,
             form_data,
             back_url,
-            submit_url: absolute_url(&state, "/create/step-3"),
+            submit_url: absolute_url_from_state(&state, "/create/step-3"),
         }
         .render()
         .unwrap(),
@@ -583,49 +484,6 @@ async fn create_step_2(
 
 
 
-
-#[derive(Template)]
-#[template(path = "step_3_fixed.html")]
-struct Step3FixedTemplate<'a> {
-    current_user: Option<CurrentUser>,
-    api_hostname: String,
-    base_url: String,
-    flash_messages: Vec<String>,
-    has_flash_messages: bool,
-    base_state: &'a BaseState,
-    products: &'a [ProductView],
-    has_products: bool,
-    selected_product_id: String,
-    region_name: String,
-    floating_ip_count: String,
-    back_url: String,
-    submit_url: String,
-    restart_url: String,
-    ssh_key_ids_csv: String,
-    hostnames_csv: String,
-}
-
-
-#[derive(Template)]
-#[template(path = "step_3_custom.html")]
-struct Step3CustomTemplate<'a> {
-    current_user: Option<CurrentUser>,
-    api_hostname: String,
-    base_url: String,
-    flash_messages: Vec<String>,
-    has_flash_messages: bool,
-    base_state: &'a BaseState,
-    region_name: String,
-    floating_ip_count: String,
-    back_url: String,
-    submit_url: String,
-    requirements: Vec<String>,
-    minimum_ram: i32,
-    minimum_disk: i32,
-    form_values: CustomPlanFormValues,
-    ssh_key_ids_csv: String,
-    hostnames_csv: String,
-}
 
 fn value_to_short_string(value: &Value) -> String {
     match value {
@@ -666,9 +524,9 @@ async fn create_step_3(
     let back_pairs = build_base_query_pairs(&base);
     let back_q = build_query_string(&back_pairs);
     let back_url = if back_q.is_empty() {
-        absolute_url(&state, "/create/step-2")
+        absolute_url_from_state(&state, "/create/step-2")
     } else {
-        absolute_url(&state, &format!("/create/step-2?{}", back_q))
+        absolute_url_from_state(&state, &format!("/create/step-2?{}", back_q))
     };
     // Build the hostnames CSV and prepare ssh key CSV for the template where needed
     let hostnames_csv = base.hostnames.join(",");
@@ -701,8 +559,8 @@ async fn create_step_3(
                 region_name: base.region.clone(),
                 floating_ip_count: base.floating_ip_count.to_string(),
                 back_url,
-                submit_url: absolute_url(&state, "/create/step-4"),
-                restart_url: absolute_url(&state, "/create/step-1"),
+                submit_url: absolute_url_from_state(&state, "/create/step-4"),
+                restart_url: absolute_url_from_state(&state, "/create/step-1"),
                 ssh_key_ids_csv: ssh_key_ids_csv.clone(),
                 hostnames_csv: hostnames_csv.clone(),
             }
@@ -745,7 +603,7 @@ async fn create_step_3(
             region_name: base.region.clone(),
             floating_ip_count: base.floating_ip_count.to_string(),
             back_url,
-            submit_url: absolute_url(&state, "/create/step-5"),
+            submit_url: absolute_url_from_state(&state, "/create/step-5"),
             requirements: Vec::new(),
             minimum_ram: 1,
             minimum_disk: 1,
@@ -765,24 +623,6 @@ struct ExtrasFormValues {
     extra_bandwidth: String,
 }
 
-#[derive(Template)]
-#[template(path = "step_4.html")]
-struct Step4Template<'a> {
-    current_user: Option<CurrentUser>,
-    api_hostname: String,
-    base_url: String,
-    flash_messages: Vec<String>,
-    has_flash_messages: bool,
-    base_state: &'a BaseState,
-    floating_ip_count: String,
-    product_id: String,
-    ssh_key_ids_csv: String,
-    hostnames_csv: String,
-    extras: ExtrasFormValues,
-    back_url: String,
-    submit_url: String,
-}
-
 async fn create_step_4(
     State(state): State<AppState>,
     jar: CookieJar,
@@ -800,9 +640,9 @@ async fn create_step_4(
     let back_pairs = build_base_query_pairs(&base);
     let back_q = build_query_string(&back_pairs);
     let back_url = if back_q.is_empty() {
-        absolute_url(&state, "/create/step-3")
+        absolute_url_from_state(&state, "/create/step-3")
     } else {
-        absolute_url(&state, &format!("/create/step-3?{}", back_q))
+        absolute_url_from_state(&state, &format!("/create/step-3?{}", back_q))
     };
     if base.plan_type != "fixed" {
         let next_pairs = build_base_query_pairs(&base);
@@ -848,7 +688,7 @@ async fn create_step_4(
             hostnames_csv: hostnames_csv,
             extras,
             back_url,
-            submit_url: absolute_url(&state, "/create/step-5"),
+            submit_url: absolute_url_from_state(&state, "/create/step-5"),
         }
         .render()
         .unwrap(),
@@ -864,31 +704,6 @@ struct CustomPlanCarry {
     disk_in_gb: String,
     bandwidth_in_tb: String,
 }
-
-#[derive(Template)]
-#[template(path = "step_5.html")]
-struct Step5Template<'a> {
-    current_user: Option<CurrentUser>,
-    api_hostname: String,
-    base_url: String,
-    flash_messages: Vec<String>,
-    has_flash_messages: bool,
-    base_state: &'a BaseState,
-    os_list: &'a [OsItem],
-    selected_os_id: String,
-    product_id: String,
-    extra_disk: String,
-    extra_bandwidth: String,
-    custom_plan: CustomPlanCarry,
-    floating_ip_count: String,
-    back_url: String,
-    submit_url: String,
-    hostnames_csv: String,
-    ssh_key_ids_csv: String,
-}
-
-
-
 
 async fn create_step_5(
     State(state): State<AppState>,
@@ -957,9 +772,9 @@ async fn create_step_5(
     };
     let back_q = build_query_string(&back_pairs);
     let back_url = if back_q.is_empty() {
-        absolute_url(&state, back_target)
+        absolute_url_from_state(&state, back_target)
     } else {
-        absolute_url(&state, &format!("{}?{}", back_target, back_q))
+        absolute_url_from_state(&state, &format!("{}?{}", back_target, back_q))
     };
     let hostnames_csv = base.hostnames.join(",");
     let ssh_key_ids_csv = base.ssh_key_ids.iter().map(|id| id.to_string()).collect::<Vec<_>>().join(",");
@@ -981,7 +796,7 @@ async fn create_step_5(
             custom_plan,
             floating_ip_count: base.floating_ip_count.to_string(),
             back_url,
-            submit_url: absolute_url(&state, "/create/step-6"),
+            submit_url: absolute_url_from_state(&state, "/create/step-6"),
             hostnames_csv: hostnames_csv,
             ssh_key_ids_csv: ssh_key_ids_csv,
         }
@@ -995,27 +810,6 @@ struct SelectableSshKey {
     id: String,
     name: String,
     selected: bool,
-}
-
-#[derive(Template)]
-#[template(path = "step_6.html")]
-struct Step6Template<'a> {
-    current_user: Option<CurrentUser>,
-    api_hostname: String,
-    base_url: String,
-    flash_messages: Vec<String>,
-    has_flash_messages: bool,
-    base_state: &'a BaseState,
-    floating_ip_count: String,
-    ssh_keys: Vec<SelectableSshKey>,
-    product_id: String,
-    extra_disk: String,
-    extra_bandwidth: String,
-    custom_plan: CustomPlanCarry,
-    back_url: String,
-    submit_url: String,
-    manage_keys_url: String,
-    hostnames_csv: String,
 }
 
 async fn create_step_6(
@@ -1075,9 +869,9 @@ async fn create_step_6(
     };
     let back_q = build_query_string(&back_pairs);
     let back_url = if back_q.is_empty() {
-        absolute_url(&state, back_target)
+        absolute_url_from_state(&state, back_target)
     } else {
-        absolute_url(&state, &format!("{}?{}", back_target, back_q))
+        absolute_url_from_state(&state, &format!("{}?{}", back_target, back_q))
     };
     let customer_id = fetch_default_customer_id(&state).await;
     let ssh_keys = load_ssh_keys_api(&state, customer_id).await;
@@ -1113,8 +907,8 @@ async fn create_step_6(
             extra_bandwidth,
             custom_plan,
             back_url,
-            submit_url: absolute_url(&state, "/create/step-7"),
-            manage_keys_url: absolute_url(&state, "/ssh-keys"),
+            submit_url: absolute_url_from_state(&state, "/create/step-7"),
+            manage_keys_url: absolute_url_from_state(&state, "/ssh-keys"),
             hostnames_csv,
         }
         .render()
@@ -1132,49 +926,6 @@ struct PlanReviewState {
     ram_in_gb: String,
     disk_in_gb: String,
     bandwidth_in_tb: String,
-}
-
-#[derive(Template)]
-#[template(path = "step_7.html")]
-struct Step7Template<'a> {
-    current_user: Option<CurrentUser>,
-    api_hostname: String,
-    base_url: String,
-    flash_messages: Vec<String>,
-    has_flash_messages: bool,
-    base_state: &'a BaseState,
-    floating_ip_count: String,
-    plan_state: PlanReviewState,
-    plan_type_label: String,
-    region_name: String,
-    hostnames_display: String,
-    plan_summary: Vec<ProductEntry>,
-    has_plan_summary: bool,
-    price_entries: Vec<ProductEntry>,
-    has_price_entries: bool,
-    selected_os_label: String,
-    ssh_keys_display: String,
-    footnote_text: String,
-    has_footnote: bool,
-    back_url: String,
-    submit_url: String,
-    ssh_key_ids_csv: String,
-    hostnames_csv: String,
-}
-
-#[derive(Template)]
-#[template(path = "step_8.html")]
-struct Step8Template {
-    current_user: Option<CurrentUser>,
-    api_hostname: String,
-    base_url: String,
-    flash_messages: Vec<String>,
-    has_flash_messages: bool,
-    back_url: String,
-    status_label: String,
-    code: Option<String>,
-    detail: Option<String>,
-    errors: Vec<String>,
 }
 
 async fn create_step_7_core(
@@ -1334,7 +1085,7 @@ async fn create_step_7_core(
                     base_url,
                     flash_messages,
                     has_flash_messages,
-                    back_url: absolute_url(&state, "/create/step-6"),
+                    back_url: absolute_url_from_state(&state, "/create/step-6"),
                     status_label: "Failed".into(),
                     code,
                     detail,
@@ -1448,9 +1199,9 @@ async fn create_step_7_core(
     }
     let back_q = build_query_string(&back_pairs);
     let back_url = if back_q.is_empty() {
-        absolute_url(&state, "/create/step-6")
+        absolute_url_from_state(&state, "/create/step-6")
     } else {
-        absolute_url(&state, &format!("/create/step-6?{}", back_q))
+        absolute_url_from_state(&state, &format!("/create/step-6?{}", back_q))
     };
     let has_plan_summary = !plan_summary.is_empty();
     let has_price_entries = !price_entries.is_empty();
@@ -1482,7 +1233,7 @@ async fn create_step_7_core(
             footnote_text,
             has_footnote,
             back_url,
-            submit_url: absolute_url(&state, "/create/step-7"),
+            submit_url: absolute_url_from_state(&state, "/create/step-7"),
         }
         .render()
         .unwrap(),
@@ -1518,7 +1269,7 @@ async fn create_step_8(
         base_url,
         flash_messages,
         has_flash_messages,
-        back_url: q.get("back_url").cloned().unwrap_or_else(|| absolute_url(&state, "/create/step-1")),
+        back_url: q.get("back_url").cloned().unwrap_or_else(|| absolute_url_from_state(&state, "/create/step-1")),
         status_label: q.get("status_label").cloned().unwrap_or_else(|| "Result".into()),
         code,
         detail,
@@ -1584,17 +1335,6 @@ async fn load_instances_for_user_wrapper(state: &AppState, username: &str) -> Ve
     let users_map = state.users.lock().unwrap().clone();
     load_instances_for_user(&state.client, &state.api_base_url, &state.api_token, &users_map, username).await
 }
-#[derive(Template)]
-#[template(path = "users.html")]
-struct UsersTemplate {
-    current_user: Option<CurrentUser>,
-    api_hostname: String,
-    base_url: String,
-    flash_messages: Vec<String>,
-    has_flash_messages: bool,
-    rows: Vec<UserTableRow>,
-}
-
 struct UserTableRow {
     username: String,
     role: String,
@@ -1854,18 +1594,6 @@ async fn delete_user(
     );
     Redirect::to("/users").into_response()
 }
-#[derive(Template)]
-#[template(path = "instances.html")]
-struct InstancesTemplate<'a> {
-    current_user: Option<CurrentUser>,
-    api_hostname: String,
-    base_url: String,
-    flash_messages: Vec<String>,
-    has_flash_messages: bool,
-    instances: &'a [InstanceView],
-}
-
-
 #[derive(Clone)]
 struct InstanceForAction {
     id: String,
@@ -1878,94 +1606,6 @@ struct InstanceForAction {
     disk_display: String,
     os: Option<OsItem>,
 }
-
-#[derive(Template)]
-#[template(path = "poweroff_instance.html")]
-struct PowerOffInstanceTemplate {
-    current_user: Option<CurrentUser>,
-    api_hostname: String,
-    base_url: String,
-    flash_messages: Vec<String>,
-    has_flash_messages: bool,
-    instance: InstanceForAction,
-    is_disabled: bool,
-}
-
-#[derive(Template)]
-#[template(path = "poweron_instance.html")]
-struct PowerOnInstanceTemplate {
-    current_user: Option<CurrentUser>,
-    api_hostname: String,
-    base_url: String,
-    flash_messages: Vec<String>,
-    has_flash_messages: bool,
-    instance: InstanceForAction,
-    is_disabled: bool,
-}
-
-#[derive(Template)]
-#[template(path = "reset_instance.html")]
-struct ResetInstanceTemplate {
-    current_user: Option<CurrentUser>,
-    api_hostname: String,
-    base_url: String,
-    flash_messages: Vec<String>,
-    has_flash_messages: bool,
-    instance: InstanceForAction,
-    is_disabled: bool,
-}
-
-#[derive(Template)]
-#[template(path = "delete_instance.html")]
-struct DeleteInstanceTemplate {
-    current_user: Option<CurrentUser>,
-    api_hostname: String,
-    base_url: String,
-    flash_messages: Vec<String>,
-    has_flash_messages: bool,
-    instance: InstanceForAction,
-    is_disabled: bool,
-}
-
-#[derive(Template)]
-#[template(path = "change_os.html")]
-struct ChangeOsTemplate<'a> {
-    current_user: Option<CurrentUser>,
-    api_hostname: String,
-    base_url: String,
-    flash_messages: Vec<String>,
-    has_flash_messages: bool,
-    instance: InstanceForAction,
-    os_list: &'a [OsItem],
-    is_disabled: bool,
-}
-
-#[derive(Template)]
-#[template(path = "resize.html")]
-struct ResizeTemplate<'a> {
-    current_user: Option<CurrentUser>,
-    api_hostname: String,
-    base_url: String,
-    flash_messages: Vec<String>,
-    has_flash_messages: bool,
-    instance: InstanceForAction,
-    regions: &'a [Region],
-    is_disabled: bool,
-}
-
-#[derive(Template)]
-#[template(path = "change_pass_instance.html")]
-struct ChangePassInstanceTemplate {
-    current_user: Option<CurrentUser>,
-    api_hostname: String,
-    base_url: String,
-    flash_messages: Vec<String>,
-    has_flash_messages: bool,
-    instance: InstanceForAction,
-    new_password: Option<String>,
-    is_disabled: bool,
-}
-
 
 async fn instances_real(State(state): State<AppState>, jar: CookieJar) -> impl IntoResponse {
     let Some(username) = current_username_from_jar(&state, &jar) else {
@@ -1990,17 +1630,6 @@ async fn instances_real(State(state): State<AppState>, jar: CookieJar) -> impl I
 }
 
 // Access management (owner only): list admins and assign instances
-#[derive(Template)]
-#[template(path = "access.html")]
-struct AccessTemplate {
-    current_user: Option<CurrentUser>,
-    api_hostname: String,
-    base_url: String,
-    flash_messages: Vec<String>,
-    has_flash_messages: bool,
-    admins: Vec<AdminView>,
-}
-
 struct AdminView {
     username: String,
     instances: Vec<AdminInstanceRow>,
@@ -2141,18 +1770,6 @@ struct SshKeyView {
     name: String,
     fingerprint: String,
     public_key: String,
-    customer_id: Option<String>,
-}
-
-#[derive(Template)]
-#[template(path = "ssh_keys.html")]
-struct SshKeysTemplate<'a> {
-    current_user: Option<CurrentUser>,
-    api_hostname: String,
-    base_url: String,
-    flash_messages: Vec<String>,
-    has_flash_messages: bool,
-    ssh_keys: &'a [SshKeyView],
     customer_id: Option<String>,
 }
 
