@@ -1,0 +1,31 @@
+use crate::models::OsItem;
+use super::client::api_call;
+
+/// Load operating system catalog from the API.
+/// Returns a list of available OS images with their details.
+pub async fn load_os_list(
+    client: &reqwest::Client,
+    api_base_url: &str,
+    api_token: &str,
+) -> Vec<OsItem> {
+    let payload = api_call(client, api_base_url, api_token, "GET", "/v1/os", None, None).await;
+    let mut out = vec![];
+    
+    if payload.get("code").and_then(|c| c.as_str()) == Some("OKAY") {
+        if let Some(arr) = payload.get("data").and_then(|d| d.as_array()) {
+            for item in arr {
+                if let Some(obj) = item.as_object() {
+                    out.push(OsItem {
+                        id: obj.get("id").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+                        name: obj.get("name").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+                        family: obj.get("family").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+                        arch: obj.get("arch").and_then(|v| v.as_str()).map(|s| s.to_string()),
+                        min_ram: obj.get("minRam").and_then(|v| v.as_str()).map(|s| s.to_string()),
+                        is_default: obj.get("isDefault").and_then(|v| v.as_bool()).unwrap_or(false),
+                    });
+                }
+            }
+        }
+    }
+    out
+}

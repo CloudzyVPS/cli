@@ -1,5 +1,6 @@
 use askama::Template;
 use crate::models::{CurrentUser, InstanceView};
+use crate::templates::BaseTemplate;
 
 #[derive(Template)]
 #[template(path = "change_pass_instance.html")]
@@ -13,3 +14,5 @@ pub struct ChangePassInstanceTemplate {
     pub new_password: Option<String>,
     pub is_disabled: bool,
 }
+
+crate::impl_base_template!(ChangePassInstanceTemplate);

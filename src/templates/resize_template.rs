@@ -1,5 +1,6 @@
 use askama::Template;
 use crate::models::{CurrentUser, Region, InstanceView};
+use crate::templates::BaseTemplate;
 
 #[derive(Template)]
 #[template(path = "resize.html")]
@@ -13,3 +14,5 @@ pub struct ResizeTemplate<'a> {
     pub regions: &'a [Region],
     pub is_disabled: bool,
 }
+
+crate::impl_base_template!(ResizeTemplate);

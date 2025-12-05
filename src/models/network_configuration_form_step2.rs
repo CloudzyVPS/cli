@@ -1,5 +1,5 @@
 #[derive(Clone)]
-pub struct Step2FormData {
+pub struct NetworkConfigurationFormStep2 {
     pub hostnames_text: String,
     pub assign_ipv4: bool,
     pub assign_ipv6: bool,

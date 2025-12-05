@@ -1,5 +1,6 @@
 use askama::Template;
 use crate::models::{CurrentUser, UserRow};
+use crate::templates::BaseTemplate;
 
 #[derive(Template)]
 #[template(path = "users.html")]
@@ -11,3 +12,5 @@ pub struct UsersPageTemplate<'a> {
     pub has_flash_messages: bool,
     pub rows: &'a [UserRow],
 }
+
+crate::impl_base_template!(UsersPageTemplate);

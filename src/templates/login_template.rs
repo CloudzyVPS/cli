@@ -1,5 +1,6 @@
 use askama::Template;
 use crate::models::CurrentUser;
+use crate::templates::BaseTemplate;
 
 #[derive(Template)]
 #[template(path = "login.html")]
@@ -11,3 +12,5 @@ pub struct LoginTemplate {
     pub has_flash_messages: bool,
     pub error: Option<String>,
 }
+
+crate::impl_base_template!(LoginTemplate);
