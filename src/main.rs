@@ -4,7 +4,6 @@ mod services;
 mod util;
 mod api;
 mod templates;
-mod wizard;
 
 use askama::Template;
 use axum::{
@@ -35,8 +34,6 @@ use models::{UserRecord, CurrentUser, AppState, AddTrafficForm, ChangeOsForm, Re
 use services::{generate_password_hash, verify_password, random_session_id, load_users_from_file, persist_users_file, simple_instance_action, enforce_instance_access, get_instance_for_action, parse_wizard_base, build_base_query_pairs};
 use util::{hostname_from_url, absolute_url, build_query_string, parse_urlencoded_body};
 use api::{api_call, load_regions, load_products, load_os_list, load_applications, load_instances_for_user};
-use wizard::templates::{Step1Template, Step2Template, Step3FixedTemplate, Step3CustomTemplate, Step4Template, Step5Template, Step6Template, Step7Template, Step8Template, SshKeyDisplay};
-use templates::{LoginTemplate, RegionsPageTemplate, ProductsPageTemplate, OsCatalogTemplate, ApplicationsTemplate, InstanceDetailTemplate, BulkRefundTemplate, UsersPageTemplate, AccessPageTemplate, SshKeysPageTemplate, InstancesPageTemplate, DeleteInstanceTemplate, PowerOnInstanceTemplate, PowerOffInstanceTemplate, ResetInstanceTemplate, ChangePassInstanceTemplate, ChangeOsTemplate, ResizeTemplate};
 use templates::*;
 use std::collections::HashSet;
 use rand::rngs::OsRng;
