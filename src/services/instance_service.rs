@@ -1,28 +1,6 @@
-use serde::Deserialize;
 use serde_json::Value;
-use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
 
-use crate::users::models::UserRecord;
-
-#[derive(Clone)]
-pub struct AppState {
-    pub users: Arc<Mutex<HashMap<String, UserRecord>>>,
-    pub sessions: Arc<Mutex<HashMap<String, String>>>,
-    pub flash_store: Arc<Mutex<HashMap<String, Vec<String>>>>,
-    pub default_customer_cache: Arc<Mutex<Option<String>>>,
-    pub api_base_url: String,
-    pub api_token: String,
-    pub public_base_url: String,
-    pub client: reqwest::Client,
-    pub disabled_instances: Arc<std::collections::HashSet<String>>,
-}
-
-impl AppState {
-    pub fn is_instance_disabled(&self, id: &str) -> bool {
-        self.disabled_instances.contains(id)
-    }
-}
+use crate::models::{AppState, InstanceView, OsItem};
 
 pub async fn simple_instance_action(state: &AppState, action: &str, instance_id: &str) -> Value {
     let endpoint = format!("/v1/instances/{}/{}", instance_id, action);
@@ -42,34 +20,10 @@ pub async fn enforce_instance_access(state: &AppState, username: Option<&str>, i
     false
 }
 
-#[derive(Deserialize)]
-pub struct AddTrafficForm {
-    pub traffic_amount: String,
-}
-
-#[derive(Deserialize)]
-pub struct ChangeOsForm {
-    pub os_id: String,
-}
-
-#[derive(Deserialize)]
-pub struct ResizeForm {
-    pub r#type: String,
-    pub product_id: Option<String>,
-    pub region_id: Option<String>,
-    pub cpu: Option<String>,
-    #[serde(rename = "ramInGB")]
-    pub ram_in_gb: Option<String>,
-    #[serde(rename = "diskInGB")]
-    pub disk_in_gb: Option<String>,
-    #[serde(rename = "bandwidthInTB")]
-    pub bandwidth_in_tb: Option<String>,
-}
-
-pub async fn get_instance_for_action(state: &AppState, instance_id: &str) -> crate::api::InstanceView {
+pub async fn get_instance_for_action(state: &AppState, instance_id: &str) -> InstanceView {
     let endpoint = format!("/v1/instances/{}", instance_id);
     let payload = crate::api::api_call(&state.client, &state.api_base_url, &state.api_token, "GET", &endpoint, None, None).await;
-    let mut instance = crate::api::InstanceView {
+    let mut instance = InstanceView {
         id: instance_id.to_string(),
         hostname: "(no hostname)".into(),
         region: "".into(),
@@ -87,7 +41,7 @@ pub async fn get_instance_for_action(state: &AppState, instance_id: &str) -> cra
             instance.ram_display = data.get("ram").and_then(|v| v.as_i64()).map(|n| format!("{} MB", n)).unwrap_or_else(|| "—".into());
             instance.disk_display = data.get("disk").and_then(|v| v.as_i64()).map(|n| format!("{} GB", n)).unwrap_or_else(|| "—".into());
             if let Some(os_obj) = data.get("os").and_then(|v| v.as_object()) {
-                instance.os = Some(crate::api::OsItem {
+                instance.os = Some(OsItem {
                     id: os_obj.get("id").and_then(|v| v.as_str()).unwrap_or("").to_string(),
                     name: os_obj.get("name").and_then(|v| v.as_str()).unwrap_or("").to_string(),
                     family: os_obj.get("family").and_then(|v| v.as_str()).unwrap_or("").to_string(),

@@ -1,6 +1,5 @@
 use askama::Template;
-use crate::users::CurrentUser;
-use crate::api::{Region, ProductView, OsItem, ApplicationView, InstanceView};
+use crate::models::{CurrentUser, Region, ProductView, OsItem, ApplicationView, InstanceView};
 
 #[derive(Template)]
 #[template(path = "login.html")]

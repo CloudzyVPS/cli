@@ -1,6 +1,4 @@
-pub mod models;
 pub mod templates;
 
-// Re-export commonly used items from models and templates
-pub use models::*;
+// Re-export templates
 pub use templates::*;
