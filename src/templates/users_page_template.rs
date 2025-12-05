@@ -1,5 +1,5 @@
 use askama::Template;
-use crate::models::{CurrentUser, Region, ProductView, OsItem, ApplicationView, InstanceView};
+use crate::models::{CurrentUser, UserRow};
 
 #[derive(Template)]
 #[template(path = "users.html")]
@@ -9,5 +9,5 @@ pub struct UsersPageTemplate<'a> {
     pub base_url: String,
     pub flash_messages: Vec<String>,
     pub has_flash_messages: bool,
-    pub users: &'a [(String, String, Vec<String>)],
+    pub rows: &'a [UserRow],
 }

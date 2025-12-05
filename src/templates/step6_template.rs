@@ -1,5 +1,5 @@
 use askama::Template;
-use crate::models::{CurrentUser, BaseState, Step1FormData, Step2FormData, CustomPlanFormValues, Region, ProductView, OsItem};
+use crate::models::{CurrentUser, BaseState, CustomPlanFormValues, SshKeyDisplay};
 
 #[derive(Template)]
 #[template(path = "step_6.html")]
@@ -11,13 +11,13 @@ pub struct Step6Template<'a> {
     pub has_flash_messages: bool,
     pub base_state: &'a BaseState,
     pub product_id: String,
-    pub cpu: String,
-    pub ram_in_gb: String,
-    pub disk_in_gb: String,
-    pub bandwidth_in_tb: String,
+    pub hostnames_csv: String,
+    pub floating_ip_count: String,
+    pub extra_disk: String,
+    pub extra_bandwidth: String,
+    pub custom_plan: CustomPlanFormValues,
     pub ssh_keys: &'a [SshKeyDisplay],
-    pub selected_key_ids: Vec<i64>,
+    pub manage_keys_url: String,
     pub back_url: String,
     pub submit_url: String,
-    pub restart_url: String,
 }

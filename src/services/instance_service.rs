@@ -20,6 +20,7 @@ pub async fn enforce_instance_access(state: &AppState, username: Option<&str>, i
     false
 }
 
+#[allow(dead_code)]
 pub async fn get_instance_for_action(state: &AppState, instance_id: &str) -> InstanceView {
     let endpoint = format!("/v1/instances/{}", instance_id);
     let payload = crate::api::api_call(&state.client, &state.api_base_url, &state.api_token, "GET", &endpoint, None, None).await;

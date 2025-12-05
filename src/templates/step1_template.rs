@@ -1,5 +1,5 @@
 use askama::Template;
-use crate::models::{CurrentUser, BaseState, Step1FormData, Step2FormData, CustomPlanFormValues, Region, ProductView, OsItem};
+use crate::models::{CurrentUser, Step1FormData, Region};
 
 #[derive(Template)]
 #[template(path = "step_1.html")]

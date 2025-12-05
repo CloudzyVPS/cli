@@ -1,5 +1,5 @@
 use askama::Template;
-use crate::models::{CurrentUser, Region, ProductView, OsItem, ApplicationView, InstanceView};
+use crate::models::CurrentUser;
 
 #[derive(Template)]
 #[template(path = "instance_detail.html")]
