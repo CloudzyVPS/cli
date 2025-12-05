@@ -197,7 +197,7 @@ pub struct ChangePassInstanceTemplate {
 }
 
 #[derive(Template)]
-#[template(path = "change_os_instance.html")]
+#[template(path = "change_os.html")]
 pub struct ChangeOsTemplate<'a> {
     pub current_user: Option<CurrentUser>,
     pub api_hostname: String,
@@ -210,7 +210,7 @@ pub struct ChangeOsTemplate<'a> {
 }
 
 #[derive(Template)]
-#[template(path = "resize_instance.html")]
+#[template(path = "resize.html")]
 pub struct ResizeTemplate<'a> {
     pub current_user: Option<CurrentUser>,
     pub api_hostname: String,

@@ -30,20 +30,14 @@ use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 use axum_extra::extract::cookie::{CookieJar, Cookie};
 
-use config::{DEFAULT_HOST, DEFAULT_PORT, DEFAULT_PBKDF2_ITERATIONS};
+use config::{DEFAULT_HOST, DEFAULT_PORT};
 use users::{UserRecord, CurrentUser, generate_password_hash, verify_password, random_session_id, load_users_from_file, persist_users_file};
-use util::{hostname_from_url, absolute_url, build_query_string, parse_flag, parse_optional_int, parse_int_list, parse_urlencoded_body};
-use api::{api_call, load_regions, load_products, load_os_list, load_applications, load_instances_for_user, Region, ProductView, ProductEntry, OsItem, ApplicationView, InstanceView};
+use util::{hostname_from_url, absolute_url, build_query_string, parse_flag, parse_optional_int, parse_int_list};
+use api::{api_call, load_regions, load_products, load_os_list, load_applications, load_instances_for_user, Region, ProductView, OsItem, ApplicationView, InstanceView};
 use instances::{AppState, simple_instance_action, enforce_instance_access, get_instance_for_action, AddTrafficForm, ChangeOsForm, ResizeForm};
 use wizard::{parse_wizard_base, build_base_query_pairs, BaseState, Step1FormData, Step2FormData, CustomPlanFormValues, Step7Form};
 use templates::*;
 use urlencoding::encode;
-use std::collections::HashSet;
-use rand::rngs::OsRng;
-use rand::RngCore;
-use pbkdf2::pbkdf2_hmac;
-use sha2::Sha256;
-use hex::encode as hex_encode;
 // No-op logging ignore endpoint list
 static LOGGING_IGNORE_ENDPOINTS: &[&str] = &["/v1/os", "/v1/products", "/os", "/products"];
 
@@ -437,14 +431,118 @@ fn inject_context(state: &AppState, jar: &CookieJar, mut html: String) -> Respon
 
 // ---------- Helper Parsing Functions (Wizard) ----------
 
+fn parse_flag(value: Option<&String>, default: bool) -> bool {
+    match value {
+        Some(v) => {
+            let t = v.trim().to_lowercase();
+            if t.is_empty() {
+                default
+            } else {
+                matches!(t.as_str(), "1" | "true" | "yes" | "on")
+            }
+        }
+        None => default,
+    }
+}
+
+fn parse_optional_int(value: Option<&String>) -> Option<i32> {
+    value.and_then(|v| {
+        let t = v.trim();
+        if t.is_empty() {
+            None
+        } else {
+            t.parse::<i32>().ok()
+        }
+    })
+}
+
+fn parse_int_list(values: &[String]) -> Vec<i64> {
+    values
+        .iter()
+        .filter_map(|v| {
+            let t = v.trim();
+            if t.is_empty() {
+                None
+            } else {
+                t.parse::<i64>().ok()
+            }
+        })
+        .collect()
+}
 
 
 
-
-
+fn build_query_string(pairs: &[(String, String)]) -> String {
+    let mut first = true;
+    let mut out = String::new();
+    for (k, v) in pairs {
+        if !first {
+            out.push('&');
+        } else {
+            first = false;
+        }
+        out.push_str(&encode(k));
+        out.push('=');
+        out.push_str(&encode(v));
+    }
+    out
+}
 
 // ---------- Regions Loader ----------
 
+async fn load_regions(state: &AppState) -> (Vec<Region>, HashMap<String, Region>) {
+    let payload = api_call(state, "GET", "/v1/regions", None, None).await;
+    let mut regions = Vec::new();
+    let mut map = HashMap::new();
+    if payload.get("code").and_then(|c| c.as_str()) == Some("OKAY") {
+        if let Some(arr) = payload.get("data").and_then(|d| d.as_array()) {
+            for r in arr {
+                if let Some(obj) = r.as_object() {
+                    let id = obj
+                        .get("id")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or_default()
+                        .to_string();
+                    let name = obj
+                        .get("name")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or(&id)
+                        .to_string();
+                    let slug = obj
+                        .get("slug")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("")
+                        .to_string();
+                    let country = obj
+                        .get("country")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("")
+                        .to_string();
+                    let city = obj
+                        .get("city")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("")
+                        .to_string();
+                    let latitude = obj.get("latitude").and_then(|v| v.as_f64());
+                    let longitude = obj.get("longitude").and_then(|v| v.as_f64());
+
+                    let region = Region {
+                        id: id.clone(),
+                        name,
+                        slug,
+                        country,
+                        city,
+                        latitude,
+                        longitude,
+                    };
+                    regions.push(region.clone());
+                    map.insert(id, region);
+                }
+            }
+        }
+    }
+    (regions, map)
+}
 
 // ---------- Wizard Step 1 Template ----------
 
@@ -469,7 +567,7 @@ async fn create_step_1(
         return r.into_response();
     }
     let base = parse_wizard_base(&q);
-    let (regions, _lookup) = load_regions_wrapper(&state).await;
+    let (regions, _lookup) = load_regions(&state).await;
     let mut region_sel = base.region.clone();
     if region_sel.is_empty() && !regions.is_empty() {
         region_sel = regions[0].id.clone();
@@ -650,6 +748,96 @@ fn value_to_short_string(value: &Value) -> String {
 
 
 
+async fn load_products(state: &AppState, region_id: &str) -> Vec<ProductView> {
+    let params = vec![("regionId".into(), region_id.to_string())];
+    let payload = api_call(state, "GET", "/v1/products", None, Some(params)).await;
+    let mut out = vec![];
+    if payload.get("code").and_then(|c| c.as_str()) == Some("OKAY") {
+        if let Some(arr) = payload.get("data").and_then(|d| d.as_array()) {
+            for item in arr {
+                if let Some(obj) = item.as_object() {
+                    let id = obj
+                        .get("id")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or_default()
+                        .to_string();
+
+                    let plan = obj.get("plan").and_then(|v| v.as_object());
+                    let price_items = obj.get("priceItems").and_then(|v| v.as_array());
+
+                    let name = id.clone();
+                    
+                    let display_name = name.clone();
+                    let description = obj
+                        .get("description")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("")
+                        .to_string();
+                    let tags = obj
+                        .get("tags")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("")
+                        .to_string(); 
+
+                    let mut spec_entries = Vec::new();
+                    let mut cpu = None;
+                    let mut ram = None;
+                    let mut storage = None;
+                    let mut bandwidth = None;
+
+                    if let Some(p) = plan {
+                        if let Some(spec) = p.get("specification").and_then(|v| v.as_object()) {
+                            if let Some(c) = spec.get("cpu") {
+                                let val = value_to_short_string(c);
+                                cpu = Some(format!("{} vCPU", val));
+                                spec_entries.push(ProductEntry { term: "CPU".into(), value: format!("{} vCPU", val) });
+                            }
+                            if let Some(r) = spec.get("ram") {
+                                let val = value_to_short_string(r);
+                                ram = Some(format!("{} GB", val));
+                                spec_entries.push(ProductEntry { term: "RAM".into(), value: format!("{} GB", val) });
+                            }
+                            if let Some(s) = spec.get("storage") {
+                                let val = value_to_short_string(s);
+                                storage = Some(format!("{} GB", val));
+                                spec_entries.push(ProductEntry { term: "Storage".into(), value: format!("{} GB", val) });
+                            }
+                            if let Some(b) = spec.get("bandwidthInTB") {
+                                let val = value_to_short_string(b);
+                                bandwidth = Some(format!("{} TB", val));
+                                spec_entries.push(ProductEntry { term: "Bandwidth".into(), value: format!("{} TB", val) });
+                            }
+                        }
+                    }
+
+                    let mut price_entries = Vec::new();
+                    if let Some(items) = price_items {
+                        for item in items {
+                            if let Some(monthly) = item.get("monthlyPrice") {
+                                price_entries.push(ProductEntry { term: "Monthly".into(), value: format!("${}", value_to_short_string(monthly)) });
+                            }
+                        }
+                    }
+
+                    out.push(ProductView {
+                        id,
+                        name,
+                        display_name,
+                        description,
+                        tags,
+                        spec_entries,
+                        price_entries,
+                        cpu,
+                        ram,
+                        storage,
+                        bandwidth,
+                    });
+                }
+            }
+        }
+    }
+    out
+}
 
 async fn create_step_3(
     State(state): State<AppState>,
@@ -675,7 +863,7 @@ async fn create_step_3(
     let ssh_key_ids_csv = base.ssh_key_ids.iter().map(|id| id.to_string()).collect::<Vec<_>>().join(",");
 
     if base.plan_type == "fixed" {
-        let products = load_products_wrapper(&state, &base.region).await;
+        let products = load_products(&state, &base.region).await;
         let selected_product_id = q.get("product_id").cloned().unwrap_or_default();
         let TemplateGlobals {
             current_user,
@@ -887,8 +1075,115 @@ struct Step5Template<'a> {
     ssh_key_ids_csv: String,
 }
 
+async fn load_os_list(state: &AppState) -> Vec<OsItem> {
+    let payload = api_call(state, "GET", "/v1/os", None, None).await;
+    let mut out = vec![];
+    if payload.get("code").and_then(|c| c.as_str()) == Some("OKAY") {
+        if let Some(arr) = payload
+            .get("data")
+            .and_then(|d| d.get("os"))
+            .and_then(|o| o.as_array())
+        {
+            for item in arr {
+                if let Some(obj) = item.as_object() {
+                    let id = obj
+                        .get("id")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("")
+                        .to_string();
+                    let name = obj
+                        .get("name")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("")
+                        .to_string();
+                    let family = obj
+                        .get("family")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("")
+                        .to_string();
+                    let arch = obj
+                        .get("arch")
+                        .and_then(|v| v.as_str())
+                        .map(|s| s.to_string());
+                    let min_ram = obj
+                        .get("minRam")
+                        .map(value_to_short_string)
+                        .filter(|s| !s.is_empty());
+                    let is_default = obj
+                        .get("isDefault")
+                        .and_then(|v| v.as_bool())
+                        .unwrap_or(false);
+                    out.push(OsItem {
+                        id,
+                        name,
+                        family,
+                        arch,
+                        min_ram,
+                        is_default,
+                    });
+                }
+            }
+        }
+    }
+    out
+}
 
 
+async fn load_applications(state: &AppState) -> Vec<ApplicationView> {
+    let payload = api_call(state, "GET", "/v1/applications", None, None).await;
+    let mut apps = Vec::new();
+    if payload.get("code").and_then(|c| c.as_str()) == Some("OKAY") {
+        if let Some(arr) = payload
+            .get("data")
+            .and_then(|d| d.get("applications")) // Note: API spec says data is array of ApplicationSchema, but code expects data.applications. Checking spec again...
+            // Spec says: "data": {"type": "array", "items": {"$ref": "#/components/schemas/ApplicationSchema"}}
+            // So it should be payload.get("data").and_then(|d| d.as_array())
+            // But let's stick to what was working or try both.
+            .or_else(|| payload.get("data"))
+            .and_then(|a| a.as_array())
+        {
+            for item in arr {
+                if let Some(obj) = item.as_object() {
+                    let id = obj
+                        .get("id")
+                        .and_then(|v| v.as_i64())
+                        .map(|n| n.to_string())
+                        .or_else(|| {
+                            obj.get("id")
+                                .and_then(|v| v.as_str())
+                                .map(|s| s.to_string())
+                        })
+                        .unwrap_or_default();
+                    let name = obj
+                        .get("name")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or(&id)
+                        .to_string();
+                    let description = obj
+                        .get("description")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("")
+                        .to_string();
+                    let price = obj
+                        .get("price")
+                        .map(value_to_short_string)
+                        .or_else(|| obj.get("pricing").map(value_to_short_string))
+                        .filter(|s| !s.is_empty());
+                    let tags = obj.get("tag").and_then(|v| v.as_str()).map(|s| s.to_string());
+                    
+                    apps.push(ApplicationView {
+                        id,
+                        name,
+                        description,
+                        price,
+                        tags,
+                    });
+                }
+            }
+        }
+    }
+    apps
+}
 
 async fn create_step_5(
     State(state): State<AppState>,
@@ -927,7 +1222,7 @@ async fn create_step_5(
             .cloned()
             .unwrap_or_else(|| "1".into()),
     };
-    let os_list = load_os_list_wrapper(&state).await;
+    let os_list = load_os_list(&state).await;
     let mut selected_os_id = base.os_id.clone();
     if selected_os_id.is_empty() {
         selected_os_id = q.get("os_id").cloned().unwrap_or_default();
@@ -1282,7 +1577,7 @@ async fn create_step_7_core(
                 payload["extraResource"] = Value::Object(extras);
             }
         }
-        let resp = api_call_wrapper(&state, "POST", "/v1/instances", Some(payload), None).await;
+        let resp = api_call(&state, "POST", "/v1/instances", Some(payload), None).await;
         if resp.get("code").and_then(|c| c.as_str()) == Some("OKAY")
             || resp.get("code").and_then(|c| c.as_str()) == Some("CREATED")
         {
@@ -1357,7 +1652,7 @@ async fn create_step_7_core(
     let mut footnote = None;
     
     if base.plan_type == "fixed" {
-        let products = load_products_wrapper(&state, &base.region).await;
+        let products = load_products(&state, &base.region).await;
         if let Some(prod) = products.into_iter().find(|p| p.id == plan_state.product_id) {
             plan_summary = prod.spec_entries.clone();
             price_entries = prod.price_entries.clone();
@@ -1394,7 +1689,7 @@ async fn create_step_7_core(
         }
         plan_summary = summary;
     }
-    let os_list = load_os_list_wrapper(&state).await;
+    let os_list = load_os_list(&state).await;
     let selected_os_label = os_list
         .iter()
         .find(|os| os.id == base.os_id)
@@ -1966,12 +2261,73 @@ struct ChangePassInstanceTemplate {
     is_disabled: bool,
 }
 
+async fn load_instances_for_user(state: &AppState, username: &str) -> Vec<InstanceView> {
+    let payload = api_call(state, "GET", "/v1/instances", None, None).await;
+    let mut list: Vec<InstanceView> = vec![];
+    if payload.get("code").and_then(|c| c.as_str()) == Some("OKAY") {
+        if let Some(items) = payload
+            .get("data")
+            .and_then(|d| d.get("instances"))
+            .and_then(|arr| arr.as_array())
+        {
+            for item in items {
+                let id = item
+                    .get("id")
+                    .and_then(|v| v.as_i64())
+                    .map(|n| n.to_string())
+                    .or_else(|| {
+                        item.get("id")
+                            .and_then(|v| v.as_str())
+                            .map(|s| s.to_string())
+                    })
+                    .unwrap_or_else(|| "?".into());
+                let hostname = item
+                    .get("hostname")
+                    .and_then(|v| v.as_str())
+                    .map(|s| s.to_string())
+                    .unwrap_or_else(|| "(no hostname)".into());
+                let status = item
+                    .get("status")
+                    .and_then(|v| v.as_str())
+                    .map(|s| s.to_string())
+                    .unwrap_or_else(|| "?".into());
+                list.push(InstanceView { id, hostname, status });
+            }
+        }
+    }
+    let (role, allowed) = {
+        let users = state.users.lock().unwrap();
+        if let Some(user) = users.get(username) {
+            if user.role == "admin" {
+                (
+                    Some(user.role.clone()),
+                    Some(
+                        user.assigned_instances
+                            .iter()
+                            .cloned()
+                            .collect::<HashSet<String>>(),
+                    ),
+                )
+            } else {
+                (Some(user.role.clone()), None)
+            }
+        } else {
+            (None, None)
+        }
+    };
+    if role.as_deref() == Some("admin") {
+        if let Some(allowed_set) = allowed {
+            list.retain(|inst| allowed_set.contains(&inst.id));
+        }
+    }
+    list
+}
 
 async fn instances_real(State(state): State<AppState>, jar: CookieJar) -> impl IntoResponse {
     let Some(username) = current_username_from_jar(&state, &jar) else {
         return Redirect::to("/login").into_response();
     };
-    let list = load_instances_for_user_wrapper(&state, &username).await;
+    let list = load_instances_for_user(&state, &username).await;
     let TemplateGlobals { current_user, api_hostname, base_url, flash_messages, has_flash_messages } = build_template_globals(&state, &jar);
     inject_context(
         &state,
@@ -2017,7 +2373,7 @@ async fn access_get(State(state): State<AppState>, jar: CookieJar) -> impl IntoR
         return r.into_response();
     }
     // Load instances
-    let payload = api_call_wrapper(&state, "GET", "/v1/instances", None, None).await;
+    let payload = api_call(&state, "GET", "/v1/instances", None, None).await;
     let mut list: Vec<InstanceView> = vec![];
     if payload.get("code").and_then(|c| c.as_str()) == Some("OKAY") {
         if let Some(items) = payload
@@ -2338,7 +2694,7 @@ async fn ssh_keys_post(
             return plain_html("Invalid key id");
         }
         let endpoint = format!("/v1/ssh-keys/{}", key_id_raw);
-        let payload = api_call_wrapper(&state, "DELETE", &endpoint, None, None).await;
+        let payload = api_call(&state, "DELETE", &endpoint, None, None).await;
         if payload.get("code").and_then(|c| c.as_str()) != Some("OKAY") {
             if let Some(detail) = payload.get("detail").and_then(|d| d.as_str()) {
                 if detail_requires_customer(detail) {
@@ -2368,13 +2724,13 @@ async fn ssh_keys_post(
         return plain_html("Provide name and public key");
     }
     let mut body = serde_json::json!({"name": name, "publicKey": public_key});
-    let payload = api_call_wrapper(&state, "POST", "/v1/ssh-keys", Some(body.clone()), None).await;
+    let payload = api_call(&state, "POST", "/v1/ssh-keys", Some(body.clone()), None).await;
     if payload.get("code").and_then(|c| c.as_str()) != Some("OKAY") {
         if let Some(detail) = payload.get("detail").and_then(|d| d.as_str()) {
             if detail_requires_customer(detail) {
                 if let Some(cid) = fetch_default_customer_id(&state).await {
                     body["customerId"] = Value::String(cid.clone());
-                    let _ = api_call_wrapper(&state, "POST", "/v1/ssh-keys", Some(body), None).await;
+                    let _ = api_call(&state, "POST", "/v1/ssh-keys", Some(body), None).await;
                 }
             }
         }
@@ -2402,7 +2758,7 @@ async fn regions_get(State(state): State<AppState>, jar: CookieJar) -> impl Into
     if let Some(r) = ensure_owner(&state, &jar) {
         return r.into_response();
     }
-    let (regions, _) = load_regions_wrapper(&state).await;
+    let (regions, _) = load_regions(&state).await;
     // let total_regions = regions.len();
     // let premium_count = regions.iter().filter(|r| r.is_premium).count();
     let TemplateGlobals { current_user, api_hostname, base_url, flash_messages, has_flash_messages } = build_template_globals(&state, &jar);
@@ -2427,7 +2783,7 @@ async fn products_get(
     if let Some(r) = ensure_owner(&state, &jar) {
         return r.into_response();
     }
-    let (regions, _) = load_regions_wrapper(&state).await;
+    let (regions, _) = load_regions(&state).await;
     let region_param = q
         .get("region_id")
         .cloned()
@@ -2445,7 +2801,7 @@ async fn products_get(
     }
     let selected_region_id = selected_region_idx.map(|idx| regions[idx].id.clone());
     let products = if let Some(ref region_id) = selected_region_id {
-        load_products_wrapper(&state, region_id).await
+        load_products(&state, region_id).await
     } else {
         vec![]
     };
@@ -2473,7 +2829,7 @@ async fn os_get(State(state): State<AppState>, jar: CookieJar) -> impl IntoRespo
     if let Some(r) = ensure_owner(&state, &jar) {
         return r.into_response();
     }
-    let os_list = load_os_list_wrapper(&state).await;
+    let os_list = load_os_list(&state).await;
     // let total_images = os_list.len();
     let TemplateGlobals { current_user, api_hostname, base_url, flash_messages, has_flash_messages } = build_template_globals(&state, &jar);
     let html = OsCatalogTemplate {
@@ -2493,7 +2849,7 @@ async fn applications_get(State(state): State<AppState>, jar: CookieJar) -> impl
     if let Some(r) = ensure_owner(&state, &jar) {
         return r.into_response();
     }
-    let apps = load_applications_wrapper(&state).await;
+    let apps = load_applications(&state).await;
     // let total_apps = apps.len();
     let TemplateGlobals { current_user, api_hostname, base_url, flash_messages, has_flash_messages } = build_template_globals(&state, &jar);
     let html = ApplicationsTemplate {
@@ -2512,6 +2868,18 @@ async fn applications_get(State(state): State<AppState>, jar: CookieJar) -> impl
 // ---------- Instance Detail & Actions ----------
 // Instance details are rendered using `templates/instance_detail.html` (path-based Askama template)
 
+async fn enforce_instance_access(state: &AppState, jar: &CookieJar, instance_id: &str) -> bool {
+    if let Some(username) = current_username_from_jar(state, jar) {
+        let users = state.users.lock().unwrap();
+        if let Some(rec) = users.get(&username) {
+            if rec.role == "owner" {
+                return true;
+            }
+            return rec.assigned_instances.iter().any(|id| id == instance_id);
+        }
+    }
+    false
+}
 
 async fn instance_detail(
     State(state): State<AppState>,
@@ -2528,7 +2896,7 @@ async fn instance_detail(
         return Redirect::to("/instances").into_response();
     }
     let endpoint = format!("/v1/instances/{}", instance_id);
-    let payload = api_call_wrapper(&state, "GET", &endpoint, None, None).await;
+    let payload = api_call(&state, "GET", &endpoint, None, None).await;
     let _json = serde_json::to_string_pretty(&payload).unwrap_or_else(|_| "{}".into());
     // Collect nice key-value pair details we want to display rather than raw JSON
     let mut details: Vec<(String, String)> = Vec::new();
@@ -2566,7 +2934,7 @@ async fn instance_detail(
             if let Some(pid) = product_id.clone() {
                 // Try to resolve product name using region-scoped product listing
                 let product_name = if !region.is_empty() && !pid.is_empty() {
-                    let products = load_products_wrapper(&state, &region).await;
+                    let products = load_products(&state, &region).await;
                     products
                         .into_iter()
                         .find(|p| p.id == pid)
@@ -2641,7 +3009,7 @@ async fn instance_poweron_get(
         return Redirect::to("/instances").into_response();
     }
     let endpoint = format!("/v1/instances/{}", instance_id);
-    let payload = api_call_wrapper(&state, "GET", &endpoint, None, None).await;
+    let payload = api_call(&state, "GET", &endpoint, None, None).await;
     let mut instance = InstanceForAction { id: instance_id.clone(), hostname: "(no hostname)".into(), region: "".into(), main_ip: None, status: "".into(), vcpu_count_display: "—".into(), ram_display: "—".into(), disk_display: "—".into(), os: None };
     if let Some(obj) = payload.as_object() {
         if let Some(data) = obj.get("data").and_then(|d| d.as_object()) {
@@ -2707,7 +3075,7 @@ async fn instance_delete_get(
         return Redirect::to("/instances").into_response();
     }
     let endpoint = format!("/v1/instances/{}", instance_id);
-    let payload = api_call_wrapper(&state, "GET", &endpoint, None, None).await;
+    let payload = api_call(&state, "GET", &endpoint, None, None).await;
     let mut instance = InstanceForAction { id: instance_id.clone(), hostname: "(no hostname)".into(), region: "".into(), main_ip: None, status: "".into(), vcpu_count_display: "—".into(), ram_display: "—".into(), disk_display: "—".into(), os: None };
     if let Some(obj) = payload.as_object() {
         if let Some(data) = obj.get("data").and_then(|d| d.as_object()) {
@@ -2750,7 +3118,7 @@ async fn instance_poweroff_get(
         return Redirect::to("/instances").into_response();
     }
     let endpoint = format!("/v1/instances/{}", instance_id);
-    let payload = api_call_wrapper(&state, "GET", &endpoint, None, None).await;
+    let payload = api_call(&state, "GET", &endpoint, None, None).await;
     let mut instance = InstanceForAction { id: instance_id.clone(), hostname: "(no hostname)".into(), region: "".into(), main_ip: None, status: "".into(), vcpu_count_display: "—".into(), ram_display: "—".into(), disk_display: "—".into(), os: None };
     if let Some(obj) = payload.as_object() {
         if let Some(data) = obj.get("data").and_then(|d| d.as_object()) {
@@ -2801,7 +3169,7 @@ async fn instance_reset_get(
         return Redirect::to("/instances").into_response();
     }
     let endpoint = format!("/v1/instances/{}", instance_id);
-    let payload = api_call_wrapper(&state, "GET", &endpoint, None, None).await;
+    let payload = api_call(&state, "GET", &endpoint, None, None).await;
     let mut instance = InstanceForAction { id: instance_id.clone(), hostname: "(no hostname)".into(), region: "".into(), main_ip: None, status: "".into(), vcpu_count_display: "—".into(), ram_display: "—".into(), disk_display: "—".into(), os: None };
     if let Some(obj) = payload.as_object() {
         if let Some(data) = obj.get("data").and_then(|d| d.as_object()) {
@@ -2852,7 +3220,7 @@ async fn instance_change_pass_get(
         return Redirect::to("/instances").into_response();
     }
     let endpoint = format!("/v1/instances/{}", instance_id);
-    let payload = api_call_wrapper(&state, "GET", &endpoint, None, None).await;
+    let payload = api_call(&state, "GET", &endpoint, None, None).await;
     let mut instance = InstanceForAction { id: instance_id.clone(), hostname: "(no hostname)".into(), region: "".into(), main_ip: None, status: "".into(), vcpu_count_display: "—".into(), ram_display: "—".into(), disk_display: "—".into(), os: None };
     if let Some(obj) = payload.as_object() {
         if let Some(data) = obj.get("data").and_then(|d| d.as_object()) {
@@ -2887,11 +3255,11 @@ async fn instance_change_pass_post(
         return Redirect::to(&format!("/instance/{}/change-pass", instance_id)).into_response();
     }
     let endpoint = format!("/v1/instances/{}/change-pass", instance_id);
-    let payload = api_call_wrapper(&state, "POST", &endpoint, None, None).await;
+    let payload = api_call(&state, "POST", &endpoint, None, None).await;
     let new_password = payload.get("data").and_then(|d| d.get("password")).and_then(|v| v.as_str()).map(|s| s.to_string());
     // Fetch instance details for rendering
     let get_endpoint = format!("/v1/instances/{}", instance_id);
-    let payload2 = api_call_wrapper(&state, "GET", &get_endpoint, None, None).await;
+    let payload2 = api_call(&state, "GET", &get_endpoint, None, None).await;
     let mut instance = InstanceForAction { id: instance_id.clone(), hostname: "(no hostname)".into(), region: "".into(), main_ip: None, status: "".into(), vcpu_count_display: "—".into(), ram_display: "—".into(), disk_display: "—".into(), os: None };
     if let Some(obj) = payload2.as_object() {
         if let Some(data) = obj.get("data").and_then(|d| d.as_object()) {
@@ -2925,7 +3293,7 @@ async fn instance_delete(
         return Redirect::to(&format!("/instance/{}", instance_id)).into_response();
     }
     let endpoint = format!("/v1/instances/{}", instance_id);
-    let payload = api_call_wrapper(&state, "DELETE", &endpoint, None, None).await;
+    let payload = api_call(&state, "DELETE", &endpoint, None, None).await;
     // Optionally set flash message for success or failure
     if let Some(sid) = jar.get("session_id") {
         let mut flashes = state.flash_store.lock().unwrap();
@@ -2969,7 +3337,7 @@ async fn instance_add_traffic(
         if amount > 0.0 {
             let endpoint = format!("/v1/instances/{}/add-traffic", instance_id);
             let payload = serde_json::json!({"amount": amount});
-            let _ = api_call_wrapper(&state, "POST", &endpoint, Some(payload), None).await;
+            let _ = api_call(&state, "POST", &endpoint, Some(payload), None).await;
         }
     }
     Redirect::to(&format!("/instance/{}", instance_id)).into_response()
@@ -2988,7 +3356,7 @@ async fn instance_change_os_get(
         return Redirect::to("/instances").into_response();
     }
     let endpoint = format!("/v1/instances/{}", instance_id);
-    let payload = api_call_wrapper(&state, "GET", &endpoint, None, None).await;
+    let payload = api_call(&state, "GET", &endpoint, None, None).await;
     let mut instance = InstanceForAction { id: instance_id.clone(), hostname: "(no hostname)".into(), region: "".into(), main_ip: None, status: "".into(), vcpu_count_display: "—".into(), ram_display: "—".into(), disk_display: "—".into(), os: None };
     if let Some(obj) = payload.as_object() {
         if let Some(data) = obj.get("data").and_then(|d| d.as_object()) {
@@ -3008,7 +3376,7 @@ async fn instance_change_os_get(
             instance.status = data.get("status").and_then(|v| v.as_str()).unwrap_or("").to_string();
         }
     }
-    let os_list = load_os_list_wrapper(&state).await;
+    let os_list = load_os_list(&state).await;
     let TemplateGlobals { current_user, api_hostname, base_url, flash_messages, has_flash_messages } = build_template_globals(&state, &jar);
     inject_context(&state, &jar, ChangeOsTemplate { current_user, api_hostname, base_url, flash_messages, has_flash_messages, instance, os_list: &os_list, is_disabled: state.is_instance_disabled(&instance_id) }.render().unwrap())
 }
@@ -3038,7 +3406,7 @@ async fn instance_change_os_post(
     }
     let endpoint = format!("/v1/instances/{}/change-os", instance_id);
     let payload = serde_json::json!({"osId": form.os_id});
-    let _ = api_call_wrapper(&state, "POST", &endpoint, Some(payload), None).await;
+    let _ = api_call(&state, "POST", &endpoint, Some(payload), None).await;
     Redirect::to(&format!("/instance/{}", instance_id)).into_response()
 }
 
@@ -3055,7 +3423,7 @@ async fn instance_resize_get(
         return Redirect::to("/instances").into_response();
     }
     let endpoint = format!("/v1/instances/{}", instance_id);
-    let payload = api_call_wrapper(&state, "GET", &endpoint, None, None).await;
+    let payload = api_call(&state, "GET", &endpoint, None, None).await;
     let mut instance = InstanceForAction { id: instance_id.clone(), hostname: "(no hostname)".into(), region: "".into(), main_ip: None, status: "".into(), vcpu_count_display: "—".into(), ram_display: "—".into(), disk_display: "—".into(), os: None };
     if let Some(obj) = payload.as_object() {
         if let Some(data) = obj.get("data").and_then(|d| d.as_object()) {
@@ -3065,7 +3433,7 @@ async fn instance_resize_get(
             instance.status = data.get("status").and_then(|v| v.as_str()).unwrap_or("").to_string();
         }
     }
-    let (regions, _map) = load_regions_wrapper(&state).await;
+    let (regions, _map) = load_regions(&state).await;
     let TemplateGlobals { current_user, api_hostname, base_url, flash_messages, has_flash_messages } = build_template_globals(&state, &jar);
     inject_context(&state, &jar, ResizeTemplate { current_user, api_hostname, base_url, flash_messages, has_flash_messages, instance, regions: &regions, is_disabled: state.is_instance_disabled(&instance_id) }.render().unwrap())
 }
@@ -3107,7 +3475,7 @@ async fn instance_resize_post(
             payload["resource"] = Value::Object(obj);
         }
     }
-    let _ = api_call_wrapper(&state, "POST", &endpoint, Some(payload), None).await;
+    let _ = api_call(&state, "POST", &endpoint, Some(payload), None).await;
     Redirect::to(&format!("/instance/{}", instance_id)).into_response()
 }
 
@@ -3121,7 +3489,7 @@ async fn instance_subscription_refund(
         return Redirect::to("/instances").into_response();
     }
     let endpoint = format!("/v1/instances/{}/subscription-refund", instance_id);
-    let payload = api_call_wrapper(&state, "GET", &endpoint, None, None).await;
+    let payload = api_call(&state, "GET", &endpoint, None, None).await;
     Html(format!("<html><body><h1>Refund {}</h1><pre>{}</pre><p><a href='/instance/{}'>Back</a></p></body></html>", instance_id, serde_json::to_string_pretty(&payload).unwrap_or("{}" .into()), instance_id)).into_response()
 }
 
@@ -3360,9 +3728,9 @@ async fn main() {
                 hex_encode(b)
             };
             let mut dk = [0u8; 32];
-            pbkdf2_hmac::<Sha256>(b"owner123", salt.as_bytes(), DEFAULT_PBKDF2_ITERATIONS, &mut dk);
+            pbkdf2_hmac::<Sha256>(b"owner123", salt.as_bytes(), PBKDF2_ITERATIONS, &mut dk);
             let hash_hex = hex_encode(dk);
-            let full = format!("pbkdf2:sha256:{}${}${}", DEFAULT_PBKDF2_ITERATIONS, salt, hash_hex);
+            let full = format!("pbkdf2:sha256:{}${}${}", PBKDF2_ITERATIONS, salt, hash_hex);
             map.insert(
                 "owner".to_string(),
                 UserRecord {
@@ -3417,7 +3785,7 @@ async fn main() {
             if !ok {
                 process::exit(1);
             }
-            let resp = api_call_wrapper(&state, "GET", "/v1/regions", None, None).await;
+            let resp = api_call(&state, "GET", "/v1/regions", None, None).await;
             if resp.get("code").and_then(|c| c.as_str()) == Some("OKAY") {
                 println!("Configuration looks valid (regions returned)");
                 process::exit(0);
@@ -3534,7 +3902,7 @@ async fn main() {
             match sub {
                 InstanceCommands::List { username } => {
                     let uname = username.unwrap_or_default();
-                    let list = load_instances_for_user_wrapper(&state, &uname).await;
+                    let list = load_instances_for_user(&state, &uname).await;
                     println!("id\thostname\tstatus");
                     for i in list {
                         println!("{}\t{}\t{}", i.id, i.hostname, i.status);
@@ -3543,7 +3911,7 @@ async fn main() {
                 }
                 InstanceCommands::Show { instance_id } => {
                     let endpoint = format!("/v1/instances/{}", instance_id);
-                    let payload = api_call_wrapper(&state, "GET", &endpoint, None, None).await;
+                    let payload = api_call(&state, "GET", &endpoint, None, None).await;
                     println!("{}", serde_json::to_string_pretty(&payload).unwrap_or_else(|_| "<non-json>".into()));
                     return;
                 }
@@ -3564,13 +3932,13 @@ async fn main() {
                 }
                 InstanceCommands::Delete { instance_id } => {
                     let endpoint = format!("/v1/instances/{}", instance_id);
-                    let payload = api_call_wrapper(&state, "DELETE", &endpoint, None, None).await;
+                    let payload = api_call(&state, "DELETE", &endpoint, None, None).await;
                     println!("{}", serde_json::to_string_pretty(&payload).unwrap_or_else(|_| "<non-json>".into()));
                     return;
                 }
                 InstanceCommands::ChangePass { instance_id } => {
                     let endpoint = format!("/v1/instances/{}/change-pass", instance_id);
-                    let payload = api_call_wrapper(&state, "POST", &endpoint, None, None).await;
+                    let payload = api_call(&state, "POST", &endpoint, None, None).await;
                     if let Some(pass) = payload.get("data").and_then(|d| d.get("password")).and_then(|v| v.as_str()) {
                         println!("New password for {}: {}", instance_id, pass);
                     } else {
@@ -3581,7 +3949,7 @@ async fn main() {
                 InstanceCommands::ChangeOs { instance_id, os_id } => {
                     let endpoint = format!("/v1/instances/{}/change-os", instance_id);
                     let payload = serde_json::json!({"osId": os_id});
-                    let resp = api_call_wrapper(&state, "POST", &endpoint, Some(payload), None).await;
+                    let resp = api_call(&state, "POST", &endpoint, Some(payload), None).await;
                     println!("{}", serde_json::to_string_pretty(&resp).unwrap_or_else(|_| "<non-json>".into()));
                     return;
                 }
@@ -3600,20 +3968,20 @@ async fn main() {
                         if let Some(bw) = bandwidth_in_tb { obj.insert("bandwidthInTB".into(), serde_json::Value::from(bw)); }
                         if !obj.is_empty() { payload["resource"] = serde_json::Value::Object(obj); }
                     }
-                    let resp = api_call_wrapper(&state, "POST", &endpoint, Some(payload), None).await;
+                    let resp = api_call(&state, "POST", &endpoint, Some(payload), None).await;
                     println!("{}", serde_json::to_string_pretty(&resp).unwrap_or_else(|_| "<non-json>".into()));
                     return;
                 }
                 InstanceCommands::AddTraffic { instance_id, amount } => {
                     let endpoint = format!("/v1/instances/{}/add-traffic", instance_id);
                     let payload = serde_json::json!({"amount": amount});
-                    let resp = api_call_wrapper(&state, "POST", &endpoint, Some(payload), None).await;
+                    let resp = api_call(&state, "POST", &endpoint, Some(payload), None).await;
                     println!("{}", serde_json::to_string_pretty(&resp).unwrap_or_else(|_| "<non-json>".into()));
                     return;
                 }
                 InstanceCommands::SubscriptionRefund { instance_id } => {
                     let endpoint = format!("/v1/instances/{}/subscription-refund", instance_id);
-                    let resp = api_call_wrapper(&state, "GET", &endpoint, None, None).await;
+                    let resp = api_call(&state, "GET", &endpoint, None, None).await;
                     println!("{}", serde_json::to_string_pretty(&resp).unwrap_or_else(|_| "<non-json>".into()));
                     return;
                 }
