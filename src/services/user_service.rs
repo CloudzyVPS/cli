@@ -1,4 +1,3 @@
-use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use pbkdf2::pbkdf2_hmac;
@@ -7,19 +6,7 @@ use rand::RngCore;
 use hex::encode as hex_encode;
 
 use crate::config::{DEFAULT_PBKDF2_ITERATIONS, DEFAULT_OWNER_USERNAME, DEFAULT_OWNER_PASSWORD, DEFAULT_OWNER_ROLE};
-
-#[derive(Clone, Serialize, Deserialize)]
-pub struct UserRecord {
-    pub password: String,
-    pub role: String,
-    pub assigned_instances: Vec<String>,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct CurrentUser {
-    pub username: String,
-    pub role: String,
-}
+use crate::models::UserRecord;
 
 pub fn generate_password_hash(password: &str) -> String {
     let mut salt_bytes = [0u8; 12];

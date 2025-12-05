@@ -311,7 +311,7 @@ pub async fn load_instances_for_user(
     client: &reqwest::Client,
     api_base_url: &str,
     api_token: &str,
-    users_map: &std::collections::HashMap<String, crate::users::UserRecord>,
+    users_map: &std::collections::HashMap<String, crate::models::UserRecord>,
     username: &str,
 ) -> Vec<InstanceView> {
     let payload = api_call(client, api_base_url, api_token, "GET", "/v1/instances", None, None).await;

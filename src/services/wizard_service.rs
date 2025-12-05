@@ -1,20 +1,7 @@
-use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 use crate::util::{parse_flag, parse_optional_int, parse_int_list};
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct BaseState {
-    pub hostnames: Vec<String>,
-    pub region: String,
-    pub instance_class: String,
-    pub plan_type: String,
-    pub assign_ipv4: bool,
-    pub assign_ipv6: bool,
-    pub floating_ip_count: i32,
-    pub ssh_key_ids: Vec<i64>,
-    pub os_id: String,
-}
+use crate::models::BaseState;
 
 pub fn parse_wizard_base(query: &HashMap<String, String>) -> BaseState {
     let mut hostnames: Vec<String> = query
@@ -95,46 +82,4 @@ pub fn build_base_query_pairs(state: &BaseState) -> Vec<(String, String)> {
         pairs.push(("os_id".into(), state.os_id.clone()));
     }
     pairs
-}
-
-#[derive(Clone, Default)]
-pub struct Step1FormData {
-    pub region: String,
-    pub instance_class: String,
-    pub plan_type: String,
-}
-
-#[derive(Clone)]
-pub struct Step2FormData {
-    pub hostnames_text: String,
-    pub assign_ipv4: bool,
-    pub assign_ipv6: bool,
-    pub floating_ip_count: String,
-}
-
-#[derive(Clone)]
-pub struct CustomPlanFormValues {
-    pub cpu: String,
-    pub ram_in_gb: String,
-    pub disk_in_gb: String,
-    pub bandwidth_in_tb: String,
-}
-
-#[derive(Deserialize)]
-pub struct Step7Form {
-    pub product_id: Option<String>,
-    pub cpu: Option<String>,
-    #[serde(rename = "ramInGB")]
-    pub ram_in_gb: Option<String>,
-    #[serde(rename = "diskInGB")]
-    pub disk_in_gb: Option<String>,
-    #[serde(rename = "bandwidthInTB")]
-    pub bandwidth_in_tb: Option<String>,
-    pub region: String,
-    pub os_id: String,
-    pub ssh_key_ids: Option<String>,
-    pub hostnames: String,
-    pub assign_ipv4: Option<String>,
-    pub assign_ipv6: Option<String>,
-    pub floating_ip_count: Option<String>,
 }
