@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::util::{parse_flag, parse_optional_int, parse_int_list};
+use crate::utils::{parse_flag, parse_optional_int, parse_int_list};
 use crate::models::BaseState;
 
 pub fn parse_wizard_base(query: &HashMap<String, String>) -> BaseState {
