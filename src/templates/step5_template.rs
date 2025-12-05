@@ -1,5 +1,6 @@
 use askama::Template;
 use crate::models::{CurrentUser, BaseState, CustomPlanFormValues, OsItem};
+use crate::templates::BaseTemplate;
 
 #[derive(Template)]
 #[template(path = "step_5.html")]
@@ -22,3 +23,5 @@ pub struct Step5Template<'a> {
     pub back_url: String,
     pub submit_url: String,
 }
+
+crate::impl_base_template!(Step5Template);

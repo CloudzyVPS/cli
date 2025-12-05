@@ -1,5 +1,6 @@
 use askama::Template;
 use crate::models::{CurrentUser, Region, ProductView};
+use crate::templates::BaseTemplate;
 
 #[derive(Template)]
 #[template(path = "products.html")]
@@ -15,3 +16,5 @@ pub struct ProductsPageTemplate<'a> {
     pub requested_region: Option<String>,
     pub products: &'a [ProductView],
 }
+
+crate::impl_base_template!(ProductsPageTemplate);

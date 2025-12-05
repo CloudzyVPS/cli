@@ -10,3 +10,5 @@ pub struct BulkRefundTemplate {
     pub flash_messages: Vec<String>,
     pub has_flash_messages: bool,
 }
+
+crate::impl_base_template!(BulkRefundTemplate);

@@ -1,3 +1,7 @@
+// Base template trait for inheritance
+pub mod base_template;
+pub use base_template::BaseTemplate;
+
 // Individual template files
 pub mod login_template;
 pub mod regions_page_template;

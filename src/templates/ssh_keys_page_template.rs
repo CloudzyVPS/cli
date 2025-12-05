@@ -1,5 +1,6 @@
 use askama::Template;
 use crate::models::{CurrentUser, SshKeyView};
+use crate::templates::BaseTemplate;
 
 #[derive(Template)]
 #[template(path = "ssh_keys.html")]
@@ -12,3 +13,5 @@ pub struct SshKeysPageTemplate<'a> {
     pub ssh_keys: &'a [SshKeyView],
     pub customer_id: Option<String>,
 }
+
+crate::impl_base_template!(SshKeysPageTemplate);

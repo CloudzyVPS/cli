@@ -1,5 +1,6 @@
 use askama::Template;
 use crate::models::{CurrentUser, InstanceView};
+use crate::templates::BaseTemplate;
 
 #[derive(Template)]
 #[template(path = "delete_instance.html")]
@@ -12,3 +13,5 @@ pub struct DeleteInstanceTemplate {
     pub instance: InstanceView,
     pub is_disabled: bool,
 }
+
+crate::impl_base_template!(DeleteInstanceTemplate);

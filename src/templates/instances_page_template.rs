@@ -1,5 +1,6 @@
 use askama::Template;
 use crate::models::{CurrentUser, InstanceView};
+use crate::templates::BaseTemplate;
 
 #[derive(Template)]
 #[template(path = "instances.html")]
@@ -11,3 +12,5 @@ pub struct InstancesPageTemplate<'a> {
     pub has_flash_messages: bool,
     pub instances: &'a [InstanceView],
 }
+
+crate::impl_base_template!(InstancesPageTemplate);

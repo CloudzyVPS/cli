@@ -14,3 +14,5 @@ pub struct InstanceDetailTemplate {
     pub details: Vec<(String, String)>,
     pub is_disabled: bool,
 }
+
+crate::impl_base_template!(InstanceDetailTemplate);

@@ -2,7 +2,7 @@ use serde::Deserialize;
 
 #[allow(dead_code)]
 #[derive(Deserialize)]
-pub struct Step7Form {
+pub struct SshKeySelectionFormStep7 {
     pub product_id: Option<String>,
     pub cpu: Option<String>,
     #[serde(rename = "ramInGB")]

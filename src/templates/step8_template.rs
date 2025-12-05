@@ -15,3 +15,5 @@ pub struct Step8Template {
     pub errors: Vec<String>,
     pub back_url: String,
 }
+
+crate::impl_base_template!(Step8Template);

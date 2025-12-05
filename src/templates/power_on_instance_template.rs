@@ -1,5 +1,6 @@
 use askama::Template;
 use crate::models::{CurrentUser, InstanceView};
+use crate::templates::BaseTemplate;
 
 #[derive(Template)]
 #[template(path = "poweron_instance.html")]
@@ -12,3 +13,5 @@ pub struct PowerOnInstanceTemplate {
     pub instance: InstanceView,
     pub is_disabled: bool,
 }
+
+crate::impl_base_template!(PowerOnInstanceTemplate);

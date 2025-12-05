@@ -1,5 +1,6 @@
 use askama::Template;
 use crate::models::{CurrentUser, BaseState, ProductView};
+use crate::templates::BaseTemplate;
 
 #[derive(Template)]
 #[template(path = "step_3_fixed.html")]
@@ -21,3 +22,5 @@ pub struct Step3FixedTemplate<'a> {
     pub ssh_key_ids_csv: String,
     pub hostnames_csv: String,
 }
+
+crate::impl_base_template!(Step3FixedTemplate);

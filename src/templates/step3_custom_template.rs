@@ -1,5 +1,6 @@
 use askama::Template;
 use crate::models::{CurrentUser, BaseState, CustomPlanFormValues};
+use crate::templates::BaseTemplate;
 
 #[derive(Template)]
 #[template(path = "step_3_custom.html")]
@@ -21,3 +22,5 @@ pub struct Step3CustomTemplate<'a> {
     pub ssh_key_ids_csv: String,
     pub hostnames_csv: String,
 }
+
+crate::impl_base_template!(Step3CustomTemplate);

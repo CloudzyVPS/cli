@@ -1,5 +1,6 @@
 use askama::Template;
 use crate::models::{CurrentUser, Step1FormData, Region};
+use crate::templates::BaseTemplate;
 
 #[derive(Template)]
 #[template(path = "step_1.html")]
@@ -12,3 +13,5 @@ pub struct Step1Template<'a> {
     pub regions: &'a [Region],
     pub form_data: Step1FormData,
 }
+
+crate::impl_base_template!(Step1Template);
