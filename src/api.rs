@@ -1,72 +1,8 @@
-use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
 
-use crate::util::value_to_short_string;
-
-#[derive(Serialize, Deserialize, Clone)]
-pub struct Region {
-    pub id: String,
-    pub name: String,
-    pub slug: String,
-    pub country: String,
-    pub city: String,
-    pub latitude: Option<f64>,
-    pub longitude: Option<f64>,
-}
-
-#[derive(Serialize, Deserialize, Clone)]
-pub struct ProductEntry {
-    pub term: String,
-    pub value: String,
-}
-
-#[derive(Serialize, Deserialize, Clone)]
-pub struct ProductView {
-    pub id: String,
-    pub name: String,
-    pub display_name: String,
-    pub description: String,
-    pub tags: String,
-    pub spec_entries: Vec<ProductEntry>,
-    pub price_entries: Vec<ProductEntry>,
-    pub cpu: Option<String>,
-    pub ram: Option<String>,
-    pub storage: Option<String>,
-    pub bandwidth: Option<String>,
-}
-
-#[derive(Serialize, Deserialize, Clone)]
-pub struct OsItem {
-    pub id: String,
-    pub name: String,
-    pub family: String,
-    pub arch: Option<String>,
-    pub min_ram: Option<String>,
-    pub is_default: bool,
-}
-
-#[derive(Serialize, Deserialize, Clone)]
-pub struct ApplicationView {
-    pub id: String,
-    pub name: String,
-    pub short_description: String,
-    pub support_level: String,
-}
-
-#[derive(Clone)]
-pub struct InstanceView {
-    pub id: String,
-    pub hostname: String,
-    pub region: String,
-    pub status: String,
-    pub vcpu_count_display: String,
-    pub ram_display: String,
-    pub disk_display: String,
-    pub main_ip: Option<String>,
-    pub os: Option<OsItem>,
-}
-
+use crate::models::{Region, ProductEntry, ProductView, OsItem, ApplicationView, InstanceView, UserRecord};
+use crate::utils::value_to_short_string;
 pub async fn api_call(
     client: &reqwest::Client,
     api_base_url: &str,
@@ -311,7 +247,7 @@ pub async fn load_instances_for_user(
     client: &reqwest::Client,
     api_base_url: &str,
     api_token: &str,
-    users_map: &std::collections::HashMap<String, crate::models::UserRecord>,
+    users_map: &std::collections::HashMap<String, UserRecord>,
     username: &str,
 ) -> Vec<InstanceView> {
     let payload = api_call(client, api_base_url, api_token, "GET", "/v1/instances", None, None).await;
