@@ -925,11 +925,30 @@ async fn instance_delete(
     }
     let endpoint = format!("/v1/instances/{}", instance_id);
     let payload = api_call_wrapper(&state, "DELETE", &endpoint, None, None).await;
+    
+    let success = payload.get("code").and_then(|c| c.as_str()) == Some("OKAY");
+    
+    if success {
+        // Remove assignment from all users
+        {
+            let mut users = state.users.lock().unwrap();
+            for (_, rec) in users.iter_mut() {
+                if rec.assigned_instances.contains(&instance_id) {
+                    rec.assigned_instances.retain(|x| x != &instance_id);
+                }
+            }
+        }
+        // Persist changes
+        if let Err(e) = persist_users_file(&state.users).await {
+            tracing::error!(%e, "Failed to persist users after instance deletion");
+        }
+    }
+
     // Optionally set flash message for success or failure
     if let Some(sid) = jar.get("session_id") {
         let mut flashes = state.flash_store.lock().unwrap();
         let entry = flashes.entry(sid.value().to_string()).or_default();
-        if payload.get("code").and_then(|c| c.as_str()) == Some("OKAY") {
+        if success {
             entry.push("Instance deleted successfully.".into());
             return Redirect::to("/instances").into_response();
         } else {
@@ -938,8 +957,9 @@ async fn instance_delete(
             return Redirect::to(&format!("/instance/{}", instance_id)).into_response();
         }
     }
+    
     // If no session-id in cookie, still redirect based on result
-    if payload.get("code").and_then(|c| c.as_str()) == Some("OKAY") {
+    if success {
         Redirect::to("/instances").into_response()
     } else {
         Redirect::to(&format!("/instance/{}", instance_id)).into_response()
