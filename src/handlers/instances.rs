@@ -1,3 +1,639 @@
-// Instance listing and detail handlers
-// These will be moved from main.rs in future refactoring
+use axum::{
+    extract::{State, Path, Form},
+    response::{IntoResponse, Redirect, Html},
+};
+use axum_extra::extract::cookie::CookieJar;
+use serde::Deserialize;
+use serde_json::Value;
 
+use crate::models::{
+    AppState, InstanceView, OsItem, AddTrafficForm, ChangeOsForm, ResizeForm,
+};
+use crate::templates::{
+    InstancesTemplate, InstanceDetailTemplate, PowerOnInstanceTemplate,
+    DeleteInstanceTemplate, PowerOffInstanceTemplate, ResetInstanceTemplate,
+    ChangePassInstanceTemplate, ChangeOsTemplate, ResizeTemplate, BulkRefundTemplate,
+};
+use crate::handlers::helpers::{
+    build_template_globals, current_username_from_jar, ensure_owner,
+    render_template, api_call_wrapper, TemplateGlobals,
+    load_regions_wrapper, load_products_wrapper, load_os_list_wrapper,
+    load_instances_for_user_wrapper,
+};
+use crate::services::instance_service::{enforce_instance_access, simple_instance_action};
+use crate::services::persist_users_file;
+
+pub async fn instances_real(State(state): State<AppState>, jar: CookieJar) -> impl IntoResponse {
+    let username = current_username_from_jar(&state, &jar).expect("Middleware ensures user is logged in");
+    let list = load_instances_for_user_wrapper(&state, &username).await;
+    let TemplateGlobals { current_user, api_hostname, base_url, flash_messages, has_flash_messages } = build_template_globals(&state, &jar);
+    render_template(&state, &jar, InstancesTemplate {
+            current_user,
+            api_hostname,
+            base_url,
+            flash_messages,
+            has_flash_messages,
+            instances: &list,
+        },
+    )
+}
+
+pub async fn instance_detail(
+    State(state): State<AppState>,
+    jar: CookieJar,
+    Path(instance_id): Path<String>,
+) -> impl IntoResponse {
+    if !enforce_instance_access(&state, current_username_from_jar(&state, &jar).as_deref(), &instance_id).await {
+        return Redirect::to("/instances").into_response();
+    }
+    let endpoint = format!("/v1/instances/{}", instance_id);
+    let payload = api_call_wrapper(&state, "GET", &endpoint, None, None).await;
+    
+    let mut details: Vec<(String, String)> = Vec::new();
+    let mut hostname = "(no hostname)".to_string();
+    if let Some(obj) = payload.as_object() {
+        if let Some(data) = obj.get("data").and_then(|d| d.as_object()) {
+            hostname = data
+                .get("hostname")
+                .and_then(|v| v.as_str())
+                .unwrap_or("(no hostname)")
+                .to_string();
+            details.push(("Hostname".into(), hostname.clone()));
+            let status = data
+                .get("status")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string();
+            details.push(("Status".into(), status));
+            let region = data
+                .get("region")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string();
+            details.push(("Region".into(), region.clone()));
+            let class = data
+                .get("class")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string();
+            details.push(("Instance class".into(), class));
+            let product_id = data
+                .get("productId")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string());
+            if let Some(pid) = product_id.clone() {
+                let product_name = if !region.is_empty() && !pid.is_empty() {
+                    let products = load_products_wrapper(&state, &region).await;
+                    products
+                        .into_iter()
+                        .find(|p| p.id == pid)
+                        .map(|p| p.name)
+                        .unwrap_or(pid.clone())
+                } else {
+                    pid.clone()
+                };
+                details.push(("Product".into(), product_name));
+            }
+            let vcpu = data.get("vcpuCount").and_then(|v| v.as_i64()).map(|v| v.to_string());
+            if let Some(x) = vcpu { details.push(("vCPU".into(), x)); }
+            let ram = data.get("ram").and_then(|v| v.as_i64()).map(|v| format!("{} MB", v));
+            if let Some(x) = ram { details.push(("RAM".into(), x)); }
+            let disk = data.get("disk").and_then(|v| v.as_i64()).map(|v| format!("{} GB", v));
+            if let Some(x) = disk { details.push(("Disk".into(), x)); }
+            let ip = data.get("mainIp").and_then(|v| v.as_str()).map(|s| s.to_string());
+            if let Some(x) = ip { details.push(("IPv4".into(), x)); }
+            let ip6 = data.get("mainIpv6").and_then(|v| v.as_str()).map(|s| s.to_string());
+            if let Some(x) = ip6 { details.push(("IPv6".into(), x)); }
+            if let Some(os_obj) = data.get("os") {
+                let os_name = os_obj
+                    .get("name")
+                    .and_then(|v| v.as_str())
+                    .or_else(|| os_obj.get("id").and_then(|v| v.as_str()))
+                    .unwrap_or("")
+                    .to_string();
+                if !os_name.is_empty() { details.push(("OS".into(), os_name)); }
+            }
+            if let Some(inserted) = data.get("insertedAt").and_then(|v| v.as_str()).map(|s| s.to_string()) {
+                details.push(("Created".into(), inserted));
+            }
+            if let Some(features) = data.get("features").and_then(|v| v.as_array()) {
+                let mut features_list = Vec::new();
+                for item in features { if let Some(s) = item.as_str() { features_list.push(s.to_string()); } }
+                if !features_list.is_empty() { details.push(("Features".into(), features_list.join(", "))); }
+            }
+        }
+    }
+    let TemplateGlobals { current_user, api_hostname, base_url, flash_messages, has_flash_messages } = build_template_globals(&state, &jar);
+    render_template(&state, &jar, InstanceDetailTemplate {
+            current_user,
+            api_hostname,
+            base_url,
+            flash_messages,
+            has_flash_messages,
+            instance_id: instance_id.clone(),
+            hostname,
+            details,
+            is_disabled: state.is_instance_disabled(&instance_id),
+        },
+    )
+}
+
+pub async fn instance_poweron_get(
+    State(state): State<AppState>,
+    jar: CookieJar,
+    Path(instance_id): Path<String>,
+) -> impl IntoResponse {
+    if !enforce_instance_access(&state, current_username_from_jar(&state, &jar).as_deref(), &instance_id).await {
+        return Redirect::to("/instances").into_response();
+    }
+    let endpoint = format!("/v1/instances/{}", instance_id);
+    let payload = api_call_wrapper(&state, "GET", &endpoint, None, None).await;
+    let mut instance = InstanceView { id: instance_id.clone(), hostname: "(no hostname)".into(), region: "".into(), main_ip: None, status: "".into(), vcpu_count_display: "—".into(), ram_display: "—".into(), disk_display: "—".into(), os: None };
+    if let Some(obj) = payload.as_object() {
+        if let Some(data) = obj.get("data").and_then(|d| d.as_object()) {
+            instance.hostname = data.get("hostname").and_then(|v| v.as_str()).unwrap_or(&instance.hostname).to_string();
+            instance.vcpu_count_display = data.get("vcpuCount").and_then(|v| v.as_i64()).map(|n| n.to_string()).unwrap_or_else(|| "—".into());
+            instance.ram_display = data.get("ram").and_then(|v| v.as_i64()).map(|n| format!("{} MB", n)).unwrap_or_else(|| "—".into());
+            instance.disk_display = data.get("disk").and_then(|v| v.as_i64()).map(|n| format!("{} GB", n)).unwrap_or_else(|| "—".into());
+            if let Some(os_obj) = data.get("os").and_then(|v| v.as_object()) {
+                instance.os = Some(OsItem {
+                    id: os_obj.get("id").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+                    name: os_obj.get("name").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+                    family: os_obj.get("family").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+                    arch: os_obj.get("arch").and_then(|v| v.as_str()).map(|s| s.to_string()),
+                    min_ram: os_obj.get("minRam").and_then(|v| v.as_str()).map(|s| s.to_string()),
+                    is_default: os_obj.get("isDefault").and_then(|v| v.as_bool()).unwrap_or(false),
+                });
+            }
+            instance.region = data.get("region").and_then(|v| v.as_str()).unwrap_or("").to_string();
+            instance.main_ip = data.get("mainIp").and_then(|v| v.as_str()).map(|s| s.to_string());
+            instance.status = data.get("status").and_then(|v| v.as_str()).unwrap_or("").to_string();
+        }
+    }
+    let TemplateGlobals { current_user, api_hostname, base_url, flash_messages, has_flash_messages } = build_template_globals(&state, &jar);
+    render_template(&state, &jar, PowerOnInstanceTemplate { current_user, api_hostname, base_url, flash_messages, has_flash_messages, instance, is_disabled: state.is_instance_disabled(&instance_id) })
+}
+
+pub async fn instance_poweron_post(
+    State(state): State<AppState>,
+    jar: CookieJar,
+    Path(instance_id): Path<String>,
+) -> impl IntoResponse {
+    if !enforce_instance_access(&state, current_username_from_jar(&state, &jar).as_deref(), &instance_id).await {
+        return Redirect::to("/instances").into_response();
+    }
+    if state.is_instance_disabled(&instance_id) {
+        if let Some(sid) = jar.get("session_id") {
+            let mut flashes = state.flash_store.lock().unwrap();
+            let entry = flashes.entry(sid.value().to_string()).or_default();
+            entry.push("Actions are disabled for this instance.".into());
+        }
+        return Redirect::to(&format!("/instance/{}", instance_id)).into_response();
+    }
+    let _ = simple_instance_action(&state, "poweron", &instance_id).await;
+    Redirect::to(&format!("/instance/{}", instance_id)).into_response()
+}
+
+pub async fn instance_delete_get(
+    State(state): State<AppState>,
+    jar: CookieJar,
+    Path(instance_id): Path<String>,
+) -> impl IntoResponse {
+    if !enforce_instance_access(&state, current_username_from_jar(&state, &jar).as_deref(), &instance_id).await {
+        return Redirect::to("/instances").into_response();
+    }
+    let endpoint = format!("/v1/instances/{}", instance_id);
+    let payload = api_call_wrapper(&state, "GET", &endpoint, None, None).await;
+    let mut instance = InstanceView { id: instance_id.clone(), hostname: "(no hostname)".into(), region: "".into(), main_ip: None, status: "".into(), vcpu_count_display: "—".into(), ram_display: "—".into(), disk_display: "—".into(), os: None };
+    if let Some(obj) = payload.as_object() {
+        if let Some(data) = obj.get("data").and_then(|d| d.as_object()) {
+            instance.hostname = data.get("hostname").and_then(|v| v.as_str()).unwrap_or(&instance.hostname).to_string();
+            instance.vcpu_count_display = data.get("vcpuCount").and_then(|v| v.as_i64()).map(|n| n.to_string()).unwrap_or_else(|| "—".into());
+            instance.ram_display = data.get("ram").and_then(|v| v.as_i64()).map(|n| format!("{} MB", n)).unwrap_or_else(|| "—".into());
+            instance.disk_display = data.get("disk").and_then(|v| v.as_i64()).map(|n| format!("{} GB", n)).unwrap_or_else(|| "—".into());
+            if let Some(os_obj) = data.get("os").and_then(|v| v.as_object()) {
+                instance.os = Some(OsItem {
+                    id: os_obj.get("id").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+                    name: os_obj.get("name").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+                    family: os_obj.get("family").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+                    arch: os_obj.get("arch").and_then(|v| v.as_str()).map(|s| s.to_string()),
+                    min_ram: os_obj.get("minRam").and_then(|v| v.as_str()).map(|s| s.to_string()),
+                    is_default: os_obj.get("isDefault").and_then(|v| v.as_bool()).unwrap_or(false),
+                });
+            }
+            instance.region = data.get("region").and_then(|v| v.as_str()).unwrap_or("").to_string();
+            instance.main_ip = data.get("mainIp").and_then(|v| v.as_str()).map(|s| s.to_string());
+            instance.status = data.get("status").and_then(|v| v.as_str()).unwrap_or("").to_string();
+        }
+    }
+    let TemplateGlobals { current_user, api_hostname, base_url, flash_messages, has_flash_messages } = build_template_globals(&state, &jar);
+    render_template(&state, &jar, DeleteInstanceTemplate { current_user, api_hostname, base_url, flash_messages, has_flash_messages, instance, is_disabled: state.is_instance_disabled(&instance_id) })
+}
+
+pub async fn instance_poweroff_get(
+    State(state): State<AppState>,
+    jar: CookieJar,
+    Path(instance_id): Path<String>,
+) -> impl IntoResponse {
+    if !enforce_instance_access(&state, current_username_from_jar(&state, &jar).as_deref(), &instance_id).await {
+        return Redirect::to("/instances").into_response();
+    }
+    let endpoint = format!("/v1/instances/{}", instance_id);
+    let payload = api_call_wrapper(&state, "GET", &endpoint, None, None).await;
+    let mut instance = InstanceView { id: instance_id.clone(), hostname: "(no hostname)".into(), region: "".into(), main_ip: None, status: "".into(), vcpu_count_display: "—".into(), ram_display: "—".into(), disk_display: "—".into(), os: None };
+    if let Some(obj) = payload.as_object() {
+        if let Some(data) = obj.get("data").and_then(|d| d.as_object()) {
+            instance.hostname = data.get("hostname").and_then(|v| v.as_str()).unwrap_or(&instance.hostname).to_string();
+            instance.region = data.get("region").and_then(|v| v.as_str()).unwrap_or("").to_string();
+            instance.main_ip = data.get("mainIp").and_then(|v| v.as_str()).map(|s| s.to_string());
+            instance.status = data.get("status").and_then(|v| v.as_str()).unwrap_or("").to_string();
+        }
+    }
+    let TemplateGlobals { current_user, api_hostname, base_url, flash_messages, has_flash_messages } = build_template_globals(&state, &jar);
+    render_template(&state, &jar, PowerOffInstanceTemplate { current_user, api_hostname, base_url, flash_messages, has_flash_messages, instance, is_disabled: state.is_instance_disabled(&instance_id) })
+}
+
+pub async fn instance_poweroff_post(
+    State(state): State<AppState>,
+    jar: CookieJar,
+    Path(instance_id): Path<String>,
+) -> impl IntoResponse {
+    if !enforce_instance_access(&state, current_username_from_jar(&state, &jar).as_deref(), &instance_id).await {
+        return Redirect::to("/instances").into_response();
+    }
+    if state.is_instance_disabled(&instance_id) {
+        if let Some(sid) = jar.get("session_id") {
+            let mut flashes = state.flash_store.lock().unwrap();
+            let entry = flashes.entry(sid.value().to_string()).or_default();
+            entry.push("Actions are disabled for this instance.".into());
+        }
+        return Redirect::to(&format!("/instance/{}", instance_id)).into_response();
+    }
+    let _ = simple_instance_action(&state, "poweroff", &instance_id).await;
+    Redirect::to(&format!("/instance/{}", instance_id)).into_response()
+}
+
+pub async fn instance_reset_get(
+    State(state): State<AppState>,
+    jar: CookieJar,
+    Path(instance_id): Path<String>,
+) -> impl IntoResponse {
+    if !enforce_instance_access(&state, current_username_from_jar(&state, &jar).as_deref(), &instance_id).await {
+        return Redirect::to("/instances").into_response();
+    }
+    let endpoint = format!("/v1/instances/{}", instance_id);
+    let payload = api_call_wrapper(&state, "GET", &endpoint, None, None).await;
+    let mut instance = InstanceView { id: instance_id.clone(), hostname: "(no hostname)".into(), region: "".into(), main_ip: None, status: "".into(), vcpu_count_display: "—".into(), ram_display: "—".into(), disk_display: "—".into(), os: None };
+    if let Some(obj) = payload.as_object() {
+        if let Some(data) = obj.get("data").and_then(|d| d.as_object()) {
+            instance.hostname = data.get("hostname").and_then(|v| v.as_str()).unwrap_or(&instance.hostname).to_string();
+            instance.region = data.get("region").and_then(|v| v.as_str()).unwrap_or("").to_string();
+            instance.main_ip = data.get("mainIp").and_then(|v| v.as_str()).map(|s| s.to_string());
+            instance.status = data.get("status").and_then(|v| v.as_str()).unwrap_or("").to_string();
+        }
+    }
+    let TemplateGlobals { current_user, api_hostname, base_url, flash_messages, has_flash_messages } = build_template_globals(&state, &jar);
+    render_template(&state, &jar, ResetInstanceTemplate { current_user, api_hostname, base_url, flash_messages, has_flash_messages, instance, is_disabled: state.is_instance_disabled(&instance_id) })
+}
+
+pub async fn instance_reset_post(
+    State(state): State<AppState>,
+    jar: CookieJar,
+    Path(instance_id): Path<String>,
+) -> impl IntoResponse {
+    if !enforce_instance_access(&state, current_username_from_jar(&state, &jar).as_deref(), &instance_id).await {
+        return Redirect::to("/instances").into_response();
+    }
+    if state.is_instance_disabled(&instance_id) {
+        if let Some(sid) = jar.get("session_id") {
+            let mut flashes = state.flash_store.lock().unwrap();
+            let entry = flashes.entry(sid.value().to_string()).or_default();
+            entry.push("Actions are disabled for this instance.".into());
+        }
+        return Redirect::to(&format!("/instance/{}", instance_id)).into_response();
+    }
+    let _ = simple_instance_action(&state, "reset", &instance_id).await;
+    Redirect::to(&format!("/instance/{}", instance_id)).into_response()
+}
+
+pub async fn instance_change_pass_get(
+    State(state): State<AppState>,
+    jar: CookieJar,
+    Path(instance_id): Path<String>,
+) -> impl IntoResponse {
+    if !enforce_instance_access(&state, current_username_from_jar(&state, &jar).as_deref(), &instance_id).await {
+        return Redirect::to("/instances").into_response();
+    }
+    let endpoint = format!("/v1/instances/{}", instance_id);
+    let payload = api_call_wrapper(&state, "GET", &endpoint, None, None).await;
+    let mut instance = InstanceView { id: instance_id.clone(), hostname: "(no hostname)".into(), region: "".into(), main_ip: None, status: "".into(), vcpu_count_display: "—".into(), ram_display: "—".into(), disk_display: "—".into(), os: None };
+    if let Some(obj) = payload.as_object() {
+        if let Some(data) = obj.get("data").and_then(|d| d.as_object()) {
+            instance.hostname = data.get("hostname").and_then(|v| v.as_str()).unwrap_or(&instance.hostname).to_string();
+            instance.region = data.get("region").and_then(|v| v.as_str()).unwrap_or("").to_string();
+            instance.main_ip = data.get("mainIp").and_then(|v| v.as_str()).map(|s| s.to_string());
+            instance.status = data.get("status").and_then(|v| v.as_str()).unwrap_or("").to_string();
+        }
+    }
+    let TemplateGlobals { current_user, api_hostname, base_url, flash_messages, has_flash_messages } = build_template_globals(&state, &jar);
+    render_template(&state, &jar, ChangePassInstanceTemplate { current_user, api_hostname, base_url, flash_messages, has_flash_messages, instance, new_password: None, is_disabled: state.is_instance_disabled(&instance_id) })
+}
+
+pub async fn instance_change_pass_post(
+    State(state): State<AppState>,
+    jar: CookieJar,
+    Path(instance_id): Path<String>,
+) -> impl IntoResponse {
+    if !enforce_instance_access(&state, current_username_from_jar(&state, &jar).as_deref(), &instance_id).await {
+        return Redirect::to("/instances").into_response();
+    }
+    if state.is_instance_disabled(&instance_id) {
+        if let Some(sid) = jar.get("session_id") {
+            let mut flashes = state.flash_store.lock().unwrap();
+            let entry = flashes.entry(sid.value().to_string()).or_default();
+            entry.push("Actions are disabled for this instance.".into());
+        }
+        return Redirect::to(&format!("/instance/{}/change-pass", instance_id)).into_response();
+    }
+    let endpoint = format!("/v1/instances/{}/change-pass", instance_id);
+    let payload = api_call_wrapper(&state, "POST", &endpoint, None, None).await;
+    let new_password = payload.get("data").and_then(|d| d.get("password")).and_then(|v| v.as_str()).map(|s| s.to_string());
+    let get_endpoint = format!("/v1/instances/{}", instance_id);
+    let payload2 = api_call_wrapper(&state, "GET", &get_endpoint, None, None).await;
+    let mut instance = InstanceView { id: instance_id.clone(), hostname: "(no hostname)".into(), region: "".into(), main_ip: None, status: "".into(), vcpu_count_display: "—".into(), ram_display: "—".into(), disk_display: "—".into(), os: None };
+    if let Some(obj) = payload2.as_object() {
+        if let Some(data) = obj.get("data").and_then(|d| d.as_object()) {
+            instance.hostname = data.get("hostname").and_then(|v| v.as_str()).unwrap_or(&instance.hostname).to_string();
+            instance.region = data.get("region").and_then(|v| v.as_str()).unwrap_or("").to_string();
+            instance.main_ip = data.get("mainIp").and_then(|v| v.as_str()).map(|s| s.to_string());
+            instance.status = data.get("status").and_then(|v| v.as_str()).unwrap_or("").to_string();
+        }
+    }
+    let TemplateGlobals { current_user, api_hostname, base_url, flash_messages, has_flash_messages } = build_template_globals(&state, &jar);
+    render_template(&state, &jar, ChangePassInstanceTemplate { current_user, api_hostname, base_url, flash_messages, has_flash_messages, instance, new_password, is_disabled: state.is_instance_disabled(&instance_id) })
+}
+
+pub async fn instance_delete(
+    State(state): State<AppState>,
+    jar: CookieJar,
+    Path(instance_id): Path<String>,
+) -> impl IntoResponse {
+    if !enforce_instance_access(&state, current_username_from_jar(&state, &jar).as_deref(), &instance_id).await {
+        return Redirect::to("/instances").into_response();
+    }
+    if state.is_instance_disabled(&instance_id) {
+        if let Some(sid) = jar.get("session_id") {
+            let mut flashes = state.flash_store.lock().unwrap();
+            let entry = flashes.entry(sid.value().to_string()).or_default();
+            entry.push("Actions are disabled for this instance.".into());
+        }
+        return Redirect::to(&format!("/instance/{}", instance_id)).into_response();
+    }
+    let endpoint = format!("/v1/instances/{}", instance_id);
+    let payload = api_call_wrapper(&state, "DELETE", &endpoint, None, None).await;
+    
+    let success = payload.get("code").and_then(|c| c.as_str()) == Some("OKAY");
+    
+    if success {
+        {
+            let mut users = state.users.lock().unwrap();
+            for (_, rec) in users.iter_mut() {
+                if rec.assigned_instances.contains(&instance_id) {
+                    rec.assigned_instances.retain(|x| x != &instance_id);
+                }
+            }
+        }
+        if let Err(e) = persist_users_file(&state.users).await {
+            tracing::error!(%e, "Failed to persist users after instance deletion");
+        }
+    }
+
+    if let Some(sid) = jar.get("session_id") {
+        let mut flashes = state.flash_store.lock().unwrap();
+        let entry = flashes.entry(sid.value().to_string()).or_default();
+        if success {
+            entry.push("Instance deleted successfully.".into());
+            return Redirect::to("/instances").into_response();
+        } else {
+            let detail = payload.get("detail").and_then(|d| d.as_str()).unwrap_or("Unknown error");
+            entry.push(format!("Delete failed: {}", detail));
+            return Redirect::to(&format!("/instance/{}", instance_id)).into_response();
+        }
+    }
+    
+    if success {
+        Redirect::to("/instances").into_response()
+    } else {
+        Redirect::to(&format!("/instance/{}", instance_id)).into_response()
+    }
+}
+
+pub async fn instance_add_traffic(
+    State(state): State<AppState>,
+    jar: CookieJar,
+    Path(instance_id): Path<String>,
+    Form(form): Form<AddTrafficForm>,
+) -> impl IntoResponse {
+    if !enforce_instance_access(&state, current_username_from_jar(&state, &jar).as_deref(), &instance_id).await {
+        return Redirect::to("/instances").into_response();
+    }
+    if state.is_instance_disabled(&instance_id) {
+        if let Some(sid) = jar.get("session_id") {
+            let mut flashes = state.flash_store.lock().unwrap();
+            let entry = flashes.entry(sid.value().to_string()).or_default();
+            entry.push("Actions are disabled for this instance.".into());
+        }
+        return Redirect::to(&format!("/instance/{}", instance_id)).into_response();
+    }
+    if let Ok(amount) = form.traffic_amount.parse::<f64>() {
+        if amount > 0.0 {
+            let endpoint = format!("/v1/instances/{}/add-traffic", instance_id);
+            let payload = serde_json::json!({"amount": amount});
+            let _ = api_call_wrapper(&state, "POST", &endpoint, Some(payload), None).await;
+        }
+    }
+    Redirect::to(&format!("/instance/{}", instance_id)).into_response()
+}
+
+pub async fn instance_change_os_get(
+    State(state): State<AppState>,
+    jar: CookieJar,
+    Path(instance_id): Path<String>,
+) -> impl IntoResponse {
+    if !enforce_instance_access(&state, current_username_from_jar(&state, &jar).as_deref(), &instance_id).await {
+        return Redirect::to("/instances").into_response();
+    }
+    let endpoint = format!("/v1/instances/{}", instance_id);
+    let payload = api_call_wrapper(&state, "GET", &endpoint, None, None).await;
+    let mut instance = InstanceView { id: instance_id.clone(), hostname: "(no hostname)".into(), region: "".into(), main_ip: None, status: "".into(), vcpu_count_display: "—".into(), ram_display: "—".into(), disk_display: "—".into(), os: None };
+    if let Some(obj) = payload.as_object() {
+        if let Some(data) = obj.get("data").and_then(|d| d.as_object()) {
+            instance.hostname = data.get("hostname").and_then(|v| v.as_str()).unwrap_or(&instance.hostname).to_string();
+            if let Some(os_obj) = data.get("os").and_then(|v| v.as_object()) {
+                instance.os = Some(OsItem {
+                    id: os_obj.get("id").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+                    name: os_obj.get("name").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+                    family: os_obj.get("family").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+                    arch: os_obj.get("arch").and_then(|v| v.as_str()).map(|s| s.to_string()),
+                    min_ram: os_obj.get("minRam").and_then(|v| v.as_str()).map(|s| s.to_string()),
+                    is_default: os_obj.get("isDefault").and_then(|v| v.as_bool()).unwrap_or(false),
+                });
+            }
+            instance.region = data.get("region").and_then(|v| v.as_str()).unwrap_or("").to_string();
+            instance.main_ip = data.get("mainIp").and_then(|v| v.as_str()).map(|s| s.to_string());
+            instance.status = data.get("status").and_then(|v| v.as_str()).unwrap_or("").to_string();
+        }
+    }
+    let os_list = load_os_list_wrapper(&state).await;
+    let TemplateGlobals { current_user, api_hostname, base_url, flash_messages, has_flash_messages } = build_template_globals(&state, &jar);
+    render_template(&state, &jar, ChangeOsTemplate { current_user, api_hostname, base_url, flash_messages, has_flash_messages, instance, os_list: &os_list, is_disabled: state.is_instance_disabled(&instance_id) })
+}
+
+pub async fn instance_change_os_post(
+    State(state): State<AppState>,
+    jar: CookieJar,
+    Path(instance_id): Path<String>,
+    Form(form): Form<ChangeOsForm>,
+) -> impl IntoResponse {
+    if !enforce_instance_access(&state, current_username_from_jar(&state, &jar).as_deref(), &instance_id).await {
+        return Redirect::to("/instances").into_response();
+    }
+    if state.is_instance_disabled(&instance_id) {
+        if let Some(sid) = jar.get("session_id") {
+            let mut flashes = state.flash_store.lock().unwrap();
+            let entry = flashes.entry(sid.value().to_string()).or_default();
+            entry.push("Actions are disabled for this instance.".into());
+        }
+        return Redirect::to(&format!("/instance/{}/change-os", instance_id)).into_response();
+    }
+    if form.os_id.trim().is_empty() {
+        return Redirect::to(&format!("/instance/{}/change-os", instance_id)).into_response();
+    }
+    let endpoint = format!("/v1/instances/{}/change-os", instance_id);
+    let payload = serde_json::json!({"osId": form.os_id});
+    let _ = api_call_wrapper(&state, "POST", &endpoint, Some(payload), None).await;
+    Redirect::to(&format!("/instance/{}", instance_id)).into_response()
+}
+
+pub async fn instance_resize_get(
+    State(state): State<AppState>,
+    jar: CookieJar,
+    Path(instance_id): Path<String>,
+) -> impl IntoResponse {
+    if !enforce_instance_access(&state, current_username_from_jar(&state, &jar).as_deref(), &instance_id).await {
+        return Redirect::to("/instances").into_response();
+    }
+    let endpoint = format!("/v1/instances/{}", instance_id);
+    let payload = api_call_wrapper(&state, "GET", &endpoint, None, None).await;
+    let mut instance = InstanceView { id: instance_id.clone(), hostname: "(no hostname)".into(), region: "".into(), main_ip: None, status: "".into(), vcpu_count_display: "—".into(), ram_display: "—".into(), disk_display: "—".into(), os: None };
+    if let Some(obj) = payload.as_object() {
+        if let Some(data) = obj.get("data").and_then(|d| d.as_object()) {
+            instance.hostname = data.get("hostname").and_then(|v| v.as_str()).unwrap_or(&instance.hostname).to_string();
+            instance.region = data.get("region").and_then(|v| v.as_str()).unwrap_or("").to_string();
+            instance.main_ip = data.get("mainIp").and_then(|v| v.as_str()).map(|s| s.to_string());
+            instance.status = data.get("status").and_then(|v| v.as_str()).unwrap_or("").to_string();
+        }
+    }
+    let (regions, _map) = load_regions_wrapper(&state).await;
+    let TemplateGlobals { current_user, api_hostname, base_url, flash_messages, has_flash_messages } = build_template_globals(&state, &jar);
+    render_template(&state, &jar, ResizeTemplate { current_user, api_hostname, base_url, flash_messages, has_flash_messages, instance, regions: &regions, is_disabled: state.is_instance_disabled(&instance_id) })
+}
+
+pub async fn instance_resize_post(
+    State(state): State<AppState>,
+    jar: CookieJar,
+    Path(instance_id): Path<String>,
+    Form(form): Form<ResizeForm>,
+) -> impl IntoResponse {
+    if !enforce_instance_access(&state, current_username_from_jar(&state, &jar).as_deref(), &instance_id).await {
+        return Redirect::to("/instances").into_response();
+    }
+    if state.is_instance_disabled(&instance_id) {
+        if let Some(sid) = jar.get("session_id") {
+            let mut flashes = state.flash_store.lock().unwrap();
+            let entry = flashes.entry(sid.value().to_string()).or_default();
+            entry.push("Actions are disabled for this instance.".into());
+        }
+        return Redirect::to(&format!("/instance/{}/resize", instance_id)).into_response();
+    }
+    let endpoint = format!("/v1/instances/{}/resize", instance_id);
+    let mut payload = serde_json::json!({"type": form.r#type});
+    if form.r#type.to_uppercase() == "FIXED" {
+        if let Some(pid) = form.product_id {
+            payload["productId"] = Value::from(pid);
+        }
+    } else {
+        let mut obj = serde_json::Map::new();
+        if let Some(rid) = form.region_id { obj.insert("regionId".into(), Value::from(rid)); }
+        if let Some(cpu) = form.cpu { if let Ok(n) = cpu.parse::<i64>() { obj.insert("cpu".into(), Value::from(n)); }}
+        if let Some(ram) = form.ram_in_gb { if let Ok(n) = ram.parse::<i64>() { obj.insert("ramInGB".into(), Value::from(n)); }}
+        if let Some(disk) = form.disk_in_gb { if let Ok(n) = disk.parse::<i64>() { obj.insert("diskInGB".into(), Value::from(n)); }}
+        if let Some(bw) = form.bandwidth_in_tb { if let Ok(n) = bw.parse::<i64>() { obj.insert("bandwidthInTB".into(), Value::from(n)); }}
+        if !obj.is_empty() {
+            payload["resource"] = Value::Object(obj);
+        }
+    }
+    let _ = api_call_wrapper(&state, "POST", &endpoint, Some(payload), None).await;
+    Redirect::to(&format!("/instance/{}", instance_id)).into_response()
+}
+
+pub async fn instance_subscription_refund(
+    State(state): State<AppState>,
+    jar: CookieJar,
+    Path(instance_id): Path<String>,
+) -> impl IntoResponse {
+    if !enforce_instance_access(&state, current_username_from_jar(&state, &jar).as_deref(), &instance_id).await {
+        return Redirect::to("/instances").into_response();
+    }
+    let endpoint = format!("/v1/instances/{}/subscription-refund", instance_id);
+    let payload = api_call_wrapper(&state, "GET", &endpoint, None, None).await;
+    Html(format!("<html><body><h1>Refund {}</h1><pre>{}</pre><p><a href='/instance/{}'>Back</a></p></body></html>", instance_id, serde_json::to_string_pretty(&payload).unwrap_or("{}" .into()), instance_id)).into_response()
+}
+
+#[derive(Deserialize)]
+pub struct BulkRefundForm {
+    ids: String,
+}
+
+pub async fn bulk_subscription_refund(
+    State(state): State<AppState>,
+    jar: CookieJar,
+    Form(form): Form<BulkRefundForm>,
+) -> impl IntoResponse {
+    if let Some(r) = ensure_owner(&state, &jar) {
+        return r.into_response();
+    }
+    let ids: Vec<String> = form
+        .ids
+        .split(',')
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .collect();
+    let payload = serde_json::json!({"ids": ids});
+    let resp = api_call_wrapper(
+        &state,
+        "POST",
+        "/v1/instances/bulk-subscription-refund",
+        Some(payload),
+        None,
+    )
+    .await;
+    Html(format!("<html><body><h1>Bulk Refund Result</h1><pre>{}</pre><p><a href='/instances'>Back</a></p></body></html>", serde_json::to_string_pretty(&resp).unwrap_or("{}" .into()))).into_response()
+}
+
+pub async fn bulk_subscription_refund_get(
+    State(state): State<AppState>,
+    jar: CookieJar,
+) -> impl IntoResponse {
+    if let Some(r) = ensure_owner(&state, &jar) {
+        return r.into_response();
+    }
+    let TemplateGlobals { current_user, api_hostname, base_url, flash_messages, has_flash_messages } = build_template_globals(&state, &jar);
+    render_template(&state, &jar, BulkRefundTemplate {
+            current_user,
+            api_hostname,
+            base_url,
+            flash_messages,
+            has_flash_messages,
+        })
+}

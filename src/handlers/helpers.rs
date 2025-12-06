@@ -4,8 +4,9 @@ use axum_extra::extract::cookie::CookieJar;
 use serde::Deserialize;
 use serde_json::Value;
 
-use crate::api::{api_call, load_ssh_keys};
-use crate::models::{AppState, CurrentUser, SshKeyView};
+use crate::api::{api_call, load_ssh_keys, load_regions, load_products, load_os_list, load_instances_for_user};
+use crate::models::{AppState, CurrentUser, SshKeyView, Region, ProductView, OsItem, InstanceView};
+use std::collections::HashMap;
 
 #[derive(Deserialize, Debug)]
 #[serde(untagged)]
@@ -238,4 +239,21 @@ pub async fn fetch_default_customer_id(state: &AppState) -> Option<String> {
 
 pub async fn load_ssh_keys_api(state: &AppState, customer_id: Option<String>) -> Vec<SshKeyView> {
     load_ssh_keys(&state.client, &state.api_base_url, &state.api_token, customer_id).await
+}
+
+pub async fn load_regions_wrapper(state: &AppState) -> (Vec<Region>, HashMap<String, Region>) {
+    load_regions(&state.client, &state.api_base_url, &state.api_token).await
+}
+
+pub async fn load_products_wrapper(state: &AppState, region_id: &str) -> Vec<ProductView> {
+    load_products(&state.client, &state.api_base_url, &state.api_token, region_id).await
+}
+
+pub async fn load_os_list_wrapper(state: &AppState) -> Vec<OsItem> {
+    load_os_list(&state.client, &state.api_base_url, &state.api_token).await
+}
+
+pub async fn load_instances_for_user_wrapper(state: &AppState, username: &str) -> Vec<InstanceView> {
+    let users_map = state.users.lock().unwrap().clone();
+    load_instances_for_user(&state.client, &state.api_base_url, &state.api_token, &users_map, username).await
 }
