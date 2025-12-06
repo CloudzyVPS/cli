@@ -6,6 +6,7 @@ pub mod wizard;
 pub mod access;
 pub mod ssh_keys;
 pub mod middleware;
+pub mod security_middleware;
 
 // Temporary - these will be fully implemented
 pub mod instances;

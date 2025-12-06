@@ -17,7 +17,10 @@ pub async fn api_call(
         "POST" => client.post(&url),
         "PUT" => client.put(&url),
         "DELETE" => client.delete(&url),
-        _ => client.get(&url),
+        _ => {
+            tracing::warn!("Unsupported HTTP method: {}, defaulting to GET", method);
+            client.get(&url)
+        },
     };
     
     if !api_token.is_empty() {
@@ -33,7 +36,24 @@ pub async fn api_call(
     }
     
     match req.send().await {
-        Ok(resp) => resp.json().await.unwrap_or_else(|_| serde_json::json!({"error": "Failed to parse response"})),
-        Err(e) => serde_json::json!({"error": format!("Request failed: {}", e)}),
+        Ok(resp) => {
+            let status = resp.status();
+            match resp.json().await {
+                Ok(json) => json,
+                Err(e) => {
+                    tracing::error!("Failed to parse API response: {}", e);
+                    serde_json::json!({
+                        "error": "Failed to parse response",
+                        "status": status.as_u16()
+                    })
+                }
+            }
+        },
+        Err(e) => {
+            tracing::error!("API request failed: {}", e);
+            serde_json::json!({
+                "error": format!("Request failed: {}", e)
+            })
+        }
     }
 }

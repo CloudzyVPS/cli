@@ -125,10 +125,44 @@ fn build_app(state: AppState) -> Router {
                 ))
                 .service(ServeDir::new("static")),
         )
+        .layer(axum::middleware::from_fn(handlers::security_middleware::security_headers_middleware))
         .with_state(state)
 }
 
 async fn start_server(mut state: AppState, host: &str, port: u16, stylesheet: Option<String>) {
+    // Security validations at startup
+    if !utils::is_development_mode(host) {
+        tracing::warn!(
+            "Server is binding to non-localhost address: {}. Ensure proper firewall rules and TLS/HTTPS configuration.",
+            host
+        );
+        
+        // Warn about cookie security flags
+        tracing::info!("Cookie security flags enabled: HttpOnly, Secure, SameSite=Strict");
+        tracing::warn!("Ensure HTTPS is configured when running in production to enable Secure cookie flag");
+    }
+    
+    // Validate sensitive file permissions
+    if let Err(e) = utils::validate_file_permissions("users.json") {
+        tracing::error!("{}", e);
+        eprintln!("Security Error: {}", e);
+        // In production, this should be a hard error, but for compatibility we'll warn
+        tracing::warn!("Continuing despite permission issues. This is a security risk.");
+    }
+    
+    if let Err(e) = utils::validate_file_permissions(".env") {
+        tracing::warn!("{}", e);
+    }
+    
+    // Validate API token if configured
+    if !state.api_token.is_empty() {
+        if let Err(e) = utils::validate_api_token(&state.api_token) {
+            tracing::error!("{}", e);
+            eprintln!("Security Error: {}", e);
+            process::exit(1);
+        }
+    }
+    
     if let Some(path) = stylesheet {
         match std::fs::read_to_string(&path) {
             Ok(css) => {
@@ -153,6 +187,10 @@ async fn start_server(mut state: AppState, host: &str, port: u16, stylesheet: Op
     };
     let app = build_app(state.clone());
     tracing::info!(%addr, "Starting Zy Rust server");
+    tracing::info!("Session configuration: max_age={}s, idle_timeout={}s", 
+        config::SESSION_MAX_AGE_SECONDS, 
+        config::SESSION_IDLE_TIMEOUT_SECONDS);
+    
     match tokio::net::TcpListener::bind(addr).await {
         Ok(listener) => {
             // Run the server and log any errors (do not panic with unwrap()).

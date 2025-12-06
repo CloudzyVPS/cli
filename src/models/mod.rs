@@ -1,6 +1,7 @@
 pub mod user_record;
 pub mod current_user;
 pub mod app_state;
+pub mod session;
 pub mod add_traffic_form;
 pub mod change_os_form;
 pub mod resize_form;
@@ -26,6 +27,7 @@ pub mod admin_view;
 pub use user_record::UserRecord;
 pub use current_user::CurrentUser;
 pub use app_state::AppState;
+pub use session::Session;
 pub use add_traffic_form::AddTrafficForm;
 pub use change_os_form::ChangeOsForm;
 pub use resize_form::ResizeForm;

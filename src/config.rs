@@ -14,6 +14,16 @@ pub const DEFAULT_OWNER_ROLE: &str = "owner";
 pub const DEFAULT_ADMIN_ROLE: &str = "admin";
 pub const DEFAULT_PBKDF2_ITERATIONS: u32 = 100_000;
 
+// Security configuration constants
+pub const SESSION_MAX_AGE_SECONDS: u64 = 86400; // 24 hours
+pub const SESSION_IDLE_TIMEOUT_SECONDS: u64 = 7200; // 2 hours
+#[allow(dead_code)]
+pub const MAX_LOGIN_ATTEMPTS: u32 = 5;
+#[allow(dead_code)]
+pub const LOGIN_RATE_LIMIT_WINDOW_SECONDS: u64 = 300; // 5 minutes
+#[allow(dead_code)]
+pub const PASSWORD_MIN_LENGTH: usize = 8;
+
 pub fn load_env_file(env_file: Option<&str>) {
     if let Some(path) = env_file {
         dotenvy::from_path(Path::new(path)).ok();
