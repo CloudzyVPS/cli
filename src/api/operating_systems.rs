@@ -12,17 +12,19 @@ pub async fn load_os_list(
     let mut out = vec![];
     
     if payload.get("code").and_then(|c| c.as_str()) == Some("OKAY") {
-        if let Some(arr) = payload.get("data").and_then(|d| d.as_array()) {
-            for item in arr {
-                if let Some(obj) = item.as_object() {
-                    out.push(OsItem {
-                        id: obj.get("id").and_then(|v| v.as_str()).unwrap_or("").to_string(),
-                        name: obj.get("name").and_then(|v| v.as_str()).unwrap_or("").to_string(),
-                        family: obj.get("family").and_then(|v| v.as_str()).unwrap_or("").to_string(),
-                        arch: obj.get("arch").and_then(|v| v.as_str()).map(|s| s.to_string()),
-                        min_ram: obj.get("minRam").and_then(|v| v.as_str()).map(|s| s.to_string()),
-                        is_default: obj.get("isDefault").and_then(|v| v.as_bool()).unwrap_or(false),
-                    });
+        if let Some(data) = payload.get("data").and_then(|d| d.as_object()) {
+            if let Some(arr) = data.get("os").and_then(|o| o.as_array()) {
+                for item in arr {
+                    if let Some(obj) = item.as_object() {
+                        out.push(OsItem {
+                            id: obj.get("id").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+                            name: obj.get("name").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+                            family: obj.get("family").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+                            arch: obj.get("arch").and_then(|v| v.as_str()).map(|s| s.to_string()),
+                            min_ram: obj.get("minRam").and_then(|v| v.as_str()).map(|s| s.to_string()),
+                            is_default: obj.get("isDefault").and_then(|v| v.as_bool()).unwrap_or(false),
+                        });
+                    }
                 }
             }
         }
