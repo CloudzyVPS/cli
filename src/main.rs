@@ -6,7 +6,6 @@ mod api;
 mod templates;
 mod handlers;
 
-use askama::Template;
 use axum::{
     extract::{Form, State},
     response::{Html, IntoResponse, Redirect},
@@ -30,27 +29,22 @@ use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 use axum_extra::extract::cookie::CookieJar;
 
-use config::{DEFAULT_HOST, DEFAULT_PORT, DEFAULT_PBKDF2_ITERATIONS};
+use config::{DEFAULT_HOST, DEFAULT_PORT};
 use models::{UserRecord, AppState, AddTrafficForm, ChangeOsForm, ResizeForm, ProductView, OsItem, InstanceView, SshKeyView, AdminView, InstanceCheckbox, Region};
 use services::{generate_password_hash, load_users_from_file, persist_users_file, simple_instance_action, enforce_instance_access};
 use api::{api_call, load_regions, load_products, load_os_list, load_instances_for_user};
 use templates::*;
 use handlers::helpers::{
-    current_username_from_jar, build_template_globals, inject_context,
-    ensure_owner, ensure_logged_in, plain_html, TemplateGlobals,
+    build_template_globals, current_username_from_jar,
+    ensure_owner, ensure_logged_in, plain_html, TemplateGlobals, render_template,
 };
 use std::collections::HashSet;
-use rand::rngs::OsRng;
-use rand::RngCore;
-use pbkdf2::pbkdf2_hmac;
-use sha2::Sha256;
-use hex::encode as hex_encode;
 // No-op logging ignore endpoint list
 static LOGGING_IGNORE_ENDPOINTS: &[&str] = &["/v1/os", "/v1/products", "/os", "/products"];
 
-fn build_state_from_env(env_file: Option<&str>) -> AppState {
+async fn build_state_from_env(env_file: Option<&str>) -> AppState {
     config::load_env_file(env_file);
-    let users = load_users_from_file();
+    let users = load_users_from_file().await;
     let disabled_instances = std::sync::Arc::new(config::get_disabled_instance_ids());
     
     AppState {
@@ -133,7 +127,14 @@ fn build_app(state: AppState) -> Router {
 }
 
 async fn start_server(state: AppState, host: &str, port: u16) {
-    let addr: SocketAddr = format!("{}:{}", host, port).parse().unwrap();
+    let addr: SocketAddr = match format!("{}:{}", host, port).parse() {
+        Ok(a) => a,
+        Err(e) => {
+            tracing::error!(%e, "Invalid host/port format");
+            eprintln!("Invalid host/port format: {}", e);
+            process::exit(1);
+        }
+    };
     let app = build_app(state.clone());
     tracing::info!(%addr, "Starting Zyffiliate Rust server");
     match tokio::net::TcpListener::bind(addr).await {
@@ -197,19 +198,14 @@ async fn instances_real(State(state): State<AppState>, jar: CookieJar) -> impl I
     };
     let list = load_instances_for_user_wrapper(&state, &username).await;
     let TemplateGlobals { current_user, api_hostname, base_url, flash_messages, has_flash_messages } = build_template_globals(&state, &jar);
-    inject_context(
-        &state,
-        &jar,
-        InstancesTemplate {
+    render_template(&state, &jar, InstancesTemplate {
             current_user,
             api_hostname,
             base_url,
             flash_messages,
             has_flash_messages,
             instances: &list,
-        }
-        .render()
-        .unwrap(),
+        },
     )
 }
 
@@ -301,11 +297,7 @@ async fn access_get(State(state): State<AppState>, jar: CookieJar) -> impl IntoR
         flash_messages,
         has_flash_messages,
     } = build_template_globals(&state, &jar);
-    inject_context(
-        &state,
-        &jar,
-        AccessTemplate { current_user, api_hostname, base_url, flash_messages, has_flash_messages, admins: &admins }.render().unwrap(),
-    )
+    render_template(&state, &jar, AccessTemplate { current_user, api_hostname, base_url, flash_messages, has_flash_messages, admins: &admins })
 }
 
 #[derive(Deserialize)]
@@ -324,32 +316,32 @@ async fn update_access(
         return r.into_response();
     }
     let uname = username.to_lowercase();
-    let mut users = state.users.lock().unwrap();
-    if let Some(rec) = users.get_mut(&uname) {
-        if rec.role != "admin" {
-            return plain_html("Target user not admin");
+    {
+        let mut users = state.users.lock().unwrap();
+        if let Some(rec) = users.get_mut(&uname) {
+            if rec.role != "admin" {
+                return plain_html("Target user not admin");
+            }
+            // Normalize and dedupe
+            let mut normalized: Vec<String> = form
+                .instances
+                .iter()
+                .map(|s| s.trim().to_string())
+                .filter(|s| !s.is_empty())
+                .collect();
+            normalized.sort();
+            normalized.dedup();
+            rec.assigned_instances = normalized;
+        } else {
+            return plain_html("Admin not found");
         }
-        // Normalize and dedupe
-        let mut normalized: Vec<String> = form
-            .instances
-            .iter()
-            .map(|s| s.trim().to_string())
-            .filter(|s| !s.is_empty())
-            .collect();
-        normalized.sort();
-        normalized.dedup();
-        rec.assigned_instances = normalized;
-        let mut serialized: serde_json::Map<String, Value> = serde_json::Map::new();
-        for (u, r) in users.iter() {
-            serialized.insert(u.clone(), serde_json::json!({"password": r.password, "role": r.role, "assigned_instances": r.assigned_instances }));
-        }
-        let _ = std::fs::write(
-            "users.json",
-            serde_json::to_string_pretty(&Value::Object(serialized)).unwrap(),
-        );
-    } else {
-        return plain_html("Admin not found");
     }
+    
+    if let Err(e) = persist_users_file(&state.users).await {
+        tracing::error!(%e, "Failed to persist users");
+        return plain_html("Failed to persist users");
+    }
+
     Redirect::to("/access").into_response()
 }
 // SSH Keys CRUD (owner only)
@@ -504,10 +496,7 @@ async fn ssh_keys_get(
     };
     let keys = load_ssh_keys_api(&state, customer_id.clone()).await;
     let TemplateGlobals { current_user, api_hostname, base_url, flash_messages, has_flash_messages } = build_template_globals(&state, &jar);
-    inject_context(
-        &state,
-        &jar,
-        SshKeysTemplate {
+    render_template(&state, &jar, SshKeysTemplate {
             current_user,
             api_hostname,
             base_url,
@@ -515,9 +504,7 @@ async fn ssh_keys_get(
             has_flash_messages,
             ssh_keys: &keys,
             customer_id,
-        }
-        .render()
-        .unwrap(),
+        },
     )
 }
 
@@ -682,10 +669,7 @@ async fn instance_detail(
         }
     }
     let TemplateGlobals { current_user, api_hostname, base_url, flash_messages, has_flash_messages } = build_template_globals(&state, &jar);
-    inject_context(
-        &state,
-        &jar,
-        InstanceDetailTemplate {
+    render_template(&state, &jar, InstanceDetailTemplate {
             current_user,
             api_hostname,
             base_url,
@@ -695,9 +679,7 @@ async fn instance_detail(
             hostname,
             details,
             is_disabled: state.is_instance_disabled(&instance_id),
-        }
-        .render()
-        .unwrap(),
+        },
     )
 }
 
@@ -740,7 +722,7 @@ async fn instance_poweron_get(
         }
     }
     let TemplateGlobals { current_user, api_hostname, base_url, flash_messages, has_flash_messages } = build_template_globals(&state, &jar);
-    inject_context(&state, &jar, PowerOnInstanceTemplate { current_user, api_hostname, base_url, flash_messages, has_flash_messages, instance, is_disabled: state.is_instance_disabled(&instance_id) }.render().unwrap())
+    render_template(&state, &jar, PowerOnInstanceTemplate { current_user, api_hostname, base_url, flash_messages, has_flash_messages, instance, is_disabled: state.is_instance_disabled(&instance_id) })
 }
 
 // POST handler for poweron
@@ -809,7 +791,7 @@ async fn instance_delete_get(
         }
     }
     let TemplateGlobals { current_user, api_hostname, base_url, flash_messages, has_flash_messages } = build_template_globals(&state, &jar);
-    inject_context(&state, &jar, DeleteInstanceTemplate { current_user, api_hostname, base_url, flash_messages, has_flash_messages, instance, is_disabled: state.is_instance_disabled(&instance_id) }.render().unwrap())
+    render_template(&state, &jar, DeleteInstanceTemplate { current_user, api_hostname, base_url, flash_messages, has_flash_messages, instance, is_disabled: state.is_instance_disabled(&instance_id) })
 }
 
 // Render confirm page for poweroff (GET) and perform poweroff (POST handler below)
@@ -836,7 +818,7 @@ async fn instance_poweroff_get(
         }
     }
     let TemplateGlobals { current_user, api_hostname, base_url, flash_messages, has_flash_messages } = build_template_globals(&state, &jar);
-    inject_context(&state, &jar, PowerOffInstanceTemplate { current_user, api_hostname, base_url, flash_messages, has_flash_messages, instance, is_disabled: state.is_instance_disabled(&instance_id) }.render().unwrap())
+    render_template(&state, &jar, PowerOffInstanceTemplate { current_user, api_hostname, base_url, flash_messages, has_flash_messages, instance, is_disabled: state.is_instance_disabled(&instance_id) })
 }
 
 // POST handler for poweroff
@@ -887,7 +869,7 @@ async fn instance_reset_get(
         }
     }
     let TemplateGlobals { current_user, api_hostname, base_url, flash_messages, has_flash_messages } = build_template_globals(&state, &jar);
-    inject_context(&state, &jar, ResetInstanceTemplate { current_user, api_hostname, base_url, flash_messages, has_flash_messages, instance, is_disabled: state.is_instance_disabled(&instance_id) }.render().unwrap())
+    render_template(&state, &jar, ResetInstanceTemplate { current_user, api_hostname, base_url, flash_messages, has_flash_messages, instance, is_disabled: state.is_instance_disabled(&instance_id) })
 }
 
 // POST handler for reset
@@ -938,7 +920,7 @@ async fn instance_change_pass_get(
         }
     }
     let TemplateGlobals { current_user, api_hostname, base_url, flash_messages, has_flash_messages } = build_template_globals(&state, &jar);
-    inject_context(&state, &jar, ChangePassInstanceTemplate { current_user, api_hostname, base_url, flash_messages, has_flash_messages, instance, new_password: None, is_disabled: state.is_instance_disabled(&instance_id) }.render().unwrap())
+    render_template(&state, &jar, ChangePassInstanceTemplate { current_user, api_hostname, base_url, flash_messages, has_flash_messages, instance, new_password: None, is_disabled: state.is_instance_disabled(&instance_id) })
 }
 
 // POST handler for change-pass; display generated password in template
@@ -977,7 +959,7 @@ async fn instance_change_pass_post(
         }
     }
     let TemplateGlobals { current_user, api_hostname, base_url, flash_messages, has_flash_messages } = build_template_globals(&state, &jar);
-    inject_context(&state, &jar, ChangePassInstanceTemplate { current_user, api_hostname, base_url, flash_messages, has_flash_messages, instance, new_password, is_disabled: state.is_instance_disabled(&instance_id) }.render().unwrap())
+    render_template(&state, &jar, ChangePassInstanceTemplate { current_user, api_hostname, base_url, flash_messages, has_flash_messages, instance, new_password, is_disabled: state.is_instance_disabled(&instance_id) })
 }
 
 async fn instance_delete(
@@ -1085,7 +1067,7 @@ async fn instance_change_os_get(
     }
     let os_list = load_os_list_wrapper(&state).await;
     let TemplateGlobals { current_user, api_hostname, base_url, flash_messages, has_flash_messages } = build_template_globals(&state, &jar);
-    inject_context(&state, &jar, ChangeOsTemplate { current_user, api_hostname, base_url, flash_messages, has_flash_messages, instance, os_list: &os_list, is_disabled: state.is_instance_disabled(&instance_id) }.render().unwrap())
+    render_template(&state, &jar, ChangeOsTemplate { current_user, api_hostname, base_url, flash_messages, has_flash_messages, instance, os_list: &os_list, is_disabled: state.is_instance_disabled(&instance_id) })
 }
 
 async fn instance_change_os_post(
@@ -1142,7 +1124,7 @@ async fn instance_resize_get(
     }
     let (regions, _map) = load_regions_wrapper(&state).await;
     let TemplateGlobals { current_user, api_hostname, base_url, flash_messages, has_flash_messages } = build_template_globals(&state, &jar);
-    inject_context(&state, &jar, ResizeTemplate { current_user, api_hostname, base_url, flash_messages, has_flash_messages, instance, regions: &regions, is_disabled: state.is_instance_disabled(&instance_id) }.render().unwrap())
+    render_template(&state, &jar, ResizeTemplate { current_user, api_hostname, base_url, flash_messages, has_flash_messages, instance, regions: &regions, is_disabled: state.is_instance_disabled(&instance_id) })
 }
 
 async fn instance_resize_post(
@@ -1241,18 +1223,13 @@ async fn bulk_subscription_refund_get(
         return r.into_response();
     }
     let TemplateGlobals { current_user, api_hostname, base_url, flash_messages, has_flash_messages } = build_template_globals(&state, &jar);
-    Html(
-        BulkRefundTemplate {
+    render_template(&state, &jar, BulkRefundTemplate {
             current_user,
             api_hostname,
             base_url,
             flash_messages,
             has_flash_messages,
-        }
-        .render()
-        .unwrap(),
-    )
-    .into_response()
+        })
 }
 
 #[derive(Parser)]
@@ -1389,82 +1366,13 @@ async fn main() {
     let cli = Cli::parse();
 
     // If CLI provided an env-file or not, we will load it per command below
-    // Build shared state (load users.json and env)
-    let _user_store = {
-        let path = std::path::Path::new("users.json");
-        let mut map: HashMap<String, UserRecord> = HashMap::new();
-        if path.exists() {
-            if let Ok(text) = std::fs::read_to_string(path) {
-                if let Ok(json_val) = serde_json::from_str::<serde_json::Value>(&text) {
-                    if let Some(obj) = json_val.as_object() {
-                        for (k, v) in obj.iter() {
-                            if let Some(pw) = v.get("password").and_then(|x| x.as_str()) {
-                                let role = v
-                                    .get("role")
-                                    .and_then(|x| x.as_str())
-                                    .unwrap_or("admin")
-                                    .to_string();
-                                let assigned_instances = v
-                                    .get("assigned_instances")
-                                    .and_then(|a| a.as_array())
-                                    .map(|arr| {
-                                        arr.iter()
-                                            .filter_map(|x| x.as_str().map(|s| s.to_string()))
-                                            .collect()
-                                    })
-                                    .unwrap_or_else(|| vec![]);
-                                map.insert(
-                                    k.to_lowercase(),
-                                    UserRecord {
-                                        password: pw.to_string(),
-                                        role,
-                                        assigned_instances,
-                                    },
-                                );
-                            }
-                        }
-                    }
-                }
-            }
-        } else {
-            // Create default owner
-            // Generate werkzeug compatible hash for 'owner123' using pbkdf2 parameters
-            let salt = {
-                let mut b = [0u8; 12];
-                OsRng.fill_bytes(&mut b);
-                hex_encode(b)
-            };
-            let mut dk = [0u8; 32];
-            pbkdf2_hmac::<Sha256>(b"owner123", salt.as_bytes(), DEFAULT_PBKDF2_ITERATIONS, &mut dk);
-            let hash_hex = hex_encode(dk);
-            let full = format!("pbkdf2:sha256:{}${}${}", DEFAULT_PBKDF2_ITERATIONS, salt, hash_hex);
-            map.insert(
-                "owner".to_string(),
-                UserRecord {
-                    password: full,
-                    role: "owner".to_string(),
-                    assigned_instances: vec![],
-                },
-            );
-            let mut serialized: serde_json::Map<String, serde_json::Value> = serde_json::Map::new();
-            for (u, rec) in map.iter() {
-                serialized.insert(u.clone(), serde_json::json!({"password": rec.password, "role": rec.role, "assigned_instances": rec.assigned_instances }));
-            }
-            let _ = std::fs::write(
-                path,
-                serde_json::to_string_pretty(&serde_json::Value::Object(serialized)).unwrap(),
-            );
-        }
-        Arc::new(Mutex::new(map))
-    };
-
     // Note: we avoid constructing a default `state` here; commands build the per-command state
     // using `build_state_from_env` so we can pass a custom `--env-file` when executing commands.
 
     // Dispatch CLI commands. If no command provided, serve the web app by default
     if cli.command.is_none() {
-        let state = build_state_from_env(None);
-        start_server(state, DEFAULT_HOST, DEFAULT_PORT).await;
+    let state = build_state_from_env(None).await;
+    start_server(state, DEFAULT_HOST, DEFAULT_PORT).await;
         return;
     }
     match cli.command.unwrap() {
@@ -1473,12 +1381,12 @@ async fn main() {
             port,
             env_file,
         } => {
-            let state = build_state_from_env(env_file.as_deref());
+            let state = build_state_from_env(env_file.as_deref()).await;
             start_server(state, &host, port).await;
             return;
         }
         Commands::CheckConfig { env_file } => {
-            let state = build_state_from_env(env_file.as_deref());
+            let state = build_state_from_env(env_file.as_deref()).await;
             // Basic check: ensure API base and token exist; optionally ping regions
             let mut ok = true;
             if state.api_base_url.trim().is_empty() {
@@ -1505,7 +1413,7 @@ async fn main() {
             }
         }
         Commands::Users { sub } => {
-            let state = build_state_from_env(None);
+            let state = build_state_from_env(None).await;
             match sub {
                 UserCommands::List => {
                     let users = state.users.lock().unwrap();
@@ -1541,7 +1449,7 @@ async fn main() {
                         },
                     );
                     drop(users);
-                    if let Err(e) = persist_users_file(&state.users) {
+                    if let Err(e) = persist_users_file(&state.users).await {
                         eprintln!("Failed to persist users.json: {}", e);
                         process::exit(1);
                     }
@@ -1558,7 +1466,7 @@ async fn main() {
                         process::exit(1);
                     }
                     drop(users);
-                    if let Err(e) = persist_users_file(&state.users) {
+                    if let Err(e) = persist_users_file(&state.users).await {
                         eprintln!("Failed to persist users.json: {}", e);
                         process::exit(1);
                     }
@@ -1595,7 +1503,7 @@ async fn main() {
                         },
                     );
                     drop(users);
-                    if let Err(e) = persist_users_file(&state.users) {
+                    if let Err(e) = persist_users_file(&state.users).await {
                         eprintln!("Failed to persist users.json: {}", e);
                         process::exit(1);
                     }
@@ -1605,7 +1513,7 @@ async fn main() {
             }
         }
         Commands::Instances { sub } => {
-            let state = build_state_from_env(None);
+            let state = build_state_from_env(None).await;
             match sub {
                 InstanceCommands::List { username } => {
                     let uname = username.unwrap_or_default();

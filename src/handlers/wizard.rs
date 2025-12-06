@@ -3,7 +3,6 @@ use axum::{
     response::{IntoResponse, Redirect},
 };
 use axum_extra::extract::cookie::CookieJar;
-use askama::Template;
 use serde_json::Value;
 use std::collections::{HashMap, HashSet};
 
@@ -17,8 +16,8 @@ use crate::utils::{build_query_string, parse_urlencoded_body};
 use crate::api::{api_call, load_regions, load_products, load_os_list};
 use crate::templates::*;
 use crate::handlers::helpers::{
-    build_template_globals, inject_context, absolute_url_from_state,
-    ensure_admin_or_owner, TemplateGlobals, OneOrMany,
+    build_template_globals, absolute_url_from_state,
+    ensure_admin_or_owner, TemplateGlobals, OneOrMany, render_template,
 };
 
 // No-op logging ignore endpoint list
@@ -107,10 +106,7 @@ pub async fn create_step_1(
         instance_class: base.instance_class.clone(),
         plan_type: base.plan_type.clone(),
     };
-    inject_context(
-        &state,
-        &jar,
-        Step1Template {
+    render_template(&state, &jar, Step1Template {
             current_user,
             api_hostname,
             base_url,
@@ -118,9 +114,7 @@ pub async fn create_step_1(
             has_flash_messages,
             regions: &regions,
             form_data,
-        }
-        .render()
-        .unwrap(),
+        },
     )
 }
 
@@ -167,10 +161,7 @@ pub async fn create_step_2(
         assign_ipv6: base.assign_ipv6,
         floating_ip_count: base.floating_ip_count.to_string(),
     };
-    inject_context(
-        &state,
-        &jar,
-        Step2Template {
+    render_template(&state, &jar, Step2Template {
             current_user,
             api_hostname,
             base_url,
@@ -180,9 +171,7 @@ pub async fn create_step_2(
             form_data,
             back_url,
             submit_url: absolute_url_from_state(&state, "/create/step-3"),
-        }
-        .render()
-        .unwrap(),
+        },
     )
 }
 
@@ -222,10 +211,7 @@ pub async fn create_step_3(
             has_flash_messages,
         } = build_template_globals(&state, &jar);
         // Use the outer variables defined above
-        return inject_context(
-            &state,
-            &jar,
-            Step3FixedTemplate {
+        return render_template(&state, &jar, Step3FixedTemplate {
                 current_user,
                 api_hostname,
                 base_url,
@@ -242,9 +228,7 @@ pub async fn create_step_3(
                 restart_url: absolute_url_from_state(&state, "/create/step-1"),
                 ssh_key_ids_csv: ssh_key_ids_csv.clone(),
                 hostnames_csv: hostnames_csv.clone(),
-            }
-            .render()
-            .unwrap(),
+            },
         );
     }
     let cpu = q.get("cpu").cloned().unwrap_or_else(|| "2".into());
@@ -269,10 +253,7 @@ pub async fn create_step_3(
         disk_in_gb: disk,
         bandwidth_in_tb: bw,
     };
-    inject_context(
-        &state,
-        &jar,
-        Step3CustomTemplate {
+    render_template(&state, &jar, Step3CustomTemplate {
             current_user,
             api_hostname,
             base_url,
@@ -289,9 +270,7 @@ pub async fn create_step_3(
             form_values,
             ssh_key_ids_csv: ssh_key_ids_csv.clone(),
             hostnames_csv: hostnames_csv,
-        }
-        .render()
-        .unwrap(),
+        },
     )
 }
 
@@ -346,10 +325,7 @@ pub async fn create_step_4(
             .cloned()
             .unwrap_or_else(|| "0".into()),
     };
-    inject_context(
-        &state,
-        &jar,
-        Step4Template {
+    render_template(&state, &jar, Step4Template {
             current_user,
             api_hostname,
             base_url,
@@ -363,9 +339,7 @@ pub async fn create_step_4(
             extras,
             back_url,
             submit_url: absolute_url_from_state(&state, "/create/step-5"),
-        }
-        .render()
-        .unwrap(),
+        },
     )
 }
 
@@ -444,10 +418,7 @@ pub async fn create_step_5(
     };
     let hostnames_csv = base.hostnames.join(",");
     let ssh_key_ids_csv = base.ssh_key_ids.iter().map(|id| id.to_string()).collect::<Vec<_>>().join(",");
-    inject_context(
-        &state,
-        &jar,
-        Step5Template {
+    render_template(&state, &jar, Step5Template {
             current_user,
             api_hostname,
             base_url,
@@ -465,9 +436,7 @@ pub async fn create_step_5(
             submit_url: absolute_url_from_state(&state, "/create/step-6"),
             hostnames_csv: hostnames_csv,
             ssh_key_ids_csv: ssh_key_ids_csv,
-        }
-        .render()
-        .unwrap(),
+        },
     )
 }
 
@@ -551,10 +520,7 @@ pub async fn create_step_6(
         .collect();
     let hostnames_csv = base.hostnames.join(",");
     let _ssh_key_ids_csv = base.ssh_key_ids.iter().map(|id| id.to_string()).collect::<Vec<_>>().join(",");
-    inject_context(
-        &state,
-        &jar,
-        Step6Template {
+    render_template(&state, &jar, Step6Template {
             current_user,
             api_hostname,
             base_url,
@@ -571,9 +537,7 @@ pub async fn create_step_6(
             submit_url: absolute_url_from_state(&state, "/create/step-7"),
             manage_keys_url: absolute_url_from_state(&state, "/ssh-keys"),
             hostnames_csv,
-        }
-        .render()
-        .unwrap(),
+        },
     )
 }
 
@@ -727,10 +691,7 @@ async fn create_step_7_core(
             let detail = resp.get("detail").and_then(|d| d.as_str()).map(|s| s.to_string());
             // Do not expose raw JSON to rendered templates - keep UI friendly.
             let TemplateGlobals { current_user, api_hostname, base_url, flash_messages, has_flash_messages } = build_template_globals(&state, &jar);
-                return inject_context(
-                &state,
-                &jar,
-                Step8Template {
+                return render_template(&state, &jar, Step8Template {
                     current_user,
                     api_hostname,
                     base_url,
@@ -741,10 +702,7 @@ async fn create_step_7_core(
                     code,
                     detail,
                     errors,
-                }
-                .render()
-                .unwrap(),
-            );
+                });
         }
     }
     let TemplateGlobals {
@@ -858,10 +816,7 @@ async fn create_step_7_core(
     let has_price_entries = !price_entries.is_empty();
     let footnote_text = footnote.unwrap_or_default();
     let has_footnote = !footnote_text.is_empty();
-    inject_context(
-        &state,
-        &jar,
-        Step7Template {
+    render_template(&state, &jar, Step7Template {
             current_user,
             api_hostname,
             base_url,
@@ -888,9 +843,7 @@ async fn create_step_7_core(
             has_footnote,
             back_url,
             submit_url: absolute_url_from_state(&state, "/create/step-7"),
-        }
-        .render()
-        .unwrap(),
+        },
     )
 }
 
@@ -917,7 +870,7 @@ pub async fn create_step_8(
     let detail = q.get("detail").cloned();
     // Raw JSON is no longer rendered in the UI; any raw response can be logged by server
     let errors = q.get("errors").map(|s| s.split('|').map(|s| s.to_string()).collect()).unwrap_or_else(Vec::new);
-    inject_context(&state, &jar, Step8Template {
+    render_template(&state, &jar, Step8Template {
         current_user,
         api_hostname,
         base_url,
@@ -929,7 +882,7 @@ pub async fn create_step_8(
         detail,
         errors,
         
-    }.render().unwrap())
+    })
 }
 
 pub async fn create_step_7_post(

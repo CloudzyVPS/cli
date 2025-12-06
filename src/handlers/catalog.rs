@@ -1,4 +1,3 @@
-use askama::Template;
 use axum::{
     extract::{Query, State},
     response::{IntoResponse, Redirect},
@@ -10,7 +9,7 @@ use crate::api::{load_applications, load_os_list, load_products, load_regions};
 use crate::models::AppState;
 use crate::templates::{ApplicationsTemplate, OsCatalogTemplate, ProductsPageTemplate, RegionsPageTemplate};
 
-use super::helpers::{build_template_globals, ensure_logged_in, inject_context, TemplateGlobals};
+use super::helpers::{build_template_globals, ensure_logged_in, TemplateGlobals, render_template};
 
 pub async fn regions_get(State(state): State<AppState>, jar: CookieJar) -> impl IntoResponse {
     if let Some(r) = ensure_logged_in(&state, &jar) {
@@ -24,19 +23,14 @@ pub async fn regions_get(State(state): State<AppState>, jar: CookieJar) -> impl 
         flash_messages,
         has_flash_messages,
     } = build_template_globals(&state, &jar);
-    inject_context(
-        &state,
-        &jar,
-        RegionsPageTemplate {
+    render_template(&state, &jar, RegionsPageTemplate {
             current_user,
             api_hostname,
             base_url,
             flash_messages,
             has_flash_messages,
             regions: &list,
-        }
-        .render()
-        .unwrap(),
+        },
     )
 }
 
@@ -62,10 +56,7 @@ pub async fn products_get(
         flash_messages,
         has_flash_messages,
     } = build_template_globals(&state, &jar);
-    inject_context(
-        &state,
-        &jar,
-        ProductsPageTemplate {
+    render_template(&state, &jar, ProductsPageTemplate {
             current_user,
             api_hostname,
             base_url,
@@ -76,9 +67,7 @@ pub async fn products_get(
             active_region_id: region_id.clone(),
             requested_region: Some(region_id),
             products: &products,
-        }
-        .render()
-        .unwrap(),
+        },
     )
 }
 
@@ -94,19 +83,14 @@ pub async fn os_get(State(state): State<AppState>, jar: CookieJar) -> impl IntoR
         flash_messages,
         has_flash_messages,
     } = build_template_globals(&state, &jar);
-    inject_context(
-        &state,
-        &jar,
-        OsCatalogTemplate {
+    render_template(&state, &jar, OsCatalogTemplate {
             current_user,
             api_hostname,
             base_url,
             flash_messages,
             has_flash_messages,
             os_list: &list,
-        }
-        .render()
-        .unwrap(),
+        },
     )
 }
 
@@ -122,18 +106,13 @@ pub async fn applications_get(State(state): State<AppState>, jar: CookieJar) -> 
         flash_messages,
         has_flash_messages,
     } = build_template_globals(&state, &jar);
-    inject_context(
-        &state,
-        &jar,
-        ApplicationsTemplate {
+    render_template(&state, &jar, ApplicationsTemplate {
             current_user,
             api_hostname,
             base_url,
             flash_messages,
             has_flash_messages,
             apps: &apps,
-        }
-        .render()
-        .unwrap(),
+        },
     )
 }
