@@ -1590,7 +1590,6 @@ async fn instances_real(State(state): State<AppState>, jar: CookieJar) -> impl I
 }
 
 // Access management (owner only): list admins and assign instances
-// Removed - now using AdminView from models
 
 async fn access_get(State(state): State<AppState>, jar: CookieJar) -> impl IntoResponse {
     if let Some(r) = ensure_owner(&state, &jar) {
@@ -1730,7 +1729,6 @@ async fn update_access(
     Redirect::to("/access").into_response()
 }
 // SSH Keys CRUD (owner only)
-// Removed - now using SshKeyView from models
 
 #[derive(Deserialize)]
 struct SshKeysForm {
@@ -1789,7 +1787,7 @@ fn extract_customer_id_from_value(value: &Value) -> Option<String> {
     recurse(value)
 }
 
-async fn fetch_default_customer_id(state: &AppState) -> Option<String> {
+pub async fn fetch_default_customer_id(state: &AppState) -> Option<String> {
     if let Some(existing) = state.default_customer_cache.lock().unwrap().clone() {
         return Some(existing);
     }
@@ -1805,7 +1803,7 @@ async fn fetch_default_customer_id(state: &AppState) -> Option<String> {
     None
 }
 
-async fn load_ssh_keys_api(state: &AppState, customer_id: Option<String>) -> Vec<SshKeyView> {
+pub async fn load_ssh_keys_api(state: &AppState, customer_id: Option<String>) -> Vec<SshKeyView> {
     let params = customer_id.map(|cid| vec![("customerId".to_string(), cid)]);
     let payload = api_call_wrapper(state, "GET", "/v1/ssh-keys", None, params).await;
     if payload.get("code").and_then(|c| c.as_str()) != Some("OKAY") {
