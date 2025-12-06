@@ -12,9 +12,6 @@ use crate::templates::{ApplicationsTemplate, OsCatalogTemplate, ProductsPageTemp
 use super::helpers::{build_template_globals, ensure_logged_in, TemplateGlobals, render_template};
 
 pub async fn regions_get(State(state): State<AppState>, jar: CookieJar) -> impl IntoResponse {
-    if let Some(r) = ensure_logged_in(&state, &jar) {
-        return r.into_response();
-    }
     let (list, _map) = load_regions(&state.client, &state.api_base_url, &state.api_token).await;
     let TemplateGlobals {
         current_user,
@@ -39,9 +36,6 @@ pub async fn products_get(
     jar: CookieJar,
     Query(q): Query<HashMap<String, String>>,
 ) -> impl IntoResponse {
-    if let Some(r) = ensure_logged_in(&state, &jar) {
-        return r.into_response();
-    }
     let region_id = q.get("region_id").or_else(|| q.get("region")).cloned().unwrap_or_default();
     if region_id.is_empty() {
         return Redirect::to("/regions").into_response();
@@ -72,9 +66,6 @@ pub async fn products_get(
 }
 
 pub async fn os_get(State(state): State<AppState>, jar: CookieJar) -> impl IntoResponse {
-    if let Some(r) = ensure_logged_in(&state, &jar) {
-        return r.into_response();
-    }
     let list = load_os_list(&state.client, &state.api_base_url, &state.api_token).await;
     let TemplateGlobals {
         current_user,
@@ -95,9 +86,6 @@ pub async fn os_get(State(state): State<AppState>, jar: CookieJar) -> impl IntoR
 }
 
 pub async fn applications_get(State(state): State<AppState>, jar: CookieJar) -> impl IntoResponse {
-    if let Some(r) = ensure_logged_in(&state, &jar) {
-        return r.into_response();
-    }
     let apps = load_applications(&state.client, &state.api_base_url, &state.api_token).await;
     let TemplateGlobals {
         current_user,

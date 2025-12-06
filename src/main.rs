@@ -30,15 +30,10 @@ use tracing_subscriber::util::SubscriberInitExt;
 use axum_extra::extract::cookie::CookieJar;
 
 use config::{DEFAULT_HOST, DEFAULT_PORT};
-use models::{UserRecord, AppState, AddTrafficForm, ChangeOsForm, ResizeForm, ProductView, OsItem, InstanceView, SshKeyView, AdminView, InstanceCheckbox, Region};
-use services::{generate_password_hash, load_users_from_file, persist_users_file, simple_instance_action, enforce_instance_access};
-use api::{api_call, load_regions, load_products, load_os_list, load_instances_for_user, load_ssh_keys};
-use templates::*;
-use handlers::helpers::{
-    build_template_globals, current_username_from_jar,
-    ensure_owner, ensure_logged_in, plain_html, TemplateGlobals, render_template,
-    api_call_wrapper, fetch_default_customer_id, load_ssh_keys_api,
-};
+use models::{UserRecord, AppState};
+use services::{generate_password_hash, load_users_from_file, persist_users_file, simple_instance_action};
+use api::api_call;
+use handlers::helpers::api_call_wrapper;
 use std::collections::HashSet;
 
 async fn build_state_from_env(env_file: Option<&str>) -> AppState {
@@ -62,10 +57,7 @@ async fn build_state_from_env(env_file: Option<&str>) -> AppState {
 // Global template context injected into most page templates
 // (already implemented via build_template_globals/TemplateGlobals)
 fn build_app(state: AppState) -> Router {
-    Router::new()
-        .route("/", get(handlers::auth::root_get))
-        .route("/login", get(handlers::auth::login_get).post(handlers::auth::login_post))
-        .route("/logout", post(handlers::auth::logout_post))
+    let protected_routes = Router::new()
         .route("/users", get(handlers::users::users_list).post(handlers::users::users_create))
         .route("/users/:username/reset-password", post(handlers::users::reset_password))
         .route("/users/:username/role", post(handlers::users::update_role))
@@ -73,7 +65,7 @@ fn build_app(state: AppState) -> Router {
         .route("/access", get(handlers::access::access_get))
         .route("/access/:username", post(handlers::access::update_access))
         .route("/ssh-keys", get(handlers::ssh_keys::ssh_keys_get).post(handlers::ssh_keys::ssh_keys_post))
-        .route("/instances", get(instances_real))
+        .route("/instances", get(handlers::instances::instances_real))
         .route("/regions", get(handlers::catalog::regions_get))
         .route("/products", get(handlers::catalog::products_get))
         .route("/os", get(handlers::catalog::os_get))
@@ -89,30 +81,36 @@ fn build_app(state: AppState) -> Router {
             get(handlers::wizard::create_step_7_get).post(handlers::wizard::create_step_7_post),
         )
         .route("/create/result", get(handlers::wizard::create_step_8))
-        .route("/instance/:instance_id", get(instance_detail))
-        .route("/instance/:instance_id/delete", get(instance_delete_get).post(instance_delete))
-        .route("/instance/:instance_id/poweron", get(instance_poweron_get).post(instance_poweron_post))
-        .route("/instance/:instance_id/poweroff", get(instance_poweroff_get).post(instance_poweroff_post))
-        .route("/instance/:instance_id/reset", get(instance_reset_get).post(instance_reset_post))
+        .route("/instance/:instance_id", get(handlers::instances::instance_detail))
+        .route("/instance/:instance_id/delete", get(handlers::instances::instance_delete_get).post(handlers::instances::instance_delete))
+        .route("/instance/:instance_id/poweron", get(handlers::instances::instance_poweron_get).post(handlers::instances::instance_poweron_post))
+        .route("/instance/:instance_id/poweroff", get(handlers::instances::instance_poweroff_get).post(handlers::instances::instance_poweroff_post))
+        .route("/instance/:instance_id/reset", get(handlers::instances::instance_reset_get).post(handlers::instances::instance_reset_post))
         .route(
             "/instance/:instance_id/change-pass",
-            get(instance_change_pass_get).post(instance_change_pass_post),
+            get(handlers::instances::instance_change_pass_get).post(handlers::instances::instance_change_pass_post),
         )
-        .route("/instance/:instance_id/change-os", get(instance_change_os_get).post(instance_change_os_post))
-        .route("/instance/:instance_id/resize", get(instance_resize_get).post(instance_resize_post))
+        .route("/instance/:instance_id/change-os", get(handlers::instances::instance_change_os_get).post(handlers::instances::instance_change_os_post))
+        .route("/instance/:instance_id/resize", get(handlers::instances::instance_resize_get).post(handlers::instances::instance_resize_post))
         .route(
             "/instance/:instance_id/subscription-refund",
-            get(instance_subscription_refund),
+            get(handlers::instances::instance_subscription_refund),
         )
         .route(
             "/instance/:instance_id/add-traffic",
-            post(instance_add_traffic),
+            post(handlers::instances::instance_add_traffic),
         )
         .route(
             "/bulk-subscription-refund",
-            get(bulk_subscription_refund_get).post(bulk_subscription_refund),
+            get(handlers::instances::bulk_subscription_refund_get).post(handlers::instances::bulk_subscription_refund),
         )
-        // Serve static files with cache-control header to avoid reloading stylesheets on each request
+        .route_layer(axum::middleware::from_fn_with_state(state.clone(), handlers::middleware::auth_middleware));
+
+    Router::new()
+        .route("/", get(handlers::auth::root_get))
+        .route("/login", get(handlers::auth::login_get).post(handlers::auth::login_post))
+        .route("/logout", post(handlers::auth::logout_post))
+        .merge(protected_routes)
         .nest_service(
             "/static",
             ServiceBuilder::new()
@@ -153,43 +151,8 @@ async fn start_server(state: AppState, host: &str, port: u16) {
     }
 }
 
-async fn load_instances_for_user_wrapper(state: &AppState, username: &str) -> Vec<InstanceView> {
-    let users_map = state.users.lock().unwrap().clone();
-    load_instances_for_user(&state.client, &state.api_base_url, &state.api_token, &users_map, username).await
-}
+// Wrappers moved to handlers::helpers
 
-// Wrapper for API calls with optional logging (moved to handlers::helpers)
-
-async fn load_products_wrapper(state: &AppState, region_id: &str) -> Vec<ProductView> {
-    load_products(&state.client, &state.api_base_url, &state.api_token, region_id).await
-}
-
-async fn load_regions_wrapper(state: &AppState) -> (Vec<Region>, HashMap<String, Region>) {
-    load_regions(&state.client, &state.api_base_url, &state.api_token).await
-}
-
-async fn load_os_list_wrapper(state: &AppState) -> Vec<OsItem> {
-    load_os_list(&state.client, &state.api_base_url, &state.api_token).await
-}
-
-// Now using UserRow from models
-
-async fn instances_real(State(state): State<AppState>, jar: CookieJar) -> impl IntoResponse {
-    let Some(username) = current_username_from_jar(&state, &jar) else {
-        return Redirect::to("/login").into_response();
-    };
-    let list = load_instances_for_user_wrapper(&state, &username).await;
-    let TemplateGlobals { current_user, api_hostname, base_url, flash_messages, has_flash_messages } = build_template_globals(&state, &jar);
-    render_template(&state, &jar, InstancesTemplate {
-            current_user,
-            api_hostname,
-            base_url,
-            flash_messages,
-            has_flash_messages,
-            instances: &list,
-        },
-    )
-}
 
 // Access management (owner only): list admins and assign instances
 // Moved to handlers/access.rs
@@ -204,682 +167,14 @@ async fn instances_real(State(state): State<AppState>, jar: CookieJar) -> impl I
 
 // Applications are rendered using `templates/applications.html` (path-based Askama template)
 
-async fn instance_detail(
-    State(state): State<AppState>,
-    jar: CookieJar,
-    axum::extract::Path(instance_id): axum::extract::Path<String>,
-) -> impl IntoResponse {
-    if let Some(r) = ensure_logged_in(&state, &jar) {
-        return r.into_response();
-    }
-    if let Some(r) = ensure_logged_in(&state, &jar) {
-        return r.into_response();
-    }
-    if !enforce_instance_access(&state, current_username_from_jar(&state, &jar).as_deref(), &instance_id).await {
-        return Redirect::to("/instances").into_response();
-    }
-    let endpoint = format!("/v1/instances/{}", instance_id);
-    let payload = api_call_wrapper(&state, "GET", &endpoint, None, None).await;
-    let _json = serde_json::to_string_pretty(&payload).unwrap_or_else(|_| "{}".into());
-    // Collect nice key-value pair details we want to display rather than raw JSON
-    let mut details: Vec<(String, String)> = Vec::new();
-    let mut hostname = "(no hostname)".to_string();
-    if let Some(obj) = payload.as_object() {
-        if let Some(data) = obj.get("data").and_then(|d| d.as_object()) {
-            hostname = data
-                .get("hostname")
-                .and_then(|v| v.as_str())
-                .unwrap_or("(no hostname)")
-                .to_string();
-            details.push(("Hostname".into(), hostname.clone()));
-            let status = data
-                .get("status")
-                .and_then(|v| v.as_str())
-                .unwrap_or("")
-                .to_string();
-            details.push(("Status".into(), status));
-            let region = data
-                .get("region")
-                .and_then(|v| v.as_str())
-                .unwrap_or("")
-                .to_string();
-            details.push(("Region".into(), region.clone()));
-            let class = data
-                .get("class")
-                .and_then(|v| v.as_str())
-                .unwrap_or("")
-                .to_string();
-            details.push(("Instance class".into(), class));
-            let product_id = data
-                .get("productId")
-                .and_then(|v| v.as_str())
-                .map(|s| s.to_string());
-            if let Some(pid) = product_id.clone() {
-                // Try to resolve product name using region-scoped product listing
-                let product_name = if !region.is_empty() && !pid.is_empty() {
-                    let products = load_products_wrapper(&state, &region).await;
-                    products
-                        .into_iter()
-                        .find(|p| p.id == pid)
-                        .map(|p| p.name)
-                        .unwrap_or(pid.clone())
-                } else {
-                    pid.clone()
-                };
-                details.push(("Product".into(), product_name));
-            }
-            let vcpu = data.get("vcpuCount").and_then(|v| v.as_i64()).map(|v| v.to_string());
-            if let Some(x) = vcpu { details.push(("vCPU".into(), x)); }
-            let ram = data.get("ram").and_then(|v| v.as_i64()).map(|v| format!("{} MB", v));
-            if let Some(x) = ram { details.push(("RAM".into(), x)); }
-            let disk = data.get("disk").and_then(|v| v.as_i64()).map(|v| format!("{} GB", v));
-            if let Some(x) = disk { details.push(("Disk".into(), x)); }
-            let ip = data.get("mainIp").and_then(|v| v.as_str()).map(|s| s.to_string());
-            if let Some(x) = ip { details.push(("IPv4".into(), x)); }
-            let ip6 = data.get("mainIpv6").and_then(|v| v.as_str()).map(|s| s.to_string());
-            if let Some(x) = ip6 { details.push(("IPv6".into(), x)); }
-            if let Some(os_obj) = data.get("os") {
-                let os_name = os_obj
-                    .get("name")
-                    .and_then(|v| v.as_str())
-                    .or_else(|| os_obj.get("id").and_then(|v| v.as_str()))
-                    .unwrap_or("")
-                    .to_string();
-                if !os_name.is_empty() { details.push(("OS".into(), os_name)); }
-            }
-            if let Some(inserted) = data.get("insertedAt").and_then(|v| v.as_str()).map(|s| s.to_string()) {
-                details.push(("Created".into(), inserted));
-            }
-            if let Some(features) = data.get("features").and_then(|v| v.as_array()) {
-                let mut features_list = Vec::new();
-                for item in features { if let Some(s) = item.as_str() { features_list.push(s.to_string()); } }
-                if !features_list.is_empty() { details.push(("Features".into(), features_list.join(", "))); }
-            }
-        }
-    }
-    let TemplateGlobals { current_user, api_hostname, base_url, flash_messages, has_flash_messages } = build_template_globals(&state, &jar);
-    render_template(&state, &jar, InstanceDetailTemplate {
-            current_user,
-            api_hostname,
-            base_url,
-            flash_messages,
-            has_flash_messages,
-            instance_id: instance_id.clone(),
-            hostname,
-            details,
-            is_disabled: state.is_instance_disabled(&instance_id),
-        },
-    )
-}
+// Instance handlers moved to handlers::instances
 
 
-// immediate instance_poweron action removed; use confirmation GET/POST handlers instead
-
-async fn instance_poweron_get(
-    State(state): State<AppState>,
-    jar: CookieJar,
-    axum::extract::Path(instance_id): axum::extract::Path<String>,
-) -> impl IntoResponse {
-    if let Some(r) = ensure_logged_in(&state, &jar) {
-        return r.into_response();
-    }
-    if !enforce_instance_access(&state, current_username_from_jar(&state, &jar).as_deref(), &instance_id).await {
-        return Redirect::to("/instances").into_response();
-    }
-    let endpoint = format!("/v1/instances/{}", instance_id);
-    let payload = api_call_wrapper(&state, "GET", &endpoint, None, None).await;
-    let mut instance = InstanceView { id: instance_id.clone(), hostname: "(no hostname)".into(), region: "".into(), main_ip: None, status: "".into(), vcpu_count_display: "—".into(), ram_display: "—".into(), disk_display: "—".into(), os: None };
-    if let Some(obj) = payload.as_object() {
-        if let Some(data) = obj.get("data").and_then(|d| d.as_object()) {
-            instance.hostname = data.get("hostname").and_then(|v| v.as_str()).unwrap_or(&instance.hostname).to_string();
-            instance.vcpu_count_display = data.get("vcpuCount").and_then(|v| v.as_i64()).map(|n| n.to_string()).unwrap_or_else(|| "—".into());
-            instance.ram_display = data.get("ram").and_then(|v| v.as_i64()).map(|n| format!("{} MB", n)).unwrap_or_else(|| "—".into());
-            instance.disk_display = data.get("disk").and_then(|v| v.as_i64()).map(|n| format!("{} GB", n)).unwrap_or_else(|| "—".into());
-            if let Some(os_obj) = data.get("os").and_then(|v| v.as_object()) {
-                instance.os = Some(OsItem {
-                    id: os_obj.get("id").and_then(|v| v.as_str()).unwrap_or("").to_string(),
-                    name: os_obj.get("name").and_then(|v| v.as_str()).unwrap_or("").to_string(),
-                    family: os_obj.get("family").and_then(|v| v.as_str()).unwrap_or("").to_string(),
-                    arch: os_obj.get("arch").and_then(|v| v.as_str()).map(|s| s.to_string()),
-                    min_ram: os_obj.get("minRam").and_then(|v| v.as_str()).map(|s| s.to_string()),
-                    is_default: os_obj.get("isDefault").and_then(|v| v.as_bool()).unwrap_or(false),
-                });
-            }
-            instance.region = data.get("region").and_then(|v| v.as_str()).unwrap_or("").to_string();
-            instance.main_ip = data.get("mainIp").and_then(|v| v.as_str()).map(|s| s.to_string());
-            instance.status = data.get("status").and_then(|v| v.as_str()).unwrap_or("").to_string();
-        }
-    }
-    let TemplateGlobals { current_user, api_hostname, base_url, flash_messages, has_flash_messages } = build_template_globals(&state, &jar);
-    render_template(&state, &jar, PowerOnInstanceTemplate { current_user, api_hostname, base_url, flash_messages, has_flash_messages, instance, is_disabled: state.is_instance_disabled(&instance_id) })
-}
-
-// POST handler for poweron
-async fn instance_poweron_post(
-    State(state): State<AppState>,
-    jar: CookieJar,
-    axum::extract::Path(instance_id): axum::extract::Path<String>,
-) -> impl IntoResponse {
-    if let Some(r) = ensure_logged_in(&state, &jar) {
-        return r.into_response();
-    }
-    if !enforce_instance_access(&state, current_username_from_jar(&state, &jar).as_deref(), &instance_id).await {
-        return Redirect::to("/instances").into_response();
-    }
-    if state.is_instance_disabled(&instance_id) {
-        if let Some(sid) = jar.get("session_id") {
-            let mut flashes = state.flash_store.lock().unwrap();
-            let entry = flashes.entry(sid.value().to_string()).or_default();
-            entry.push("Actions are disabled for this instance.".into());
-        }
-        return Redirect::to(&format!("/instance/{}", instance_id)).into_response();
-    }
-    let _ = simple_instance_action(&state, "poweron", &instance_id).await;
-    Redirect::to(&format!("/instance/{}", instance_id)).into_response()
-}
-// immediate instance_poweroff action removed; use confirmation GET/POST handlers instead
-// immediate instance_reset action removed; use confirmation GET/POST handlers instead
-
-// Render confirm page for delete (GET) and perform delete (POST implemented as instance_delete)
-async fn instance_delete_get(
-    State(state): State<AppState>,
-    jar: CookieJar,
-    axum::extract::Path(instance_id): axum::extract::Path<String>,
-) -> impl IntoResponse {
-    if let Some(r) = ensure_logged_in(&state, &jar) {
-        return r.into_response();
-    }
-    if !enforce_instance_access(&state, current_username_from_jar(&state, &jar).as_deref(), &instance_id).await {
-        return Redirect::to("/instances").into_response();
-    }
-    let endpoint = format!("/v1/instances/{}", instance_id);
-    let payload = api_call_wrapper(&state, "GET", &endpoint, None, None).await;
-    let mut instance = InstanceView { id: instance_id.clone(), hostname: "(no hostname)".into(), region: "".into(), main_ip: None, status: "".into(), vcpu_count_display: "—".into(), ram_display: "—".into(), disk_display: "—".into(), os: None };
-    if let Some(obj) = payload.as_object() {
-        if let Some(data) = obj.get("data").and_then(|d| d.as_object()) {
-            instance.hostname = data.get("hostname").and_then(|v| v.as_str()).unwrap_or(&instance.hostname).to_string();
-            instance.vcpu_count_display = data.get("vcpuCount").and_then(|v| v.as_i64()).map(|n| n.to_string()).unwrap_or_else(|| "—".into());
-            instance.ram_display = data.get("ram").and_then(|v| v.as_i64()).map(|n| format!("{} MB", n)).unwrap_or_else(|| "—".into());
-            instance.disk_display = data.get("disk").and_then(|v| v.as_i64()).map(|n| format!("{} GB", n)).unwrap_or_else(|| "—".into());
-            if let Some(os_obj) = data.get("os").and_then(|v| v.as_object()) {
-                instance.os = Some(OsItem {
-                    id: os_obj.get("id").and_then(|v| v.as_str()).unwrap_or("").to_string(),
-                    name: os_obj.get("name").and_then(|v| v.as_str()).unwrap_or("").to_string(),
-                    family: os_obj.get("family").and_then(|v| v.as_str()).unwrap_or("").to_string(),
-                    arch: os_obj.get("arch").and_then(|v| v.as_str()).map(|s| s.to_string()),
-                    min_ram: os_obj.get("minRam").and_then(|v| v.as_str()).map(|s| s.to_string()),
-                    is_default: os_obj.get("isDefault").and_then(|v| v.as_bool()).unwrap_or(false),
-                });
-            }
-            instance.region = data.get("region").and_then(|v| v.as_str()).unwrap_or("").to_string();
-            instance.main_ip = data.get("mainIp").and_then(|v| v.as_str()).map(|s| s.to_string());
-            instance.status = data.get("status").and_then(|v| v.as_str()).unwrap_or("").to_string();
-            instance.vcpu_count_display = data.get("vcpuCount").and_then(|v| v.as_i64()).map(|n| n.to_string()).unwrap_or_else(|| "—".into());
-            instance.ram_display = data.get("ram").and_then(|v| v.as_i64()).map(|n| format!("{} MB", n)).unwrap_or_else(|| "—".into());
-            instance.disk_display = data.get("disk").and_then(|v| v.as_i64()).map(|n| format!("{} GB", n)).unwrap_or_else(|| "—".into());
-        }
-    }
-    let TemplateGlobals { current_user, api_hostname, base_url, flash_messages, has_flash_messages } = build_template_globals(&state, &jar);
-    render_template(&state, &jar, DeleteInstanceTemplate { current_user, api_hostname, base_url, flash_messages, has_flash_messages, instance, is_disabled: state.is_instance_disabled(&instance_id) })
-}
-
-// Render confirm page for poweroff (GET) and perform poweroff (POST handler below)
-async fn instance_poweroff_get(
-    State(state): State<AppState>,
-    jar: CookieJar,
-    axum::extract::Path(instance_id): axum::extract::Path<String>,
-) -> impl IntoResponse {
-    if let Some(r) = ensure_logged_in(&state, &jar) {
-        return r.into_response();
-    }
-    if !enforce_instance_access(&state, current_username_from_jar(&state, &jar).as_deref(), &instance_id).await {
-        return Redirect::to("/instances").into_response();
-    }
-    let endpoint = format!("/v1/instances/{}", instance_id);
-    let payload = api_call_wrapper(&state, "GET", &endpoint, None, None).await;
-    let mut instance = InstanceView { id: instance_id.clone(), hostname: "(no hostname)".into(), region: "".into(), main_ip: None, status: "".into(), vcpu_count_display: "—".into(), ram_display: "—".into(), disk_display: "—".into(), os: None };
-    if let Some(obj) = payload.as_object() {
-        if let Some(data) = obj.get("data").and_then(|d| d.as_object()) {
-            instance.hostname = data.get("hostname").and_then(|v| v.as_str()).unwrap_or(&instance.hostname).to_string();
-            instance.region = data.get("region").and_then(|v| v.as_str()).unwrap_or("").to_string();
-            instance.main_ip = data.get("mainIp").and_then(|v| v.as_str()).map(|s| s.to_string());
-            instance.status = data.get("status").and_then(|v| v.as_str()).unwrap_or("").to_string();
-        }
-    }
-    let TemplateGlobals { current_user, api_hostname, base_url, flash_messages, has_flash_messages } = build_template_globals(&state, &jar);
-    render_template(&state, &jar, PowerOffInstanceTemplate { current_user, api_hostname, base_url, flash_messages, has_flash_messages, instance, is_disabled: state.is_instance_disabled(&instance_id) })
-}
-
-// POST handler for poweroff
-async fn instance_poweroff_post(
-    State(state): State<AppState>,
-    jar: CookieJar,
-    axum::extract::Path(instance_id): axum::extract::Path<String>,
-) -> impl IntoResponse {
-    if let Some(r) = ensure_logged_in(&state, &jar) {
-        return r.into_response();
-    }
-    if !enforce_instance_access(&state, current_username_from_jar(&state, &jar).as_deref(), &instance_id).await {
-        return Redirect::to("/instances").into_response();
-    }
-    if state.is_instance_disabled(&instance_id) {
-        if let Some(sid) = jar.get("session_id") {
-            let mut flashes = state.flash_store.lock().unwrap();
-            let entry = flashes.entry(sid.value().to_string()).or_default();
-            entry.push("Actions are disabled for this instance.".into());
-        }
-        return Redirect::to(&format!("/instance/{}", instance_id)).into_response();
-    }
-    let _ = simple_instance_action(&state, "poweroff", &instance_id).await;
-    Redirect::to(&format!("/instance/{}", instance_id)).into_response()
-}
-
-// Render confirm page for reset
-async fn instance_reset_get(
-    State(state): State<AppState>,
-    jar: CookieJar,
-    axum::extract::Path(instance_id): axum::extract::Path<String>,
-) -> impl IntoResponse {
-    if let Some(r) = ensure_logged_in(&state, &jar) {
-        return r.into_response();
-    }
-    if !enforce_instance_access(&state, current_username_from_jar(&state, &jar).as_deref(), &instance_id).await {
-        return Redirect::to("/instances").into_response();
-    }
-    let endpoint = format!("/v1/instances/{}", instance_id);
-    let payload = api_call_wrapper(&state, "GET", &endpoint, None, None).await;
-    let mut instance = InstanceView { id: instance_id.clone(), hostname: "(no hostname)".into(), region: "".into(), main_ip: None, status: "".into(), vcpu_count_display: "—".into(), ram_display: "—".into(), disk_display: "—".into(), os: None };
-    if let Some(obj) = payload.as_object() {
-        if let Some(data) = obj.get("data").and_then(|d| d.as_object()) {
-            instance.hostname = data.get("hostname").and_then(|v| v.as_str()).unwrap_or(&instance.hostname).to_string();
-            instance.region = data.get("region").and_then(|v| v.as_str()).unwrap_or("").to_string();
-            instance.main_ip = data.get("mainIp").and_then(|v| v.as_str()).map(|s| s.to_string());
-            instance.status = data.get("status").and_then(|v| v.as_str()).unwrap_or("").to_string();
-        }
-    }
-    let TemplateGlobals { current_user, api_hostname, base_url, flash_messages, has_flash_messages } = build_template_globals(&state, &jar);
-    render_template(&state, &jar, ResetInstanceTemplate { current_user, api_hostname, base_url, flash_messages, has_flash_messages, instance, is_disabled: state.is_instance_disabled(&instance_id) })
-}
-
-// POST handler for reset
-async fn instance_reset_post(
-    State(state): State<AppState>,
-    jar: CookieJar,
-    axum::extract::Path(instance_id): axum::extract::Path<String>,
-) -> impl IntoResponse {
-    if let Some(r) = ensure_logged_in(&state, &jar) {
-        return r.into_response();
-    }
-    if !enforce_instance_access(&state, current_username_from_jar(&state, &jar).as_deref(), &instance_id).await {
-        return Redirect::to("/instances").into_response();
-    }
-    if state.is_instance_disabled(&instance_id) {
-        if let Some(sid) = jar.get("session_id") {
-            let mut flashes = state.flash_store.lock().unwrap();
-            let entry = flashes.entry(sid.value().to_string()).or_default();
-            entry.push("Actions are disabled for this instance.".into());
-        }
-        return Redirect::to(&format!("/instance/{}", instance_id)).into_response();
-    }
-    let _ = simple_instance_action(&state, "reset", &instance_id).await;
-    Redirect::to(&format!("/instance/{}", instance_id)).into_response()
-}
-
-// GET confirm page for change password
-async fn instance_change_pass_get(
-    State(state): State<AppState>,
-    jar: CookieJar,
-    axum::extract::Path(instance_id): axum::extract::Path<String>,
-) -> impl IntoResponse {
-    if let Some(r) = ensure_logged_in(&state, &jar) {
-        return r.into_response();
-    }
-    if !enforce_instance_access(&state, current_username_from_jar(&state, &jar).as_deref(), &instance_id).await {
-        return Redirect::to("/instances").into_response();
-    }
-    let endpoint = format!("/v1/instances/{}", instance_id);
-    let payload = api_call_wrapper(&state, "GET", &endpoint, None, None).await;
-    let mut instance = InstanceView { id: instance_id.clone(), hostname: "(no hostname)".into(), region: "".into(), main_ip: None, status: "".into(), vcpu_count_display: "—".into(), ram_display: "—".into(), disk_display: "—".into(), os: None };
-    if let Some(obj) = payload.as_object() {
-        if let Some(data) = obj.get("data").and_then(|d| d.as_object()) {
-            instance.hostname = data.get("hostname").and_then(|v| v.as_str()).unwrap_or(&instance.hostname).to_string();
-            instance.region = data.get("region").and_then(|v| v.as_str()).unwrap_or("").to_string();
-            instance.main_ip = data.get("mainIp").and_then(|v| v.as_str()).map(|s| s.to_string());
-            instance.status = data.get("status").and_then(|v| v.as_str()).unwrap_or("").to_string();
-        }
-    }
-    let TemplateGlobals { current_user, api_hostname, base_url, flash_messages, has_flash_messages } = build_template_globals(&state, &jar);
-    render_template(&state, &jar, ChangePassInstanceTemplate { current_user, api_hostname, base_url, flash_messages, has_flash_messages, instance, new_password: None, is_disabled: state.is_instance_disabled(&instance_id) })
-}
-
-// POST handler for change-pass; display generated password in template
-async fn instance_change_pass_post(
-    State(state): State<AppState>,
-    jar: CookieJar,
-    axum::extract::Path(instance_id): axum::extract::Path<String>,
-) -> impl IntoResponse {
-    if let Some(r) = ensure_logged_in(&state, &jar) {
-        return r.into_response();
-    }
-    if !enforce_instance_access(&state, current_username_from_jar(&state, &jar).as_deref(), &instance_id).await {
-        return Redirect::to("/instances").into_response();
-    }
-    if state.is_instance_disabled(&instance_id) {
-        if let Some(sid) = jar.get("session_id") {
-            let mut flashes = state.flash_store.lock().unwrap();
-            let entry = flashes.entry(sid.value().to_string()).or_default();
-            entry.push("Actions are disabled for this instance.".into());
-        }
-        return Redirect::to(&format!("/instance/{}/change-pass", instance_id)).into_response();
-    }
-    let endpoint = format!("/v1/instances/{}/change-pass", instance_id);
-    let payload = api_call_wrapper(&state, "POST", &endpoint, None, None).await;
-    let new_password = payload.get("data").and_then(|d| d.get("password")).and_then(|v| v.as_str()).map(|s| s.to_string());
-    // Fetch instance details for rendering
-    let get_endpoint = format!("/v1/instances/{}", instance_id);
-    let payload2 = api_call_wrapper(&state, "GET", &get_endpoint, None, None).await;
-    let mut instance = InstanceView { id: instance_id.clone(), hostname: "(no hostname)".into(), region: "".into(), main_ip: None, status: "".into(), vcpu_count_display: "—".into(), ram_display: "—".into(), disk_display: "—".into(), os: None };
-    if let Some(obj) = payload2.as_object() {
-        if let Some(data) = obj.get("data").and_then(|d| d.as_object()) {
-            instance.hostname = data.get("hostname").and_then(|v| v.as_str()).unwrap_or(&instance.hostname).to_string();
-            instance.region = data.get("region").and_then(|v| v.as_str()).unwrap_or("").to_string();
-            instance.main_ip = data.get("mainIp").and_then(|v| v.as_str()).map(|s| s.to_string());
-            instance.status = data.get("status").and_then(|v| v.as_str()).unwrap_or("").to_string();
-        }
-    }
-    let TemplateGlobals { current_user, api_hostname, base_url, flash_messages, has_flash_messages } = build_template_globals(&state, &jar);
-    render_template(&state, &jar, ChangePassInstanceTemplate { current_user, api_hostname, base_url, flash_messages, has_flash_messages, instance, new_password, is_disabled: state.is_instance_disabled(&instance_id) })
-}
-
-async fn instance_delete(
-    State(state): State<AppState>,
-    jar: CookieJar,
-    axum::extract::Path(instance_id): axum::extract::Path<String>,
-) -> impl IntoResponse {
-    if let Some(r) = ensure_logged_in(&state, &jar) {
-        return r.into_response();
-    }
-    if !enforce_instance_access(&state, current_username_from_jar(&state, &jar).as_deref(), &instance_id).await {
-        return Redirect::to("/instances").into_response();
-    }
-    if state.is_instance_disabled(&instance_id) {
-        if let Some(sid) = jar.get("session_id") {
-            let mut flashes = state.flash_store.lock().unwrap();
-            let entry = flashes.entry(sid.value().to_string()).or_default();
-            entry.push("Actions are disabled for this instance.".into());
-        }
-        return Redirect::to(&format!("/instance/{}", instance_id)).into_response();
-    }
-    let endpoint = format!("/v1/instances/{}", instance_id);
-    let payload = api_call_wrapper(&state, "DELETE", &endpoint, None, None).await;
-    
-    let success = payload.get("code").and_then(|c| c.as_str()) == Some("OKAY");
-    
-    if success {
-        // Remove assignment from all users
-        {
-            let mut users = state.users.lock().unwrap();
-            for (_, rec) in users.iter_mut() {
-                if rec.assigned_instances.contains(&instance_id) {
-                    rec.assigned_instances.retain(|x| x != &instance_id);
-                }
-            }
-        }
-        // Persist changes
-        if let Err(e) = persist_users_file(&state.users).await {
-            tracing::error!(%e, "Failed to persist users after instance deletion");
-        }
-    }
-
-    // Optionally set flash message for success or failure
-    if let Some(sid) = jar.get("session_id") {
-        let mut flashes = state.flash_store.lock().unwrap();
-        let entry = flashes.entry(sid.value().to_string()).or_default();
-        if success {
-            entry.push("Instance deleted successfully.".into());
-            return Redirect::to("/instances").into_response();
-        } else {
-            let detail = payload.get("detail").and_then(|d| d.as_str()).unwrap_or("Unknown error");
-            entry.push(format!("Delete failed: {}", detail));
-            return Redirect::to(&format!("/instance/{}", instance_id)).into_response();
-        }
-    }
-    
-    // If no session-id in cookie, still redirect based on result
-    if success {
-        Redirect::to("/instances").into_response()
-    } else {
-        Redirect::to(&format!("/instance/{}", instance_id)).into_response()
-    }
-}
 
 
-async fn instance_add_traffic(
-    State(state): State<AppState>,
-    jar: CookieJar,
-    axum::extract::Path(instance_id): axum::extract::Path<String>,
-    Form(form): Form<AddTrafficForm>,
-) -> impl IntoResponse {
-    if !enforce_instance_access(&state, current_username_from_jar(&state, &jar).as_deref(), &instance_id).await {
-        return Redirect::to("/instances").into_response();
-    }
-    if state.is_instance_disabled(&instance_id) {
-        if let Some(sid) = jar.get("session_id") {
-            let mut flashes = state.flash_store.lock().unwrap();
-            let entry = flashes.entry(sid.value().to_string()).or_default();
-            entry.push("Actions are disabled for this instance.".into());
-        }
-        return Redirect::to(&format!("/instance/{}", instance_id)).into_response();
-    }
-    if let Ok(amount) = form.traffic_amount.parse::<f64>() {
-        if amount > 0.0 {
-            let endpoint = format!("/v1/instances/{}/add-traffic", instance_id);
-            let payload = serde_json::json!({"amount": amount});
-            let _ = api_call_wrapper(&state, "POST", &endpoint, Some(payload), None).await;
-        }
-    }
-    Redirect::to(&format!("/instance/{}", instance_id)).into_response()
-}
 
 
-async fn instance_change_os_get(
-    State(state): State<AppState>,
-    jar: CookieJar,
-    axum::extract::Path(instance_id): axum::extract::Path<String>,
-) -> impl IntoResponse {
-    if let Some(r) = ensure_logged_in(&state, &jar) {
-        return r.into_response();
-    }
-    if !enforce_instance_access(&state, current_username_from_jar(&state, &jar).as_deref(), &instance_id).await {
-        return Redirect::to("/instances").into_response();
-    }
-    let endpoint = format!("/v1/instances/{}", instance_id);
-    let payload = api_call_wrapper(&state, "GET", &endpoint, None, None).await;
-    let mut instance = InstanceView { id: instance_id.clone(), hostname: "(no hostname)".into(), region: "".into(), main_ip: None, status: "".into(), vcpu_count_display: "—".into(), ram_display: "—".into(), disk_display: "—".into(), os: None };
-    if let Some(obj) = payload.as_object() {
-        if let Some(data) = obj.get("data").and_then(|d| d.as_object()) {
-            instance.hostname = data.get("hostname").and_then(|v| v.as_str()).unwrap_or(&instance.hostname).to_string();
-            if let Some(os_obj) = data.get("os").and_then(|v| v.as_object()) {
-                instance.os = Some(OsItem {
-                    id: os_obj.get("id").and_then(|v| v.as_str()).unwrap_or("").to_string(),
-                    name: os_obj.get("name").and_then(|v| v.as_str()).unwrap_or("").to_string(),
-                    family: os_obj.get("family").and_then(|v| v.as_str()).unwrap_or("").to_string(),
-                    arch: os_obj.get("arch").and_then(|v| v.as_str()).map(|s| s.to_string()),
-                    min_ram: os_obj.get("minRam").and_then(|v| v.as_str()).map(|s| s.to_string()),
-                    is_default: os_obj.get("isDefault").and_then(|v| v.as_bool()).unwrap_or(false),
-                });
-            }
-            instance.region = data.get("region").and_then(|v| v.as_str()).unwrap_or("").to_string();
-            instance.main_ip = data.get("mainIp").and_then(|v| v.as_str()).map(|s| s.to_string());
-            instance.status = data.get("status").and_then(|v| v.as_str()).unwrap_or("").to_string();
-        }
-    }
-    let os_list = load_os_list_wrapper(&state).await;
-    let TemplateGlobals { current_user, api_hostname, base_url, flash_messages, has_flash_messages } = build_template_globals(&state, &jar);
-    render_template(&state, &jar, ChangeOsTemplate { current_user, api_hostname, base_url, flash_messages, has_flash_messages, instance, os_list: &os_list, is_disabled: state.is_instance_disabled(&instance_id) })
-}
 
-async fn instance_change_os_post(
-    State(state): State<AppState>,
-    jar: CookieJar,
-    axum::extract::Path(instance_id): axum::extract::Path<String>,
-    Form(form): Form<ChangeOsForm>,
-) -> impl IntoResponse {
-    if let Some(r) = ensure_logged_in(&state, &jar) {
-        return r.into_response();
-    }
-    if !enforce_instance_access(&state, current_username_from_jar(&state, &jar).as_deref(), &instance_id).await {
-        return Redirect::to("/instances").into_response();
-    }
-    if state.is_instance_disabled(&instance_id) {
-        if let Some(sid) = jar.get("session_id") {
-            let mut flashes = state.flash_store.lock().unwrap();
-            let entry = flashes.entry(sid.value().to_string()).or_default();
-            entry.push("Actions are disabled for this instance.".into());
-        }
-        return Redirect::to(&format!("/instance/{}/change-os", instance_id)).into_response();
-    }
-    if form.os_id.trim().is_empty() {
-        return Redirect::to(&format!("/instance/{}/change-os", instance_id)).into_response();
-    }
-    let endpoint = format!("/v1/instances/{}/change-os", instance_id);
-    let payload = serde_json::json!({"osId": form.os_id});
-    let _ = api_call_wrapper(&state, "POST", &endpoint, Some(payload), None).await;
-    Redirect::to(&format!("/instance/{}", instance_id)).into_response()
-}
-
-
-async fn instance_resize_get(
-    State(state): State<AppState>,
-    jar: CookieJar,
-    axum::extract::Path(instance_id): axum::extract::Path<String>,
-) -> impl IntoResponse {
-    if let Some(r) = ensure_logged_in(&state, &jar) {
-        return r.into_response();
-    }
-    if !enforce_instance_access(&state, current_username_from_jar(&state, &jar).as_deref(), &instance_id).await {
-        return Redirect::to("/instances").into_response();
-    }
-    let endpoint = format!("/v1/instances/{}", instance_id);
-    let payload = api_call_wrapper(&state, "GET", &endpoint, None, None).await;
-    let mut instance = InstanceView { id: instance_id.clone(), hostname: "(no hostname)".into(), region: "".into(), main_ip: None, status: "".into(), vcpu_count_display: "—".into(), ram_display: "—".into(), disk_display: "—".into(), os: None };
-    if let Some(obj) = payload.as_object() {
-        if let Some(data) = obj.get("data").and_then(|d| d.as_object()) {
-            instance.hostname = data.get("hostname").and_then(|v| v.as_str()).unwrap_or(&instance.hostname).to_string();
-            instance.region = data.get("region").and_then(|v| v.as_str()).unwrap_or("").to_string();
-            instance.main_ip = data.get("mainIp").and_then(|v| v.as_str()).map(|s| s.to_string());
-            instance.status = data.get("status").and_then(|v| v.as_str()).unwrap_or("").to_string();
-        }
-    }
-    let (regions, _map) = load_regions_wrapper(&state).await;
-    let TemplateGlobals { current_user, api_hostname, base_url, flash_messages, has_flash_messages } = build_template_globals(&state, &jar);
-    render_template(&state, &jar, ResizeTemplate { current_user, api_hostname, base_url, flash_messages, has_flash_messages, instance, regions: &regions, is_disabled: state.is_instance_disabled(&instance_id) })
-}
-
-async fn instance_resize_post(
-    State(state): State<AppState>,
-    jar: CookieJar,
-    axum::extract::Path(instance_id): axum::extract::Path<String>,
-    Form(form): Form<ResizeForm>,
-) -> impl IntoResponse {
-    if let Some(r) = ensure_logged_in(&state, &jar) {
-        return r.into_response();
-    }
-    if !enforce_instance_access(&state, current_username_from_jar(&state, &jar).as_deref(), &instance_id).await {
-        return Redirect::to("/instances").into_response();
-    }
-    if state.is_instance_disabled(&instance_id) {
-        if let Some(sid) = jar.get("session_id") {
-            let mut flashes = state.flash_store.lock().unwrap();
-            let entry = flashes.entry(sid.value().to_string()).or_default();
-            entry.push("Actions are disabled for this instance.".into());
-        }
-        return Redirect::to(&format!("/instance/{}/resize", instance_id)).into_response();
-    }
-    let endpoint = format!("/v1/instances/{}/resize", instance_id);
-    let mut payload = serde_json::json!({"type": form.r#type});
-    if form.r#type.to_uppercase() == "FIXED" {
-        if let Some(pid) = form.product_id {
-            payload["productId"] = Value::from(pid);
-        }
-    } else {
-        let mut obj = serde_json::Map::new();
-        if let Some(rid) = form.region_id { obj.insert("regionId".into(), Value::from(rid)); }
-        if let Some(cpu) = form.cpu { if let Ok(n) = cpu.parse::<i64>() { obj.insert("cpu".into(), Value::from(n)); }}
-        if let Some(ram) = form.ram_in_gb { if let Ok(n) = ram.parse::<i64>() { obj.insert("ramInGB".into(), Value::from(n)); }}
-        if let Some(disk) = form.disk_in_gb { if let Ok(n) = disk.parse::<i64>() { obj.insert("diskInGB".into(), Value::from(n)); }}
-        if let Some(bw) = form.bandwidth_in_tb { if let Ok(n) = bw.parse::<i64>() { obj.insert("bandwidthInTB".into(), Value::from(n)); }}
-        if !obj.is_empty() {
-            payload["resource"] = Value::Object(obj);
-        }
-    }
-    let _ = api_call_wrapper(&state, "POST", &endpoint, Some(payload), None).await;
-    Redirect::to(&format!("/instance/{}", instance_id)).into_response()
-}
-
-// Subscription refund
-async fn instance_subscription_refund(
-    State(state): State<AppState>,
-    jar: CookieJar,
-    axum::extract::Path(instance_id): axum::extract::Path<String>,
-) -> impl IntoResponse {
-    if !enforce_instance_access(&state, current_username_from_jar(&state, &jar).as_deref(), &instance_id).await {
-        return Redirect::to("/instances").into_response();
-    }
-    let endpoint = format!("/v1/instances/{}/subscription-refund", instance_id);
-    let payload = api_call_wrapper(&state, "GET", &endpoint, None, None).await;
-    Html(format!("<html><body><h1>Refund {}</h1><pre>{}</pre><p><a href='/instance/{}'>Back</a></p></body></html>", instance_id, serde_json::to_string_pretty(&payload).unwrap_or("{}" .into()), instance_id)).into_response()
-}
-
-// Bulk subscription refund (owner)
-// Bulk refund page is rendered via `templates/bulk_refund.html` (path-based Askama template)
-
-#[derive(Deserialize)]
-struct BulkRefundForm {
-    ids: String,
-}
-
-async fn bulk_subscription_refund(
-    State(state): State<AppState>,
-    jar: CookieJar,
-    Form(form): Form<BulkRefundForm>,
-) -> impl IntoResponse {
-    if let Some(r) = ensure_owner(&state, &jar) {
-        return r.into_response();
-    }
-    let ids: Vec<String> = form
-        .ids
-        .split(',')
-        .map(|s| s.trim().to_string())
-        .filter(|s| !s.is_empty())
-        .collect();
-    let payload = serde_json::json!({"ids": ids});
-    let resp = api_call_wrapper(
-        &state,
-        "POST",
-        "/v1/instances/bulk-subscription-refund",
-        Some(payload),
-        None,
-    )
-    .await;
-    Html(format!("<html><body><h1>Bulk Refund Result</h1><pre>{}</pre><p><a href='/instances'>Back</a></p></body></html>", serde_json::to_string_pretty(&resp).unwrap_or("{}" .into()))).into_response()
-}
-async fn bulk_subscription_refund_get(
-    State(state): State<AppState>,
-    jar: CookieJar,
-) -> impl IntoResponse {
-    if let Some(r) = ensure_owner(&state, &jar) {
-        return r.into_response();
-    }
-    let TemplateGlobals { current_user, api_hostname, base_url, flash_messages, has_flash_messages } = build_template_globals(&state, &jar);
-    render_template(&state, &jar, BulkRefundTemplate {
-            current_user,
-            api_hostname,
-            base_url,
-            flash_messages,
-            has_flash_messages,
-        })
-}
 
 #[derive(Parser)]
 #[command(
@@ -1166,7 +461,7 @@ async fn main() {
             match sub {
                 InstanceCommands::List { username } => {
                     let uname = username.unwrap_or_default();
-                    let list = load_instances_for_user_wrapper(&state, &uname).await;
+                    let list = handlers::helpers::load_instances_for_user_wrapper(&state, &uname).await;
                     println!("id\thostname\tstatus");
                     for i in list {
                         println!("{}\t{}\t{}", i.id, i.hostname, i.status);
