@@ -120,6 +120,7 @@ pub fn ensure_owner(state: &AppState, jar: &CookieJar) -> Option<Redirect> {
     Some(Redirect::to("/"))
 }
 
+#[allow(dead_code)]
 pub fn ensure_logged_in(state: &AppState, jar: &CookieJar) -> Option<Redirect> {
     if current_username_from_jar(state, jar).is_none() {
         return Some(Redirect::to("/login"));

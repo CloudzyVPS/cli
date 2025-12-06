@@ -13,7 +13,7 @@ use crate::models::{
 };
 use crate::services::{parse_wizard_base, build_base_query_pairs};
 use crate::utils::{build_query_string, parse_urlencoded_body};
-use crate::api::{api_call, load_regions, load_products, load_os_list};
+use crate::api::{load_regions, load_products, load_os_list};
 use crate::templates::*;
 use crate::handlers::helpers::{
     build_template_globals, absolute_url_from_state,

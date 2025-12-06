@@ -7,10 +7,10 @@ use std::collections::HashMap;
 use serde::Deserialize;
 use serde_json::Value;
 
-use crate::models::{AppState, SshKeyView};
+use crate::models::AppState;
 use crate::templates::SshKeysTemplate;
 use crate::handlers::helpers::{
-    build_template_globals, current_username_from_jar, ensure_owner,
+    build_template_globals, ensure_owner,
     fetch_default_customer_id, render_template, TemplateGlobals,
     detail_requires_customer, api_call_wrapper, load_ssh_keys_api,
     plain_html,
