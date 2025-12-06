@@ -648,7 +648,11 @@ async fn create_step_7_core(
                 payload["extraResource"] = Value::Object(extras);
             }
         }
-        let resp = api_call_wrapper(&state, "POST", "/v1/instances", Some(payload), None).await;
+        let resp = api_call_wrapper(&state, "POST", "/v1/instances", Some(payload.clone()), None).await;
+        
+        // Debug logging for creation failure
+        tracing::info!(?payload, ?resp, "Create Instance Attempt");
+
         if resp.get("code").and_then(|c| c.as_str()) == Some("OKAY")
             || resp.get("code").and_then(|c| c.as_str()) == Some("CREATED")
         {
