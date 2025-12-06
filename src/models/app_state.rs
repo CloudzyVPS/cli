@@ -14,6 +14,7 @@ pub struct AppState {
     pub public_base_url: String,
     pub client: reqwest::Client,
     pub disabled_instances: Arc<std::collections::HashSet<String>>,
+    pub custom_css: Option<String>,
 }
 
 impl AppState {
