@@ -45,7 +45,7 @@ pub fn validate_username(username: &str) -> Result<(), String> {
     }
     
     // Must start with a letter
-    if !username.chars().next().unwrap().is_alphabetic() {
+    if !username.chars().next().map_or(false, |c| c.is_alphabetic()) {
         return Err("Username must start with a letter".to_string());
     }
     

@@ -26,9 +26,12 @@ impl AppState {
     /// Clean up expired sessions
     #[allow(dead_code)]
     pub fn cleanup_expired_sessions(&self, max_age_seconds: u64, idle_timeout_seconds: u64) {
-        let mut sessions = self.sessions.lock().unwrap();
-        sessions.retain(|_, session| {
-            !session.is_expired(max_age_seconds) && !session.is_idle(idle_timeout_seconds)
-        });
+        if let Ok(mut sessions) = self.sessions.lock() {
+            sessions.retain(|_, session| {
+                !session.is_expired(max_age_seconds) && !session.is_idle(idle_timeout_seconds)
+            });
+        } else {
+            tracing::error!("Failed to acquire sessions lock during cleanup");
+        }
     }
 }
