@@ -6,12 +6,17 @@
     <title>{% block title %}Zy{% endblock %}</title>
     <base href="{{ base_url }}/">
     <link rel="stylesheet" href="/static/styles.css">
+    <link rel="stylesheet" href="/static/tablet.css" media="(min-width: 768px)">
 </head>
 <body>
     {% if current_user.is_some() %}
     <nav>
+        <input type="checkbox" id="nav-toggle" class="nav-toggle">
         <header>
             <div>
+                <label for="nav-toggle" class="nav-toggle-label">
+                    <span></span>
+                </label>
                 <b aria-label="Zy">
                     <span>ZY</span>
                 </b>
