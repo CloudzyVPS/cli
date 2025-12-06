@@ -26,6 +26,7 @@
             <label class="product-card" role="listitem" {% if selected_product_id == product.id %}aria-current="true"{% endif %}>
                 <input type="radio" name="product_id" value="{{ product.id }}" {% if selected_product_id == product.id %}checked{% endif %}>
                 <div class="product-card-body">
+                    <h2>{{ product.display_name }}</h2>
                     {% if product.price_entries.len() > 0 %}
                     {% for entry in product.price_entries %}
                         {% if loop.index == 1 %}
@@ -33,22 +34,37 @@
                         {% endif %}
                     {% endfor %}
                     {% endif %}
-                    <div class="product-highlights">
-                        {% if product.cpu.is_some() %}
-                        <span><strong>CPU:</strong> {{ product.cpu.as_ref().unwrap() }}</span>
+                    {% if product.spec_entries.len() > 0 %}
+                    <div class="spec-badges">
+                        {% for entry in product.spec_entries %}
+                        {% if loop.index <= 3 %}
+                        <span class="badge">{{ entry.term }}: {{ entry.value }}</span>
                         {% endif %}
-                        {% if product.ram.is_some() %}
-                        <span><strong>RAM:</strong> {{ product.ram.as_ref().unwrap() }}</span>
-                        {% endif %}
-                        {% if product.storage.is_some() %}
-                        <span><strong>Storage:</strong> {{ product.storage.as_ref().unwrap() }}</span>
-                        {% endif %}
-                        {% if product.bandwidth.is_some() %}
-                        <span><strong>Bandwidth:</strong> {{ product.bandwidth.as_ref().unwrap() }}</span>
-                        {% endif %}
+                        {% endfor %}
                     </div>
+                    {% endif %}
                     {% if product.description != "" %}
                     <p>{{ product.description }}</p>
+                    {% endif %}
+                    {% if product.spec_entries.len() > 0 %}
+                    <dl>
+                        {% for entry in product.spec_entries %}
+                        <div>
+                            <dt>{{ entry.term }}</dt>
+                            <dd>{{ entry.value }}</dd>
+                        </div>
+                        {% endfor %}
+                    </dl>
+                    {% endif %}
+                    {% if product.price_entries.len() > 0 %}
+                    <dl class="pricing">
+                        {% for entry in product.price_entries %}
+                        <div>
+                            <dt>{{ entry.term }}</dt>
+                            <dd>{{ entry.value }}</dd>
+                        </div>
+                        {% endfor %}
+                    </dl>
                     {% endif %}
                     {% if product.tags != "" %}
                     <footer>

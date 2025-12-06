@@ -59,7 +59,7 @@
     {% endif %}
 
     {% if new_password.is_some() %}
-    <div class="success-banner" style="margin-top:2em">
+    <div class="success-banner mt-6">
         <h2>New Password</h2>
         <p><code>{{ new_password.as_ref().unwrap() }}</code></p>
         <p>Please copy and store this password securely. It will not be shown again.</p>

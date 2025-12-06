@@ -26,39 +26,18 @@
                 <tbody>
                     {% for row in rows %}
                     <tr>
-                                <td>{{ row.username }}</td>
-                                <td>{{ row.role }}</td>
-                                <td>
-                                    {% if row.role == "admin" %}
-                                        {{ row.assigned }}
-                                    {% else %}
-                                        &mdash;
-                                    {% endif %}
-                        </td>
+                        <td><a href="{{ base_url }}/users/{{ row.username }}">{{ row.username }}</a></td>
+                        <td>{{ row.role }}</td>
                         <td>
-                            <div class="action-grid">
-                                <form method="post" action="{{ base_url }}/users/{{ row.username }}/role">
-                                    <label class="form-label">Role</label>
-                                    <div class="d-flex gap-sm">
-                                        <select name="role" class="form-control form-select">
-                                            <option value="owner" {% if row.role == "owner" %}selected{% endif %}>Owner</option>
-                                            <option value="admin" {% if row.role == "admin" %}selected{% endif %}>Admin</option>
-                                        </select>
-                                        <button type="submit" class="btn btn-secondary btn-sm">Update</button>
-                                    </div>
-                                </form>
-                                <form method="post" action="{{ base_url }}/users/{{ row.username }}/reset-password">
-                                    <label class="form-label">Reset Password</label>
-                                    <div class="d-flex gap-sm">
-                                        <input type="password" name="new_password" class="form-control" placeholder="New password" required>
-                                        <button type="submit" class="btn btn-warning btn-sm">Save</button>
-                                    </div>
-                                </form>
-                                <form method="post" action="{{ base_url }}/users/{{ row.username }}/delete">
-                                    <label class="form-label">Remove</label>
-                                    <button type="submit" class="btn btn-danger btn-sm">Delete</button>
-                                </form>
-                            </div>
+                            {% if row.role == "admin" %}
+                            {{ row.assigned }}
+                            {% else %}
+                            &mdash;
+                            {% endif %}
+                        </td>
+                        <td class="text-right">
+                            <a href="{{ base_url }}/users/{{ row.username }}"
+                                class="btn-secondary btn-sm">Manage</a>
                         </td>
                     </tr>
                     {% endfor %}
@@ -90,7 +69,7 @@
                 </select>
             </div>
             <div class="form-actions">
-                <button type="submit" class="btn btn-primary">Create User</button>
+                <button type="submit" class="btn-primary">Create User</button>
             </div>
         </form>
     </div>
