@@ -151,7 +151,7 @@ async fn start_server(mut state: AppState, host: &str, port: u16, stylesheet: Op
         }
     };
     let app = build_app(state.clone());
-    tracing::info!(%addr, "Starting Zyffiliate Rust server");
+    tracing::info!(%addr, "Starting Zy Rust server");
     match tokio::net::TcpListener::bind(addr).await {
         Ok(listener) => {
             // Run the server and log any errors (do not panic with unwrap()).

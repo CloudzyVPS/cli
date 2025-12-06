@@ -9,7 +9,7 @@ use crate::api::{load_applications, load_os_list, load_products, load_regions};
 use crate::models::AppState;
 use crate::templates::{ApplicationsTemplate, OsCatalogTemplate, ProductsPageTemplate, RegionsPageTemplate};
 
-use super::helpers::{build_template_globals, ensure_logged_in, TemplateGlobals, render_template};
+use super::helpers::{build_template_globals, TemplateGlobals, render_template};
 
 pub async fn regions_get(State(state): State<AppState>, jar: CookieJar) -> impl IntoResponse {
     let (list, _map) = load_regions(&state.client, &state.api_base_url, &state.api_token).await;

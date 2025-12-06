@@ -1,6 +1,5 @@
 use crate::models::ApplicationView;
 use super::client::api_call;
-use serde_json::Value;
 
 /// Load application catalog from the API.
 /// Returns a list of available applications with descriptions and pricing.
