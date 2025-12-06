@@ -21,7 +21,7 @@ pub async fn api_call(
     };
     
     if !api_token.is_empty() {
-        req = req.header("Authorization", format!("Bearer {}", api_token));
+        req = req.header("API-Token", api_token);
     }
     
     if let Some(p) = params {
