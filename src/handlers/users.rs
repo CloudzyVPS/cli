@@ -7,7 +7,7 @@ use serde::Deserialize;
 
 use crate::models::{AppState, UserRecord, UserRow};
 use crate::services::{generate_password_hash, persist_users_file};
-use crate::templates::UsersTemplate;
+use crate::templates::{UsersTemplate, UserDetailTemplate};
 
 use super::helpers::{build_template_globals, ensure_owner, plain_html, TemplateGlobals, render_template};
 
@@ -49,6 +49,50 @@ pub async fn users_list(State(state): State<AppState>, jar: CookieJar) -> impl I
             rows: &rows,
         }
     )
+}
+
+pub async fn user_detail(
+    State(state): State<AppState>,
+    jar: CookieJar,
+    Path(username): Path<String>,
+) -> impl IntoResponse {
+    if let Some(r) = ensure_owner(&state, &jar) {
+        return r.into_response();
+    }
+    let uname = username.to_lowercase();
+    let users = state.users.lock().unwrap();
+    let user_row = if let Some(rec) = users.get(&uname) {
+        let assigned = if rec.assigned_instances.is_empty() {
+            String::new()
+        } else {
+            rec.assigned_instances.join(", ")
+        };
+        UserRow {
+            username: uname.clone(),
+            role: rec.role.clone(),
+            assigned,
+        }
+    } else {
+        return plain_html("User not found");
+    };
+    drop(users);
+
+    let TemplateGlobals {
+        current_user,
+        api_hostname,
+        base_url,
+        flash_messages,
+        has_flash_messages,
+    } = build_template_globals(&state, &jar);
+
+    render_template(&state, &jar, UserDetailTemplate {
+        current_user,
+        api_hostname,
+        base_url,
+        flash_messages,
+        has_flash_messages,
+        user: user_row,
+    })
 }
 
 #[derive(Deserialize)]
@@ -132,7 +176,7 @@ pub async fn reset_password(
             return plain_html("Failed to persist users");
         }
     }
-    axum::response::Redirect::to("/users").into_response()
+    axum::response::Redirect::to(&format!("/users/{}", uname)).into_response()
 }
 
 #[derive(Deserialize)]
@@ -179,7 +223,7 @@ pub async fn update_role(
             return plain_html("Failed to persist users");
         }
     }
-    axum::response::Redirect::to("/users").into_response()
+    axum::response::Redirect::to(&format!("/users/{}", uname)).into_response()
 }
 
 pub async fn delete_user(
