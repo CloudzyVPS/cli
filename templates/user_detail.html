@@ -6,7 +6,7 @@
 <header class="page-header">
     <h1>User Details: {{ user.username }}</h1>
     <div class="header-actions">
-        <a href="{{ base_url }}/users" class="btn btn-secondary">Back to Users</a>
+        <a href="{{ base_url }}/users" class="btn-secondary">Back to Users</a>
     </div>
 </header>
 
@@ -45,7 +45,7 @@
                         <option value="owner" {% if user.role == "owner" %}selected{% endif %}>Owner</option>
                         <option value="admin" {% if user.role == "admin" %}selected{% endif %}>Admin</option>
                     </select>
-                    <button type="submit" class="btn btn-secondary">Update</button>
+                    <button type="submit" class="btn-secondary">Update</button>
                 </div>
             </form>
             
@@ -55,7 +55,7 @@
                 <label class="form-label">Reset Password</label>
                 <div class="d-flex gap-sm">
                     <input type="password" name="new_password" class="form-control" placeholder="New password" required>
-                    <button type="submit" class="btn btn-warning">Reset Password</button>
+                    <button type="submit" class="btn-warning">Reset Password</button>
                 </div>
             </form>
 
@@ -64,7 +64,7 @@
             <form method="post" action="{{ base_url }}/users/{{ user.username }}/delete" onsubmit="return confirm('Are you sure you want to delete this user?');">
                 <label class="form-label text-danger">Danger Zone</label>
                 <div>
-                    <button type="submit" class="btn btn-danger">Delete User</button>
+                    <button type="submit" class="btn-danger">Delete User</button>
                 </div>
             </form>
         </div>
