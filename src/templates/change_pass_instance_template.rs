@@ -1,6 +1,5 @@
 use askama::Template;
 use crate::models::{CurrentUser, InstanceView};
-use crate::templates::BaseTemplate;
 
 #[derive(Template)]
 #[template(path = "change_pass_instance.html")]

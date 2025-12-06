@@ -1,6 +1,5 @@
 use askama::Template;
 use crate::models::{CurrentUser, OsItem, InstanceView};
-use crate::templates::BaseTemplate;
 
 #[derive(Template)]
 #[template(path = "change_os.html")]
@@ -15,4 +14,4 @@ pub struct ChangeOsTemplate<'a> {
     pub is_disabled: bool,
 }
 
-crate::impl_base_template!(ChangeOsTemplate);
+crate::impl_base_template!(ChangeOsTemplate<'_>);

@@ -1,6 +1,5 @@
 use askama::Template;
 use crate::models::{CurrentUser, AdminView};
-use crate::templates::BaseTemplate;
 
 #[derive(Template)]
 #[template(path = "access.html")]
@@ -13,4 +12,4 @@ pub struct AccessPageTemplate<'a> {
     pub admins: &'a [AdminView],
 }
 
-crate::impl_base_template!(AccessPageTemplate);
+crate::impl_base_template!(AccessPageTemplate<'_>);

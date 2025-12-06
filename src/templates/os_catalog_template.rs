@@ -1,6 +1,5 @@
 use askama::Template;
 use crate::models::{CurrentUser, OsItem};
-use crate::templates::BaseTemplate;
 
 #[derive(Template)]
 #[template(path = "os.html")]
@@ -13,4 +12,4 @@ pub struct OsCatalogTemplate<'a> {
     pub os_list: &'a [OsItem],
 }
 
-crate::impl_base_template!(OsCatalogTemplate);
+crate::impl_base_template!(OsCatalogTemplate<'_>);

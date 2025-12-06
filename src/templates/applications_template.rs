@@ -1,6 +1,5 @@
 use askama::Template;
 use crate::models::{CurrentUser, ApplicationView};
-use crate::templates::BaseTemplate;
 
 #[derive(Template)]
 #[template(path = "applications.html")]
@@ -13,4 +12,4 @@ pub struct ApplicationsTemplate<'a> {
     pub apps: &'a [ApplicationView],
 }
 
-crate::impl_base_template!(ApplicationsTemplate);
+crate::impl_base_template!(ApplicationsTemplate<'_>);

@@ -1,6 +1,5 @@
 use askama::Template;
 use crate::models::{CurrentUser, BaseState, Extras};
-use crate::templates::BaseTemplate;
 
 #[derive(Template)]
 #[template(path = "step_4.html")]
@@ -20,4 +19,4 @@ pub struct Step4Template<'a> {
     pub submit_url: String,
 }
 
-crate::impl_base_template!(Step4Template);
+crate::impl_base_template!(Step4Template<'_>);
