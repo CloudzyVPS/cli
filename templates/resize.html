@@ -86,14 +86,14 @@
             </div>
         </fieldset>
 
-        <footer style="margin-top:1.5em">
+        <footer class="mt-5">
             <a href="{{ base_url }}/instance/{{ instance.id }}">Cancel</a>
             <button type="button" disabled>Resize instance</button>
         </footer>
     </form>
     {% else %}
     <form method="post" action="{{ base_url }}/instance/{{ instance.id }}/resize">
-        <footer style="margin-top:1.5em">
+        <footer class="mt-5">
             <a href="{{ base_url }}/instance/{{ instance.id }}">Cancel</a>
             <button type="submit">Resize instance</button>
         </footer>
