@@ -30,7 +30,30 @@ pub fn session_id_from_jar(jar: &CookieJar) -> Option<String> {
 
 pub fn current_username_from_jar(state: &AppState, jar: &CookieJar) -> Option<String> {
     let sid = session_id_from_jar(jar)?;
-    state.sessions.lock().unwrap().get(&sid).cloned()
+    let mut sessions = match state.sessions.lock() {
+        Ok(s) => s,
+        Err(e) => {
+            tracing::error!("Failed to acquire sessions lock: {}", e);
+            return None;
+        }
+    };
+    
+    // Get session and check if it exists
+    let session = sessions.get_mut(&sid)?;
+    
+    // Check if session is expired or idle
+    if session.is_expired(crate::config::SESSION_MAX_AGE_SECONDS) 
+        || session.is_idle(crate::config::SESSION_IDLE_TIMEOUT_SECONDS) {
+        // Remove expired session
+        sessions.remove(&sid);
+        tracing::info!("Removed expired/idle session");
+        return None;
+    }
+    
+    // Update last accessed time
+    session.update_last_accessed();
+    
+    Some(session.username.clone())
 }
 
 pub fn take_flash_messages(state: &AppState, jar: &CookieJar) -> Vec<String> {
