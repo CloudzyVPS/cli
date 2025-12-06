@@ -32,7 +32,7 @@ use axum_extra::extract::cookie::CookieJar;
 use config::{DEFAULT_HOST, DEFAULT_PORT};
 use models::{UserRecord, AppState, AddTrafficForm, ChangeOsForm, ResizeForm, ProductView, OsItem, InstanceView, SshKeyView, AdminView, InstanceCheckbox, Region};
 use services::{generate_password_hash, load_users_from_file, persist_users_file, simple_instance_action, enforce_instance_access};
-use api::{api_call, load_regions, load_products, load_os_list, load_instances_for_user};
+use api::{api_call, load_regions, load_products, load_os_list, load_instances_for_user, load_ssh_keys};
 use templates::*;
 use handlers::helpers::{
     build_template_globals, current_username_from_jar,
@@ -420,65 +420,7 @@ pub async fn fetch_default_customer_id(state: &AppState) -> Option<String> {
 }
 
 pub async fn load_ssh_keys_api(state: &AppState, customer_id: Option<String>) -> Vec<SshKeyView> {
-    let params = customer_id.map(|cid| vec![("customerId".to_string(), cid)]);
-    let payload = api_call_wrapper(state, "GET", "/v1/ssh-keys", None, params).await;
-    if payload.get("code").and_then(|c| c.as_str()) != Some("OKAY") {
-        return vec![];
-    }
-    let data = payload.get("data").cloned().unwrap_or(Value::Null);
-    let candidates: Vec<Value> = if let Some(arr) = data.as_array() {
-        arr.clone()
-    } else if let Some(arr) = data.get("sshKeys").and_then(|v| v.as_array()) {
-        arr.clone()
-    } else {
-        vec![]
-    };
-    let mut out = vec![];
-    for item in candidates {
-        if let Some(obj) = item.as_object() {
-            let id = obj
-                .get("id")
-                .and_then(|v| v.as_i64())
-                .map(|n| n.to_string())
-                .or_else(|| {
-                    obj.get("id")
-                        .and_then(|v| v.as_str())
-                        .map(|s| s.to_string())
-                })
-                .unwrap_or_else(|| "0".into());
-            let name = obj
-                .get("name")
-                .and_then(|v| v.as_str())
-                .map(|s| s.to_string())
-                .unwrap_or_else(|| format!("SSH Key {}", id));
-            let fingerprint = obj
-                .get("fingerprint")
-                .or_else(|| obj.get("fingerPrint"))
-                .and_then(|v| v.as_str())
-                .unwrap_or("")
-                .to_string();
-            let public_key = obj
-                .get("publicKey")
-                .or_else(|| obj.get("public_key"))
-                .and_then(|v| v.as_str())
-                .unwrap_or("")
-                .to_string();
-            let customer_id = obj
-                .get("customerId")
-                .or_else(|| obj.get("userId"))
-                .or_else(|| obj.get("customer_id"))
-                .and_then(|v| v.as_str())
-                .map(|s| s.to_string());
-            out.push(SshKeyView {
-                id,
-                name,
-                fingerprint,
-                public_key,
-                customer_id,
-            });
-        }
-    }
-    out
+    load_ssh_keys(&state.client, &state.api_base_url, &state.api_token, customer_id).await
 }
 
 async fn ssh_keys_get(
