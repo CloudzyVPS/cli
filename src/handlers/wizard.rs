@@ -18,10 +18,8 @@ use crate::templates::*;
 use crate::handlers::helpers::{
     build_template_globals, absolute_url_from_state,
     ensure_admin_or_owner, TemplateGlobals, OneOrMany, render_template,
+    api_call_wrapper, fetch_default_customer_id, load_ssh_keys_api,
 };
-
-// No-op logging ignore endpoint list
-static LOGGING_IGNORE_ENDPOINTS: &[&str] = &["/v1/os", "/v1/products", "/os", "/products"];
 
 fn value_to_short_string(value: &Value) -> String {
     match value {
@@ -44,24 +42,6 @@ fn value_to_short_string(value: &Value) -> String {
     }
 }
 
-async fn api_call_wrapper(
-    state: &AppState,
-    method: &str,
-    endpoint: &str,
-    data: Option<Value>,
-    params: Option<Vec<(String, String)>>,
-) -> Value {
-    let should_log = !LOGGING_IGNORE_ENDPOINTS.contains(&endpoint);
-    if should_log {
-        tracing::info!(method, endpoint, ?data, ?params, "API Request");
-    }
-    let result = api_call(&state.client, &state.api_base_url, &state.api_token, method, endpoint, data, params).await;
-    if should_log {
-        tracing::info!(response=?result, "API Response");
-    }
-    result
-}
-
 async fn load_regions_wrapper(state: &AppState) -> (Vec<Region>, HashMap<String, Region>) {
     load_regions(&state.client, &state.api_base_url, &state.api_token).await
 }
@@ -76,7 +56,7 @@ async fn load_os_list_wrapper(state: &AppState) -> Vec<OsItem> {
 
 // These functions are used by wizard steps but defined elsewhere in main.rs
 // We'll need them imported or moved here
-use crate::{fetch_default_customer_id, load_ssh_keys_api};
+// use crate::{fetch_default_customer_id, load_ssh_keys_api};
 
 // ---------- Wizard Step 1 Template ----------
 

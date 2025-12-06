@@ -2,8 +2,10 @@ use axum::response::{Html, IntoResponse, Redirect, Response};
 use axum::http::StatusCode;
 use axum_extra::extract::cookie::CookieJar;
 use serde::Deserialize;
+use serde_json::Value;
 
-use crate::models::{AppState, CurrentUser};
+use crate::api::{api_call, load_ssh_keys};
+use crate::models::{AppState, CurrentUser, SshKeyView};
 
 #[derive(Deserialize, Debug)]
 #[serde(untagged)]
@@ -147,4 +149,93 @@ pub fn render_template<T: askama::Template>(state: &AppState, jar: &CookieJar, t
             (StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error").into_response()
         }
     }
+}
+
+static LOGGING_IGNORE_ENDPOINTS: &[&str] = &["/v1/os", "/v1/products", "/os", "/products"];
+
+pub async fn api_call_wrapper(
+    state: &AppState,
+    method: &str,
+    endpoint: &str,
+    data: Option<Value>,
+    params: Option<Vec<(String, String)>>,
+) -> Value {
+    let should_log = !LOGGING_IGNORE_ENDPOINTS.contains(&endpoint);
+    if should_log {
+        tracing::info!(method, endpoint, ?data, ?params, "API Request");
+    }
+    let result = api_call(&state.client, &state.api_base_url, &state.api_token, method, endpoint, data, params).await;
+    if should_log {
+        tracing::info!(response=?result, "API Response");
+    }
+    result
+}
+
+pub fn detail_requires_customer(detail: &str) -> bool {
+    detail.to_lowercase().contains("customer id")
+}
+
+pub fn extract_customer_id_from_value(value: &Value) -> Option<String> {
+    fn recurse(node: &Value) -> Option<String> {
+        if let Some(obj) = node.as_object() {
+            for key in ["customerId", "customer_id", "id"] {
+                if let Some(val) = obj.get(key).and_then(|v| v.as_str()) {
+                    let trimmed = val.trim();
+                    if !trimmed.is_empty() {
+                        return Some(trimmed.to_string());
+                    }
+                }
+            }
+            for key in ["customer", "data"] {
+                if let Some(child) = obj.get(key) {
+                    if let Some(found) = recurse(child) {
+                        return Some(found);
+                    }
+                }
+            }
+            for key in ["customers", "items", "records", "results"] {
+                if let Some(arr) = obj.get(key).and_then(|v| v.as_array()) {
+                    for entry in arr {
+                        if let Some(found) = recurse(entry) {
+                            return Some(found);
+                        }
+                    }
+                }
+            }
+        } else if let Some(arr) = node.as_array() {
+            for entry in arr {
+                if let Some(found) = recurse(entry) {
+                    return Some(found);
+                }
+            }
+        }
+        None
+    }
+
+    if let Some(data) = value.get("data") {
+        if let Some(found) = recurse(data) {
+            return Some(found);
+        }
+    }
+    recurse(value)
+}
+
+pub async fn fetch_default_customer_id(state: &AppState) -> Option<String> {
+    if let Some(existing) = state.default_customer_cache.lock().unwrap().clone() {
+        return Some(existing);
+    }
+    let endpoints = ["/v1/customers", "/v1/profile"];
+    for endpoint in endpoints {
+        let payload = api_call_wrapper(state, "GET", endpoint, None, None).await;
+        if let Some(id) = extract_customer_id_from_value(&payload) {
+            let mut cache = state.default_customer_cache.lock().unwrap();
+            *cache = Some(id.clone());
+            return Some(id);
+        }
+    }
+    None
+}
+
+pub async fn load_ssh_keys_api(state: &AppState, customer_id: Option<String>) -> Vec<SshKeyView> {
+    load_ssh_keys(&state.client, &state.api_base_url, &state.api_token, customer_id).await
 }

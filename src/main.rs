@@ -37,10 +37,9 @@ use templates::*;
 use handlers::helpers::{
     build_template_globals, current_username_from_jar,
     ensure_owner, ensure_logged_in, plain_html, TemplateGlobals, render_template,
+    api_call_wrapper, fetch_default_customer_id, load_ssh_keys_api,
 };
 use std::collections::HashSet;
-// No-op logging ignore endpoint list
-static LOGGING_IGNORE_ENDPOINTS: &[&str] = &["/v1/os", "/v1/products", "/os", "/products"];
 
 async fn build_state_from_env(env_file: Option<&str>) -> AppState {
     config::load_env_file(env_file);
@@ -71,9 +70,9 @@ fn build_app(state: AppState) -> Router {
         .route("/users/:username/reset-password", post(handlers::users::reset_password))
         .route("/users/:username/role", post(handlers::users::update_role))
         .route("/users/:username/delete", post(handlers::users::delete_user))
-        .route("/access", get(access_get))
-        .route("/access/:username", post(update_access))
-        .route("/ssh-keys", get(ssh_keys_get).post(ssh_keys_post))
+        .route("/access", get(handlers::access::access_get))
+        .route("/access/:username", post(handlers::access::update_access))
+        .route("/ssh-keys", get(handlers::ssh_keys::ssh_keys_get).post(handlers::ssh_keys::ssh_keys_post))
         .route("/instances", get(instances_real))
         .route("/regions", get(handlers::catalog::regions_get))
         .route("/products", get(handlers::catalog::products_get))
@@ -159,24 +158,7 @@ async fn load_instances_for_user_wrapper(state: &AppState, username: &str) -> Ve
     load_instances_for_user(&state.client, &state.api_base_url, &state.api_token, &users_map, username).await
 }
 
-// Wrapper for API calls with optional logging (used by main.rs handlers)
-async fn api_call_wrapper(
-    state: &AppState,
-    method: &str,
-    endpoint: &str,
-    data: Option<Value>,
-    params: Option<Vec<(String, String)>>,
-) -> Value {
-    let should_log = !LOGGING_IGNORE_ENDPOINTS.contains(&endpoint);
-    if should_log {
-        tracing::info!(method, endpoint, ?data, ?params, "API Request");
-    }
-    let result = api_call(&state.client, &state.api_base_url, &state.api_token, method, endpoint, data, params).await;
-    if should_log {
-        tracing::info!(response=?result, "API Response");
-    }
-    result
-}
+// Wrapper for API calls with optional logging (moved to handlers::helpers)
 
 async fn load_products_wrapper(state: &AppState, region_id: &str) -> Vec<ProductView> {
     load_products(&state.client, &state.api_base_url, &state.api_token, region_id).await
@@ -210,304 +192,9 @@ async fn instances_real(State(state): State<AppState>, jar: CookieJar) -> impl I
 }
 
 // Access management (owner only): list admins and assign instances
-
-async fn access_get(State(state): State<AppState>, jar: CookieJar) -> impl IntoResponse {
-    if let Some(r) = ensure_owner(&state, &jar) {
-        return r.into_response();
-    }
-    // Load instances
-    let payload = api_call_wrapper(&state, "GET", "/v1/instances", None, None).await;
-    let mut list: Vec<InstanceView> = vec![];
-    if payload.get("code").and_then(|c| c.as_str()) == Some("OKAY") {
-        if let Some(items) = payload
-            .get("data")
-            .and_then(|d| d.get("instances"))
-            .and_then(|arr| arr.as_array())
-        {
-            for item in items {
-                let id = item
-                    .get("id")
-                    .and_then(|v| v.as_i64())
-                    .map(|n| n.to_string())
-                    .or_else(|| {
-                        item.get("id")
-                            .and_then(|v| v.as_str())
-                            .map(|s| s.to_string())
-                    })
-                    .unwrap_or_else(|| "?".into());
-                let hostname = item
-                    .get("hostname")
-                    .and_then(|v| v.as_str())
-                    .map(|s| s.to_string())
-                    .unwrap_or_else(|| "(no hostname)".into());
-                let status = item
-                    .get("status")
-                    .and_then(|v| v.as_str())
-                    .map(|s| s.to_string())
-                    .unwrap_or_else(|| "?".into());
-                let region = item
-                    .get("region")
-                    .and_then(|v| v.as_str())
-                    .map(|s| s.to_string())
-                    .unwrap_or_default();
-                list.push(InstanceView { 
-                    id, 
-                    hostname, 
-                    region,
-                    status,
-                    vcpu_count_display: "—".into(),
-                    ram_display: "—".into(),
-                    disk_display: "—".into(),
-                    main_ip: None,
-                    os: None,
-                });
-            }
-        }
-    }
-    // Collect admins
-    let users = state.users.lock().unwrap();
-    let mut admins: Vec<AdminView> = users
-        .iter()
-        .filter(|(_, rec)| rec.role == "admin")
-        .map(|(u, rec)| {
-            let assigned: HashSet<&str> =
-                rec.assigned_instances.iter().map(|s| s.as_str()).collect();
-            let rows = list
-                .iter()
-                .map(|inst| {
-                    let checked = assigned.contains(inst.id.as_str());
-                    InstanceCheckbox {
-                        id: inst.id.clone(),
-                        hostname: inst.hostname.clone(),
-                        checked,
-                    }
-                })
-                .collect();
-            AdminView {
-                username: u.clone(),
-                instances: rows,
-            }
-        })
-        .collect();
-    admins.sort_by(|a, b| a.username.cmp(&b.username));
-    let TemplateGlobals {
-        current_user,
-        api_hostname,
-        base_url,
-        flash_messages,
-        has_flash_messages,
-    } = build_template_globals(&state, &jar);
-    render_template(&state, &jar, AccessTemplate { current_user, api_hostname, base_url, flash_messages, has_flash_messages, admins: &admins })
-}
-
-#[derive(Deserialize)]
-struct UpdateAccessForm {
-    #[serde(rename = "instances")]
-    instances: Vec<String>,
-}
-
-async fn update_access(
-    State(state): State<AppState>,
-    jar: CookieJar,
-    axum::extract::Path(username): axum::extract::Path<String>,
-    Form(form): Form<UpdateAccessForm>,
-) -> impl IntoResponse {
-    if let Some(r) = ensure_owner(&state, &jar) {
-        return r.into_response();
-    }
-    let uname = username.to_lowercase();
-    {
-        let mut users = state.users.lock().unwrap();
-        if let Some(rec) = users.get_mut(&uname) {
-            if rec.role != "admin" {
-                return plain_html("Target user not admin");
-            }
-            // Normalize and dedupe
-            let mut normalized: Vec<String> = form
-                .instances
-                .iter()
-                .map(|s| s.trim().to_string())
-                .filter(|s| !s.is_empty())
-                .collect();
-            normalized.sort();
-            normalized.dedup();
-            rec.assigned_instances = normalized;
-        } else {
-            return plain_html("Admin not found");
-        }
-    }
-    
-    if let Err(e) = persist_users_file(&state.users).await {
-        tracing::error!(%e, "Failed to persist users");
-        return plain_html("Failed to persist users");
-    }
-
-    Redirect::to("/access").into_response()
-}
+// Moved to handlers/access.rs
 // SSH Keys CRUD (owner only)
-
-#[derive(Deserialize)]
-struct SshKeysForm {
-    action: Option<String>,
-    name: Option<String>,
-    public_key: Option<String>,
-    ssh_key_id: Option<String>,
-}
-
-fn detail_requires_customer(detail: &str) -> bool {
-    detail.to_lowercase().contains("customer id")
-}
-
-fn extract_customer_id_from_value(value: &Value) -> Option<String> {
-    fn recurse(node: &Value) -> Option<String> {
-        if let Some(obj) = node.as_object() {
-            for key in ["customerId", "customer_id", "id"] {
-                if let Some(val) = obj.get(key).and_then(|v| v.as_str()) {
-                    let trimmed = val.trim();
-                    if !trimmed.is_empty() {
-                        return Some(trimmed.to_string());
-                    }
-                }
-            }
-            for key in ["customer", "data"] {
-                if let Some(child) = obj.get(key) {
-                    if let Some(found) = recurse(child) {
-                        return Some(found);
-                    }
-                }
-            }
-            for key in ["customers", "items", "records", "results"] {
-                if let Some(arr) = obj.get(key).and_then(|v| v.as_array()) {
-                    for entry in arr {
-                        if let Some(found) = recurse(entry) {
-                            return Some(found);
-                        }
-                    }
-                }
-            }
-        } else if let Some(arr) = node.as_array() {
-            for entry in arr {
-                if let Some(found) = recurse(entry) {
-                    return Some(found);
-                }
-            }
-        }
-        None
-    }
-
-    if let Some(data) = value.get("data") {
-        if let Some(found) = recurse(data) {
-            return Some(found);
-        }
-    }
-    recurse(value)
-}
-
-pub async fn fetch_default_customer_id(state: &AppState) -> Option<String> {
-    if let Some(existing) = state.default_customer_cache.lock().unwrap().clone() {
-        return Some(existing);
-    }
-    let endpoints = ["/v1/customers", "/v1/profile"];
-    for endpoint in endpoints {
-        let payload = api_call_wrapper(state, "GET", endpoint, None, None).await;
-        if let Some(id) = extract_customer_id_from_value(&payload) {
-            let mut cache = state.default_customer_cache.lock().unwrap();
-            *cache = Some(id.clone());
-            return Some(id);
-        }
-    }
-    None
-}
-
-pub async fn load_ssh_keys_api(state: &AppState, customer_id: Option<String>) -> Vec<SshKeyView> {
-    load_ssh_keys(&state.client, &state.api_base_url, &state.api_token, customer_id).await
-}
-
-async fn ssh_keys_get(
-    State(state): State<AppState>,
-    jar: CookieJar,
-    axum::extract::Query(q): axum::extract::Query<HashMap<String, String>>,
-) -> impl IntoResponse {
-    if let Some(r) = ensure_owner(&state, &jar) {
-        return r.into_response();
-    }
-    let customer_id = if let Some(id) = q.get("customer_id").cloned() {
-        Some(id)
-    } else {
-        fetch_default_customer_id(&state).await
-    };
-    let keys = load_ssh_keys_api(&state, customer_id.clone()).await;
-    let TemplateGlobals { current_user, api_hostname, base_url, flash_messages, has_flash_messages } = build_template_globals(&state, &jar);
-    render_template(&state, &jar, SshKeysTemplate {
-            current_user,
-            api_hostname,
-            base_url,
-            flash_messages,
-            has_flash_messages,
-            ssh_keys: &keys,
-            customer_id,
-        },
-    )
-}
-
-async fn ssh_keys_post(
-    State(state): State<AppState>,
-    jar: CookieJar,
-    Form(form): Form<SshKeysForm>,
-) -> impl IntoResponse {
-    if let Some(r) = ensure_owner(&state, &jar) {
-        return r.into_response();
-    }
-    let action = form.action.clone().unwrap_or_else(|| "create".into());
-    if action == "delete" {
-        let key_id_raw = form.ssh_key_id.clone().unwrap_or_default();
-        if !key_id_raw.chars().all(|c| c.is_ascii_digit()) {
-            return plain_html("Invalid key id");
-        }
-        let endpoint = format!("/v1/ssh-keys/{}", key_id_raw);
-        let payload = api_call_wrapper(&state, "DELETE", &endpoint, None, None).await;
-        if payload.get("code").and_then(|c| c.as_str()) != Some("OKAY") {
-            if let Some(detail) = payload.get("detail").and_then(|d| d.as_str()) {
-                if detail_requires_customer(detail) {
-                    if let Some(cid) = fetch_default_customer_id(&state).await {
-                        let _ = api_call_wrapper(
-                            &state,
-                            "DELETE",
-                            &endpoint,
-                            None,
-                            Some(vec![("customerId".into(), cid)]),
-                        )
-                        .await;
-                    }
-                }
-            }
-        }
-        return Redirect::to("/ssh-keys").into_response();
-    }
-    let name = form.name.clone().unwrap_or_default().trim().to_string();
-    let public_key = form
-        .public_key
-        .clone()
-        .unwrap_or_default()
-        .trim()
-        .to_string();
-    if name.is_empty() || public_key.is_empty() {
-        return plain_html("Provide name and public key");
-    }
-    let mut body = serde_json::json!({"name": name, "publicKey": public_key});
-    let payload = api_call_wrapper(&state, "POST", "/v1/ssh-keys", Some(body.clone()), None).await;
-    if payload.get("code").and_then(|c| c.as_str()) != Some("OKAY") {
-        if let Some(detail) = payload.get("detail").and_then(|d| d.as_str()) {
-            if detail_requires_customer(detail) {
-                if let Some(cid) = fetch_default_customer_id(&state).await {
-                    body["customerId"] = Value::String(cid.clone());
-                    let _ = api_call_wrapper(&state, "POST", "/v1/ssh-keys", Some(body), None).await;
-                }
-            }
-        }
-    }
-    Redirect::to("/ssh-keys").into_response()
-}
+// Moved to handlers/ssh_keys.rs
 
 // Regions are rendered using `templates/regions.html` (path-based Askama template)
 
