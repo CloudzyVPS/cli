@@ -7,8 +7,6 @@ mod templates;
 mod handlers;
 
 use axum::{
-    extract::{Form, State},
-    response::{Html, IntoResponse, Redirect},
     routing::{get, post},
     Router,
 };
@@ -17,8 +15,6 @@ use tower_http::set_header::SetResponseHeaderLayer;
 use axum::http::header::CACHE_CONTROL;
 use axum::http::HeaderValue;
 use tower::ServiceBuilder;
-use serde::Deserialize;
-use serde_json::Value;
 use std::net::SocketAddr;
 use std::sync::{Arc, Mutex};
 use std::collections::HashMap;
@@ -27,14 +23,11 @@ use clap::{Parser, Subcommand};
 use tracing_subscriber::{fmt, EnvFilter};
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
-use axum_extra::extract::cookie::CookieJar;
 
 use config::{DEFAULT_HOST, DEFAULT_PORT};
 use models::{UserRecord, AppState};
 use services::{generate_password_hash, load_users_from_file, persist_users_file, simple_instance_action};
-use api::api_call;
 use handlers::helpers::api_call_wrapper;
-use std::collections::HashSet;
 
 async fn build_state_from_env(env_file: Option<&str>) -> AppState {
     config::load_env_file(env_file);
@@ -51,6 +44,7 @@ async fn build_state_from_env(env_file: Option<&str>) -> AppState {
         public_base_url: config::get_public_base_url(),
         client: reqwest::Client::new(),
         disabled_instances,
+        custom_css: None,
     }
 }
 
@@ -106,12 +100,22 @@ fn build_app(state: AppState) -> Router {
         )
         .route_layer(axum::middleware::from_fn_with_state(state.clone(), handlers::middleware::auth_middleware));
 
-    Router::new()
+    let mut app = Router::new()
         .route("/", get(handlers::auth::root_get))
         .route("/login", get(handlers::auth::login_get).post(handlers::auth::login_post))
         .route("/logout", post(handlers::auth::logout_post))
-        .merge(protected_routes)
-        .nest_service(
+        .merge(protected_routes);
+
+    if let Some(css) = state.custom_css.clone() {
+        app = app.route("/static/styles.css", get(move || async move {
+            (
+                [(axum::http::header::CONTENT_TYPE, "text/css")],
+                css
+            )
+        }));
+    }
+
+    app.nest_service(
             "/static",
             ServiceBuilder::new()
                 .layer(SetResponseHeaderLayer::if_not_present(
@@ -123,7 +127,21 @@ fn build_app(state: AppState) -> Router {
         .with_state(state)
 }
 
-async fn start_server(state: AppState, host: &str, port: u16) {
+async fn start_server(mut state: AppState, host: &str, port: u16, stylesheet: Option<String>) {
+    if let Some(path) = stylesheet {
+        match std::fs::read_to_string(&path) {
+            Ok(css) => {
+                state.custom_css = Some(css);
+                tracing::info!("Loaded custom stylesheet from {}", path);
+            }
+            Err(e) => {
+                tracing::error!(%e, "Failed to read custom stylesheet");
+                eprintln!("Failed to read custom stylesheet at {}: {}", path, e);
+                process::exit(1);
+            }
+        }
+    }
+
     let addr: SocketAddr = match format!("{}:{}", host, port).parse() {
         Ok(a) => a,
         Err(e) => {
@@ -215,6 +233,9 @@ enum Commands {
         /// Path to .env file
         #[arg(long)]
         env_file: Option<String>,
+        /// Path to a custom stylesheet to serve instead of the default
+        #[arg(long)]
+        stylesheet: Option<String>,
     },
     /// Validate configuration (env vars / API credentials)
     #[command(about = "Validate configuration and ensure API connectivity.", long_about = "Validate environment variables required for the Zy server, and optionally validate the configured API token by attempting to fetch regions from the remote API.")]
@@ -315,8 +336,8 @@ async fn main() {
 
     // Dispatch CLI commands. If no command provided, serve the web app by default
     if cli.command.is_none() {
-    let state = build_state_from_env(None).await;
-    start_server(state, DEFAULT_HOST, DEFAULT_PORT).await;
+        let state = build_state_from_env(None).await;
+        start_server(state, DEFAULT_HOST, DEFAULT_PORT, None).await;
         return;
     }
     match cli.command.unwrap() {
@@ -324,9 +345,10 @@ async fn main() {
             host,
             port,
             env_file,
+            stylesheet,
         } => {
             let state = build_state_from_env(env_file.as_deref()).await;
-            start_server(state, &host, port).await;
+            start_server(state, &host, port, stylesheet).await;
             return;
         }
         Commands::CheckConfig { env_file } => {
