@@ -15,9 +15,20 @@ pub async fn load_instances_for_user(
     let mut all_instances = Vec::new();
     
     if payload.get("code").and_then(|c| c.as_str()) == Some("OKAY") {
-        if let Some(arr) = payload.get("data").and_then(|d| d.as_array()) {
-            for item in arr {
-                if let Some(obj) = item.as_object() {
+        let candidates = if let Some(arr) = payload.get("data").and_then(|d| d.as_array()) {
+            arr.clone()
+        } else if let Some(data) = payload.get("data").and_then(|d| d.as_object()) {
+            if let Some(arr) = data.get("instances").and_then(|i| i.as_array()) {
+                arr.clone()
+            } else {
+                vec![]
+            }
+        } else {
+            vec![]
+        };
+
+        for item in candidates {
+            if let Some(obj) = item.as_object() {
                     let id = obj.get("id").and_then(|v| v.as_str()).unwrap_or("").to_string();
                     let hostname = obj.get("hostname").and_then(|v| v.as_str()).unwrap_or("(no hostname)").to_string();
                     let region = obj.get("region").and_then(|v| v.as_str()).unwrap_or("").to_string();
@@ -53,7 +64,6 @@ pub async fn load_instances_for_user(
                     });
                 }
             }
-        }
     }
     
     if username.is_empty() {
