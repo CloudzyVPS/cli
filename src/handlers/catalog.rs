@@ -42,7 +42,7 @@ pub async fn products_get(
     if let Some(r) = ensure_logged_in(&state, &jar) {
         return r.into_response();
     }
-    let region_id = q.get("region").cloned().unwrap_or_default();
+    let region_id = q.get("region_id").or_else(|| q.get("region")).cloned().unwrap_or_default();
     if region_id.is_empty() {
         return Redirect::to("/regions").into_response();
     }
