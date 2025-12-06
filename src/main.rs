@@ -53,6 +53,7 @@ async fn build_state_from_env(env_file: Option<&str>) -> AppState {
 fn build_app(state: AppState) -> Router {
     let protected_routes = Router::new()
         .route("/users", get(handlers::users::users_list).post(handlers::users::users_create))
+        .route("/users/:username", get(handlers::users::user_detail))
         .route("/users/:username/reset-password", post(handlers::users::reset_password))
         .route("/users/:username/role", post(handlers::users::update_role))
         .route("/users/:username/delete", post(handlers::users::delete_user))
