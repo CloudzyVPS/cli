@@ -40,12 +40,12 @@ pub fn random_session_id() -> String {
     hex_encode(b)
 }
 
-pub fn load_users_from_file() -> Arc<Mutex<HashMap<String, UserRecord>>> {
+pub async fn load_users_from_file() -> Arc<Mutex<HashMap<String, UserRecord>>> {
     let path = std::path::Path::new("users.json");
     let mut map: HashMap<String, UserRecord> = HashMap::new();
     
     if path.exists() {
-        if let Ok(text) = std::fs::read_to_string(path) {
+        if let Ok(text) = tokio::fs::read_to_string(path).await {
             if let Ok(json_val) = serde_json::from_str::<serde_json::Value>(&text) {
                 if let Some(obj) = json_val.as_object() {
                     for (k, v) in obj.iter() {
@@ -99,20 +99,23 @@ pub fn load_users_from_file() -> Arc<Mutex<HashMap<String, UserRecord>>> {
         for (u, rec) in map.iter() {
             serialized.insert(u.clone(), serde_json::json!({"password": rec.password, "role": rec.role, "assigned_instances": rec.assigned_instances }));
         }
-        let _ = std::fs::write(
+        let _ = tokio::fs::write(
             path,
             serde_json::to_string_pretty(&serde_json::Value::Object(serialized)).unwrap(),
-        );
+        ).await;
     }
     
     Arc::new(Mutex::new(map))
 }
 
-pub fn persist_users_file(users_arc: &Arc<Mutex<HashMap<String, UserRecord>>>) -> Result<(), std::io::Error> {
-    let users = users_arc.lock().unwrap();
-    let mut serialized: serde_json::Map<String, serde_json::Value> = serde_json::Map::new();
-    for (u, rec) in users.iter() {
-        serialized.insert(u.clone(), serde_json::json!({"password": rec.password, "role": rec.role, "assigned_instances": rec.assigned_instances }));
-    }
-    std::fs::write("users.json", serde_json::to_string_pretty(&serde_json::Value::Object(serialized))?)
+pub async fn persist_users_file(users_arc: &Arc<Mutex<HashMap<String, UserRecord>>>) -> Result<(), std::io::Error> {
+    let content = {
+        let users = users_arc.lock().unwrap();
+        let mut serialized: serde_json::Map<String, serde_json::Value> = serde_json::Map::new();
+        for (u, rec) in users.iter() {
+            serialized.insert(u.clone(), serde_json::json!({"password": rec.password, "role": rec.role, "assigned_instances": rec.assigned_instances }));
+        }
+        serde_json::to_string_pretty(&serde_json::Value::Object(serialized))?
+    };
+    tokio::fs::write("users.json", content).await
 }

@@ -1,4 +1,3 @@
-use askama::Template;
 use axum::{
     extract::{Form, Path, State},
     response::IntoResponse,
@@ -10,7 +9,7 @@ use crate::models::{AppState, UserRecord, UserRow};
 use crate::services::{generate_password_hash, persist_users_file};
 use crate::templates::UsersTemplate;
 
-use super::helpers::{build_template_globals, ensure_owner, inject_context, plain_html, TemplateGlobals};
+use super::helpers::{build_template_globals, ensure_owner, plain_html, TemplateGlobals, render_template};
 
 pub async fn users_list(State(state): State<AppState>, jar: CookieJar) -> impl IntoResponse {
     if let Some(r) = ensure_owner(&state, &jar) {
@@ -41,10 +40,7 @@ pub async fn users_list(State(state): State<AppState>, jar: CookieJar) -> impl I
         flash_messages,
         has_flash_messages,
     } = build_template_globals(&state, &jar);
-    inject_context(
-        &state,
-        &jar,
-        UsersTemplate {
+    render_template(&state, &jar, UsersTemplate {
             current_user,
             api_hostname,
             base_url,
@@ -52,8 +48,6 @@ pub async fn users_list(State(state): State<AppState>, jar: CookieJar) -> impl I
             has_flash_messages,
             rows: &rows,
         }
-        .render()
-        .unwrap(),
     )
 }
 
@@ -64,11 +58,12 @@ pub struct CreateUserForm {
     pub role: String,
 }
 
+#[axum::debug_handler]
 pub async fn users_create(
     State(state): State<AppState>,
     jar: CookieJar,
     Form(form): Form<CreateUserForm>,
-) -> impl IntoResponse {
+) -> axum::response::Response {
     if let Some(r) = ensure_owner(&state, &jar) {
         return r.into_response();
     }
@@ -94,7 +89,13 @@ pub async fn users_create(
             },
         );
     }
-    let _ = persist_users_file(&state.users);
+    match persist_users_file(&state.users).await {
+        Ok(_) => (),
+        Err(e) => {
+            tracing::error!(%e, "Failed to persist users");
+            return plain_html("Failed to persist users");
+        }
+    }
     axum::response::Redirect::to("/users").into_response()
 }
 
@@ -124,7 +125,13 @@ pub async fn reset_password(
             return plain_html("User not found");
         }
     }
-    let _ = persist_users_file(&state.users);
+    match persist_users_file(&state.users).await {
+        Ok(_) => (),
+        Err(e) => {
+            tracing::error!(%e, "Failed to persist users");
+            return plain_html("Failed to persist users");
+        }
+    }
     axum::response::Redirect::to("/users").into_response()
 }
 
@@ -165,7 +172,13 @@ pub async fn update_role(
             rec.role = form.role.clone();
         }
     }
-    let _ = persist_users_file(&state.users);
+    match persist_users_file(&state.users).await {
+        Ok(_) => (),
+        Err(e) => {
+            tracing::error!(%e, "Failed to persist users");
+            return plain_html("Failed to persist users");
+        }
+    }
     axum::response::Redirect::to("/users").into_response()
 }
 
@@ -199,6 +212,12 @@ pub async fn delete_user(
             return plain_html("User not found");
         }
     }
-    let _ = persist_users_file(&state.users);
+    match persist_users_file(&state.users).await {
+        Ok(_) => (),
+        Err(e) => {
+            tracing::error!(%e, "Failed to persist users");
+            return plain_html("Failed to persist users");
+        }
+    }
     axum::response::Redirect::to("/users").into_response()
 }

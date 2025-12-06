@@ -1,4 +1,5 @@
 use axum::response::{Html, IntoResponse, Redirect, Response};
+use axum::http::StatusCode;
 use axum_extra::extract::cookie::CookieJar;
 use serde::Deserialize;
 
@@ -136,4 +137,14 @@ pub fn ensure_admin_or_owner(state: &AppState, jar: &CookieJar) -> Option<Redire
 
 pub fn plain_html<S: AsRef<str>>(s: S) -> Response {
     Html(format!("<!DOCTYPE html><html><body><p>{}</p></body></html>", s.as_ref())).into_response()
+}
+
+pub fn render_template<T: askama::Template>(state: &AppState, jar: &CookieJar, t: T) -> Response {
+    match t.render() {
+        Ok(body) => inject_context(state, jar, body),
+        Err(e) => {
+            tracing::error!(%e, "Template render error");
+            (StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error").into_response()
+        }
+    }
 }

@@ -1,4 +1,3 @@
-use askama::Template;
 use axum::{
     extract::{Form, State},
     response::{IntoResponse, Redirect},
@@ -7,10 +6,10 @@ use axum_extra::extract::cookie::{Cookie, CookieJar};
 use serde::Deserialize;
 
 use crate::models::AppState;
-use crate::services::{random_session_id, verify_password};
+use crate::services::{verify_password, random_session_id};
 use crate::templates::LoginTemplate;
 
-use super::helpers::{build_template_globals, current_username_from_jar, inject_context, resolve_default_endpoint, TemplateGlobals};
+use super::helpers::{build_template_globals, current_username_from_jar, resolve_default_endpoint, TemplateGlobals, render_template};
 
 #[derive(Deserialize)]
 pub struct LoginForm {
@@ -31,19 +30,14 @@ pub async fn login_get(State(state): State<AppState>, jar: CookieJar) -> impl In
         flash_messages,
         has_flash_messages,
     } = build_template_globals(&state, &jar);
-    inject_context(
-        &state,
-        &jar,
-        LoginTemplate {
+    render_template(&state, &jar, LoginTemplate {
             current_user,
             api_hostname,
             base_url: base_url.clone(),
             flash_messages,
             has_flash_messages,
             error: None,
-        }
-        .render()
-        .unwrap(),
+        },
     )
 }
 
@@ -78,19 +72,14 @@ pub async fn login_post(
         flash_messages,
         has_flash_messages,
     } = build_template_globals(&state, &jar);
-    inject_context(
-        &state,
-        &jar,
-        LoginTemplate {
+    render_template(&state, &jar, LoginTemplate {
             current_user,
             api_hostname,
             base_url,
             flash_messages,
             has_flash_messages,
             error: Some("Invalid credentials".into()),
-        }
-        .render()
-        .unwrap(),
+        },
     )
 }
 
