@@ -1,6 +1,5 @@
 use askama::Template;
 use crate::models::CurrentUser;
-use crate::templates::BaseTemplate;
 
 #[derive(Template)]
 #[template(path = "login.html")]

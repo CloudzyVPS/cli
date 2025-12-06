@@ -1,6 +1,5 @@
 use askama::Template;
 use crate::models::{CurrentUser, Region};
-use crate::templates::BaseTemplate;
 
 #[derive(Template)]
 #[template(path = "regions.html")]
@@ -13,4 +12,4 @@ pub struct RegionsPageTemplate<'a> {
     pub regions: &'a [Region],
 }
 
-crate::impl_base_template!(RegionsPageTemplate);
+crate::impl_base_template!(RegionsPageTemplate<'_>);

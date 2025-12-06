@@ -3,7 +3,7 @@ use std::path::Path;
 
 // Default configuration constants
 pub const DEFAULT_HOST: &str = "127.0.0.1";
-pub const DEFAULT_PORT: u16 = 8080;
+pub const DEFAULT_PORT: u16 = 5000;
 pub const DEFAULT_API_BASE_URL: &str = "";
 pub const DEFAULT_API_TOKEN: &str = "";
 pub const DEFAULT_PUBLIC_BASE_URL: &str = "";

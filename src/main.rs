@@ -1198,6 +1198,9 @@ async fn create_step_7_core(
             has_plan_summary,
             price_entries,
             has_price_entries,
+            selected_product_name: None,
+            selected_product_tags: None,
+            selected_product_description: None,
             selected_os_label,
             ssh_keys_display,
             ssh_key_ids_csv,
@@ -2784,10 +2787,10 @@ enum Commands {
     /// Start the web server
     Serve {
         /// Host to bind to
-        #[arg(long, default_value_t = String::from("0.0.0.0"))]
+        #[arg(long, default_value_t = String::from(DEFAULT_HOST))]
         host: String,
         /// Port to bind to
-        #[arg(long, default_value_t = 5000)]
+        #[arg(long, default_value_t = DEFAULT_PORT)]
         port: u16,
         /// Path to .env file
         #[arg(long)]
