@@ -84,7 +84,7 @@ body {
   color: var(--text-primary);
   background-color: var(--canvas-bg);
   display: flex;
-  flex-direction: row;
+  flex-direction: column;
 }
 
 body::before,
@@ -116,19 +116,16 @@ nav a {
 
 nav {
   background: var(--white);
-  border-right: 1px solid var(--border-color);
+  border-bottom: 1px solid var(--border-color);
   color: var(--gray-900);
-  padding: var(--space-4) var(--space-5);
-  position: sticky;
-  top: 0;
+  padding: var(--space-4);
+  position: relative;
   z-index: 20;
   display: flex;
   flex-direction: column;
   gap: var(--space-4);
-  height: 100vh;
-  width: 280px;
+  width: 100%;
   flex-shrink: 0;
-  overflow-y: auto;
   transition: border-color var(--transition-fast);
 }
 
@@ -139,16 +136,10 @@ nav > * {
 
 nav > header {
   display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  gap: var(--space-3);
-}
-
-nav > header > div:first-child {
-  display: flex;
+  flex-direction: row;
   align-items: center;
-  gap: var(--space-2);
-  flex: 0 1 auto;
+  flex-wrap: wrap;
+  gap: var(--space-3);
 }
 
 nav b {
@@ -184,6 +175,111 @@ nav > header > div:last-of-type {
   width: 100%;
   margin: 0;
   flex-wrap: wrap;
+}
+
+/* Mobile Navigation Toggle */
+.nav-toggle {
+  display: none;
+}
+
+nav > header > div:first-of-type {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex: 1;
+}
+
+.nav-toggle-label {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  cursor: pointer;
+  border-radius: var(--border-radius);
+  background: var(--white);
+  border: 1px solid var(--border-color);
+  transition: background var(--transition-fast);
+}
+
+.nav-toggle-label:hover {
+  background: var(--gray-50);
+}
+
+.nav-toggle-label span {
+  display: block;
+  background: var(--gray-900);
+  height: 2px;
+  width: 20px;
+  border-radius: 2px;
+  position: relative;
+  transition: background var(--transition-fast);
+}
+
+.nav-toggle-label span::before,
+.nav-toggle-label span::after {
+  content: '';
+  display: block;
+  background: var(--gray-900);
+  height: 2px;
+  width: 20px;
+  border-radius: 2px;
+  position: absolute;
+  transition: transform var(--transition-fast), top var(--transition-fast), bottom var(--transition-fast);
+}
+
+.nav-toggle-label span::before {
+  bottom: 6px;
+}
+
+.nav-toggle-label span::after {
+  top: 6px;
+}
+
+/* Transform to X when checked */
+.nav-toggle:checked ~ header .nav-toggle-label span {
+  background: transparent;
+}
+
+.nav-toggle:checked ~ header .nav-toggle-label span::before {
+  bottom: 0;
+  transform: rotate(45deg);
+}
+
+.nav-toggle:checked ~ header .nav-toggle-label span::after {
+  top: 0;
+  transform: rotate(-45deg);
+}
+
+/* Navigation Links */
+div[role="navigation"] {
+  display: none;
+  flex-direction: column;
+  gap: var(--space-1);
+  width: 100%;
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--border-color);
+}
+
+div[role="navigation"] a {
+  display: flex;
+  align-items: center;
+  padding: var(--space-3);
+  border-radius: var(--border-radius);
+  color: var(--gray-700);
+  font-weight: 600;
+  transition: background var(--transition-fast), color var(--transition-fast);
+}
+
+div[role="navigation"] a:hover,
+div[role="navigation"] a:focus-visible {
+  background: var(--gray-50);
+  color: var(--primary);
+}
+
+.nav-toggle:checked ~ div[role="navigation"] {
+  display: flex;
+  animation: fade-in-up 0.2s ease-out;
 }
 
 nav i {
@@ -341,9 +437,9 @@ nav > footer > span {
 
 main {
   flex: 1;
-  max-width: 1200px;
+  max-width: 100%;
   margin: 0 auto;
-  padding: var(--space-6) var(--space-4) var(--space-7);
+  padding: var(--space-5) var(--space-3) var(--space-6);
   display: flex;
   flex-direction: column;
   gap: var(--space-6);
@@ -453,7 +549,7 @@ section li {
 .card-grid {
   display: grid;
   gap: var(--space-4);
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  grid-template-columns: 1fr; /* Single column by default */
 }
 
 .metric-card {
@@ -515,7 +611,7 @@ section li {
 .data-grid {
   display: grid;
   gap: var(--space-4);
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  grid-template-columns: 1fr; /* Single column by default */
 }
 
 .region-card,
@@ -608,7 +704,7 @@ section dl {
   margin: 0;
   display: grid;
   gap: var(--space-2);
-  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  grid-template-columns: 1fr; /* Single column */
 }
 
 article dl > div,
@@ -809,18 +905,19 @@ input[type="submit"],
   border: 1px solid var(--border-color);
   border-radius: var(--border-radius);
   padding: var(--space-2) var(--space-4);
-  height: 36px;
+  height: 44px; /* Increased touch target */
   font-weight: 600;
   cursor: pointer;
   color: var(--gray-700);
   background: var(--white);
   transition: background var(--transition-fast), border-color var(--transition-fast), box-shadow var(--transition-fast);
-  display: inline-flex;
+  display: flex; /* Changed to flex for full width if needed */
+  width: 100%; /* Full width by default for mobile */
   align-items: center;
   justify-content: center;
   gap: var(--space-2);
   text-decoration: none;
-  font-size: 0.875rem;
+  font-size: 1rem; /* Larger font for readability */
   line-height: 1.5;
 }
 
@@ -928,8 +1025,10 @@ input[type="submit"]:disabled,
 
 .btn-sm {
   padding: 0 var(--space-2);
-  height: 28px;
-  font-size: 0.8rem;
+  height: 32px;
+  font-size: 0.85rem;
+  width: auto; /* Allow small buttons to be auto width */
+  display: inline-flex;
 }
 
 .btn-ghost {
@@ -1174,7 +1273,7 @@ footer {
 .fields-grid {
   display: grid;
   gap: var(--space-3);
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  grid-template-columns: 1fr; /* Single column by default */
 }
 
 .fields-grid.compact {
@@ -1365,7 +1464,7 @@ form > footer {
 .product-grid {
   display: grid;
   gap: var(--space-4);
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  grid-template-columns: 1fr; /* Single column */
   margin-top: var(--space-3);
 }
 
@@ -1496,7 +1595,7 @@ form > footer {
   margin: 0;
   display: grid;
   gap: var(--space-2);
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  grid-template-columns: 1fr; /* Single column */
 }
 
 .product-card-body dl > div {
@@ -1579,7 +1678,7 @@ form > footer {
 .invoice-body {
   display: grid;
   gap: var(--space-3);
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  grid-template-columns: 1fr; /* Single column */
 }
 
 .invoice-body section {
@@ -1660,7 +1759,7 @@ form p {
 div[data-admin-grid] {
   display: grid;
   gap: var(--space-4);
-  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  grid-template-columns: 1fr; /* Single column */
 }
 
 section[role="listitem"] {
@@ -1705,10 +1804,10 @@ section[role="listitem"] fieldset > legend {
   color: var(--gray-700);
 }
 
-section[role="listitem"] > div[role="list"] {> div[role="list"] {
+section[role="listitem"] > div[role="list"] {
   display: grid;
   gap: var(--space-3);
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  grid-template-columns: 1fr; /* Single column */
 }
 
 section[role="listitem"] label[role="listitem"] {
@@ -1781,7 +1880,7 @@ section dl {
   margin: 0;
   display: grid;
   gap: var(--space-3);
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  grid-template-columns: 1fr; /* Single column */
 }
 
 section dl > div {
@@ -1824,7 +1923,7 @@ section[data-instance-actions] > h2 {
 section > div {
   display: grid;
   gap: var(--space-2);
-  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  grid-template-columns: 1fr; /* Single column */
 }
 
 section > div form,
@@ -1832,6 +1931,12 @@ section > div a {
   display: flex;
   align-items: center;
   justify-content: center;
+}
+
+.action-grid {
+  display: grid;
+  gap: var(--space-2);
+  grid-template-columns: 1fr;
 }
 
 .action-grid form button,
@@ -1878,7 +1983,7 @@ section > form > div {
 }
 
 section > form input {
-  flex: 1 1 160px;
+  flex: 1 1 100%; /* Full width inputs */
 }
 
 section > form p {
@@ -1914,7 +2019,7 @@ section[aria-labelledby="regions-heading"] > header > p {
 section[aria-labelledby="regions-heading"] > div[role="list"] {
   display: grid;
   gap: var(--space-4);
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  grid-template-columns: 1fr; /* Single column */
 }
 
 section[aria-labelledby="regions-heading"] > div[role="list"] > article {
@@ -1983,7 +2088,7 @@ section[aria-labelledby="regions-heading"] > div[role="list"] > article dl {
   margin: 0;
   display: grid;
   gap: var(--space-2);
-  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  grid-template-columns: 1fr; /* Single column */
 }
 
 section[aria-labelledby="regions-heading"] > div[role="list"] > article dl > div {
@@ -2107,67 +2212,15 @@ section[aria-labelledby="regions-heading"] > div[role="list"] > article > footer
 }
 
 @media (min-width: 640px) {
-  nav div {
-    flex-wrap: nowrap;
-  }
-
-  table th,
-  table td {
-    padding: var(--space-4);
-  }
+  /* Removed desktop-specific styles */
 }
 
 @media (min-width: 960px) {
-  body {
-    flex-direction: row;
-    align-items: stretch;
-  }
-
-  nav {
-    width: 280px;
-    min-height: 100vh;
-    border-radius: 0 var(--radius-lg) var(--radius-lg) 0;
-    align-self: stretch;
-  }
-
-  nav div {
-    flex-direction: column;
-    align-items: flex-start;
-  }
-
-  nav div a {
-    width: 100%;
-  }
-
-  nav button {
-    margin-top: var(--space-2);
-  }
-
-  nav + main {
-    flex: 1;
-    padding: var(--space-7);
-  }
-
-  header.page-header {
-    flex-direction: row;
-    align-items: center;
-    justify-content: space-between;
-  }
+  /* Removed desktop-specific styles */
 }
 
 @media (max-width: 480px) {
-  main {
-    padding: var(--space-5) var(--space-3) var(--space-6);
-  }
-
-  .metric-card {
-    padding: var(--space-3);
-  }
-
-  button,
-  input[type="submit"] {
-    width: 100%;
-  }
+  /* Merged into base styles */
 }
 
 .warning-banner {
@@ -2216,8 +2269,8 @@ section[aria-labelledby="regions-heading"] > div[role="list"] > article > footer
 
 section dl > div {
   display: grid;
-  grid-template-columns: 140px 1fr;
-  gap: 1rem;
+  grid-template-columns: 1fr; /* Single column */
+  gap: 0.5rem;
 }
 
 dt {
