@@ -29,6 +29,9 @@ use models::{UserRecord, AppState};
 use services::{generate_password_hash, load_users_from_file, persist_users_file, simple_instance_action};
 use handlers::helpers::api_call_wrapper;
 
+// Embed the default stylesheet in the binary
+const DEFAULT_STYLESHEET: &str = include_str!("../static/styles.css");
+
 async fn build_state_from_env(env_file: Option<&str>) -> AppState {
     config::load_env_file(env_file);
     let users = load_users_from_file().await;
@@ -101,20 +104,23 @@ fn build_app(state: AppState) -> Router {
         )
         .route_layer(axum::middleware::from_fn_with_state(state.clone(), handlers::middleware::auth_middleware));
 
-    let mut app = Router::new()
+    // Always serve styles.css - use custom if provided, otherwise use embedded default
+    let stylesheet_content = state.custom_css.clone().unwrap_or_else(|| DEFAULT_STYLESHEET.to_string());
+
+    let app = Router::new()
         .route("/", get(handlers::auth::root_get))
         .route("/login", get(handlers::auth::login_get).post(handlers::auth::login_post))
         .route("/logout", post(handlers::auth::logout_post))
+        .route("/static/styles.css", get(move || {
+            let css = stylesheet_content.clone();
+            async move {
+                (
+                    [(axum::http::header::CONTENT_TYPE, "text/css")],
+                    css
+                )
+            }
+        }))
         .merge(protected_routes);
-
-    if let Some(css) = state.custom_css.clone() {
-        app = app.route("/static/styles.css", get(move || async move {
-            (
-                [(axum::http::header::CONTENT_TYPE, "text/css")],
-                css
-            )
-        }));
-    }
 
     app.nest_service(
             "/static",
