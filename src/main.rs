@@ -23,6 +23,8 @@ use clap::{Parser, Subcommand};
 use tracing_subscriber::{fmt, EnvFilter};
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
+use comfy_table::{Table, presets, modifiers, ContentArrangement};
+use terminal_size::{Width, terminal_size};
 
 use config::{DEFAULT_HOST, DEFAULT_PORT};
 use models::{UserRecord, AppState};
@@ -143,7 +145,7 @@ async fn start_server(mut state: AppState, host: &str, port: u16, stylesheet: Op
             }
             Err(e) => {
                 tracing::error!(%e, "Failed to read custom stylesheet");
-                eprintln!("Failed to read custom stylesheet at {}: {}", path, e);
+                eprintln!("{} {}: {}", yansi::Paint::red("Failed to read custom stylesheet at"), path, e);
                 process::exit(1);
             }
         }
@@ -153,52 +155,110 @@ async fn start_server(mut state: AppState, host: &str, port: u16, stylesheet: Op
         Ok(a) => a,
         Err(e) => {
             tracing::error!(%e, "Invalid host/port format");
-            eprintln!("Invalid host/port format: {}", e);
+            eprintln!("{}: {}", yansi::Paint::red("Invalid host/port format"), e);
             process::exit(1);
         }
     };
     let app = build_app(state.clone());
     tracing::info!(%addr, "Starting Zy Rust server");
-    println!("Web server running on http://{}", addr);
+    println!("{} {}", yansi::Paint::new("Web server running on").green(), yansi::Paint::new(format!("http://{}", addr)).cyan());
     match tokio::net::TcpListener::bind(addr).await {
         Ok(listener) => {
             // Run the server and log any errors (do not panic with unwrap()).
             if let Err(e) = axum::serve(listener, app).await {
                 tracing::error!(%e, "Server encountered an error while running");
-                eprintln!("Server error: {}", e);
+                eprintln!("{}: {}", yansi::Paint::new("Server error").red(), e);
                 process::exit(1);
             }
         }
         Err(e) => {
             tracing::error!(%e, "Failed to bind to address; is the port already in use?");
-            eprintln!("Failed to bind to {}: {}\nPlease stop any process using this port, or start the server with a different --port value.", addr, e);
+            eprintln!("{}: {}\n{}", yansi::Paint::new(format!("Failed to bind to {}", addr)).red(), e, yansi::Paint::new("Please stop any process using this port, or start the server with a different --port value.").yellow());
             process::exit(1);
         }
     }
 }
 
-// Wrappers moved to handlers::helpers
 
+fn json_value_to_string(v: &serde_json::Value) -> String {
+    match v {
+        serde_json::Value::Null => "".to_string(),
+        serde_json::Value::Bool(b) => b.to_string(),
+        serde_json::Value::Number(n) => n.to_string(),
+        serde_json::Value::String(s) => s.clone(),
+        serde_json::Value::Array(_) | serde_json::Value::Object(_) => {
+             serde_json::to_string(v).unwrap_or_default()
+        }
+    }
+}
 
-// Access management (owner only): list admins and assign instances
-// Moved to handlers/access.rs
-// SSH Keys CRUD (owner only)
-// Moved to handlers/ssh_keys.rs
+fn print_table(value: &serde_json::Value) {
+    let mut table = Table::new();
+    table.load_preset(presets::UTF8_FULL);
+    table.apply_modifier(modifiers::UTF8_ROUND_CORNERS);
+    table.set_content_arrangement(ContentArrangement::Dynamic);
+    
+    if let Some((Width(w), _)) = terminal_size() {
+        table.set_width(w - 4);
+    }
 
-// Regions are rendered using `templates/regions.html` (path-based Askama template)
+    match value {
+        serde_json::Value::Array(arr) => {
+            if arr.is_empty() {
+                println!("(empty list)");
+                return;
+            }
+            // Try to find a non-empty object to get keys from, or union of keys?
+            // For simplicity, use the first object's keys if available.
+            if let Some(first) = arr.iter().find_map(|v| v.as_object()) {
+                let headers: Vec<&String> = first.keys().collect();
+                table.set_header(&headers);
+                
+                for item in arr {
+                    if let Some(obj) = item.as_object() {
+                        let row: Vec<String> = headers.iter().map(|k| {
+                            obj.get(*k).map(json_value_to_string).unwrap_or_default()
+                        }).collect();
+                        table.add_row(row);
+                    }
+                }
+            } else {
+                // List of primitives
+                table.set_header(vec!["Value"]);
+                for item in arr {
+                    table.add_row(vec![json_value_to_string(item)]);
+                }
+            }
+        },
+        serde_json::Value::Object(obj) => {
+            table.set_header(vec!["Field", "Value"]);
+            for (k, v) in obj {
+                table.add_row(vec![k, &json_value_to_string(v)]);
+            }
+        },
+        _ => {
+            println!("{}", json_value_to_string(value));
+            return;
+        }
+    }
+    
+    println!("\n{table}\n");
+}
 
-// Products are rendered using `templates/products.html` (path-based Askama template)
-
-// OS catalog is rendered using `templates/os.html` (path-based Askama template)
-
-// Applications are rendered using `templates/applications.html` (path-based Askama template)
-
-// Instance handlers moved to handlers::instances
-
-
-
-
-
+fn print_api_response(value: &serde_json::Value) {
+    if let Some(obj) = value.as_object() {
+        // Check for standard envelope
+        if obj.contains_key("code") && obj.contains_key("data") {
+             if let Some(detail) = obj.get("detail").and_then(|v| v.as_str()) {
+                 println!("{}", detail);
+             }
+             let data = &obj["data"];
+             print_table(data);
+             return;
+        }
+    }
+    print_table(value);
+}
 
 
 
@@ -378,11 +438,11 @@ async fn main() {
             // Basic check: ensure API base and token exist; optionally ping regions
             let mut ok = true;
             if state.api_base_url.trim().is_empty() {
-                eprintln!("API_BASE_URL is not configured");
+                eprintln!("{}", yansi::Paint::new("API_BASE_URL is not configured").red());
                 ok = false;
             }
             if state.api_token.trim().is_empty() {
-                eprintln!("API_TOKEN is not configured");
+                eprintln!("{}", yansi::Paint::new("API_TOKEN is not configured").red());
                 ok = false;
             }
             if !ok {
@@ -390,12 +450,14 @@ async fn main() {
             }
             let resp = api_call_wrapper(&state, "GET", "/v1/regions", None, None).await;
             if resp.get("code").and_then(|c| c.as_str()) == Some("OKAY") {
-                println!("Configuration looks valid (regions returned)");
+                println!("{}", yansi::Paint::new("Configuration looks valid (regions returned)").green());
                 process::exit(0);
             } else {
+                let json_str = serde_json::to_string_pretty(&resp).unwrap_or_else(|_| "<non-json>".into());
                 eprintln!(
-                    "Configuration appears invalid: {}",
-                    serde_json::to_string_pretty(&resp).unwrap_or_else(|_| "<non-json>".into())
+                    "{}: {}",
+                    yansi::Paint::new("Configuration appears invalid").red(),
+                    json_str
                 );
                 process::exit(1);
             }
@@ -405,7 +467,7 @@ async fn main() {
             match sub {
                 UserCommands::List => {
                     let users = state.users.lock().unwrap();
-                    println!("username\trole\tassigned_instances");
+                    println!("{}", yansi::Paint::new("username\trole\tassigned_instances").bold().underline());
                     for (u, rec) in users.iter() {
                         let assigned = if rec.assigned_instances.is_empty() {
                             String::new()
@@ -424,7 +486,7 @@ async fn main() {
                     let uname = username.trim().to_lowercase();
                     let mut users = state.users.lock().unwrap();
                     if users.contains_key(&uname) {
-                        eprintln!("User '{}' already exists", uname);
+                        eprintln!("{} '{}' {}", yansi::Paint::new("User").red(), uname, yansi::Paint::new("already exists").red());
                         process::exit(1);
                     }
                     let hash = generate_password_hash(&password);
@@ -438,10 +500,10 @@ async fn main() {
                     );
                     drop(users);
                     if let Err(e) = persist_users_file(&state.users).await {
-                        eprintln!("Failed to persist users.json: {}", e);
+                        eprintln!("{}: {}", yansi::Paint::new("Failed to persist users.json").red(), e);
                         process::exit(1);
                     }
-                    println!("User '{}' added", uname);
+                    println!("{} '{}' {}", yansi::Paint::new("User").green(), uname, yansi::Paint::new("added").green());
                     return;
                 }
                 UserCommands::ResetPassword { username, password } => {
@@ -450,15 +512,15 @@ async fn main() {
                     if let Some(rec) = users.get_mut(&uname) {
                         rec.password = generate_password_hash(&password);
                     } else {
-                        eprintln!("User '{}' not found", uname);
+                        eprintln!("{} '{}' {}", yansi::Paint::new("User").red(), uname, yansi::Paint::new("not found").red());
                         process::exit(1);
                     }
                     drop(users);
                     if let Err(e) = persist_users_file(&state.users).await {
-                        eprintln!("Failed to persist users.json: {}", e);
+                        eprintln!("{}: {}", yansi::Paint::new("Failed to persist users.json").red(), e);
                         process::exit(1);
                     }
-                    println!("Password for '{}' updated", uname);
+                    println!("{} '{}' {}", yansi::Paint::new("Password for").green(), uname, yansi::Paint::new("updated").green());
                     return;
                 }
                 UserCommands::AddOwner {
@@ -472,13 +534,13 @@ async fn main() {
                     let owner_exists = users.values().any(|r| r.role == "owner");
                     if owner_exists && !force {
                         eprintln!(
-                            "An owner user already exists; use --force to create another owner or overwrite"
+                            "{}", yansi::Paint::new("An owner user already exists; use --force to create another owner or overwrite").red()
                         );
                         process::exit(1);
                     }
                     // If the username exists and force is not set, fail (consistent with `Add` semantics)
                     if users.contains_key(&uname) && !force {
-                        eprintln!("User '{}' already exists; use --force to overwrite", uname);
+                        eprintln!("{} '{}' {}; {}", yansi::Paint::new("User").red(), uname, yansi::Paint::new("already exists").red(), yansi::Paint::new("use --force to overwrite").yellow());
                         process::exit(1);
                     }
                     let hash = generate_password_hash(&password);
@@ -492,10 +554,10 @@ async fn main() {
                     );
                     drop(users);
                     if let Err(e) = persist_users_file(&state.users).await {
-                        eprintln!("Failed to persist users.json: {}", e);
+                        eprintln!("{}: {}", yansi::Paint::new("Failed to persist users.json").red(), e);
                         process::exit(1);
                     }
-                    println!("Owner '{}' created", uname);
+                    println!("{} '{}' {}", yansi::Paint::new("Owner").green(), uname, yansi::Paint::new("created").green());
                     return;
                 }
             }
@@ -506,46 +568,55 @@ async fn main() {
                 InstanceCommands::List { username } => {
                     let uname = username.unwrap_or_default();
                     let list = handlers::helpers::load_instances_for_user_wrapper(&state, &uname).await;
-                    println!("id\thostname\tstatus");
-                    for i in list {
-                        println!("{}\t{}\t{}", i.id, i.hostname, i.status);
+                    
+                    let mut table = Table::new();
+                    table.load_preset(presets::UTF8_FULL);
+                    table.apply_modifier(modifiers::UTF8_ROUND_CORNERS);
+                    table.set_content_arrangement(ContentArrangement::Dynamic);
+                    if let Some((Width(w), _)) = terminal_size() {
+                        table.set_width(w - 4);
                     }
+                    table.set_header(vec!["ID", "Hostname", "Status"]);
+                    for i in list {
+                        table.add_row(vec![i.id, i.hostname, i.status]);
+                    }
+                    println!("\n{table}\n");
                     return;
                 }
                 InstanceCommands::Show { instance_id } => {
                     let endpoint = format!("/v1/instances/{}", instance_id);
                     let payload = api_call_wrapper(&state, "GET", &endpoint, None, None).await;
-                    println!("{}", serde_json::to_string_pretty(&payload).unwrap_or_else(|_| "<non-json>".into()));
+                    print_api_response(&payload);
                     return;
                 }
                 InstanceCommands::PowerOn { instance_id } => {
                     let payload = simple_instance_action(&state, "poweron", &instance_id).await;
-                    println!("{}", serde_json::to_string_pretty(&payload).unwrap_or_else(|_| "<non-json>".into()));
+                    print_api_response(&payload);
                     return;
                 }
                 InstanceCommands::PowerOff { instance_id } => {
                     let payload = simple_instance_action(&state, "poweroff", &instance_id).await;
-                    println!("{}", serde_json::to_string_pretty(&payload).unwrap_or_else(|_| "<non-json>".into()));
+                    print_api_response(&payload);
                     return;
                 }
                 InstanceCommands::Reset { instance_id } => {
                     let payload = simple_instance_action(&state, "reset", &instance_id).await;
-                    println!("{}", serde_json::to_string_pretty(&payload).unwrap_or_else(|_| "<non-json>".into()));
+                    print_api_response(&payload);
                     return;
                 }
                 InstanceCommands::Delete { instance_id } => {
                     let endpoint = format!("/v1/instances/{}", instance_id);
                     let payload = api_call_wrapper(&state, "DELETE", &endpoint, None, None).await;
-                    println!("{}", serde_json::to_string_pretty(&payload).unwrap_or_else(|_| "<non-json>".into()));
+                    print_api_response(&payload);
                     return;
                 }
                 InstanceCommands::ChangePass { instance_id } => {
                     let endpoint = format!("/v1/instances/{}/change-pass", instance_id);
                     let payload = api_call_wrapper(&state, "POST", &endpoint, None, None).await;
                     if let Some(pass) = payload.get("data").and_then(|d| d.get("password")).and_then(|v| v.as_str()) {
-                        println!("New password for {}: {}", instance_id, pass);
+                        println!("{} {}: {}", yansi::Paint::new("New password for").green(), instance_id, yansi::Paint::new(pass).cyan());
                     } else {
-                        println!("{}", serde_json::to_string_pretty(&payload).unwrap_or_else(|_| "<non-json>".into()));
+                        print_api_response(&payload);
                     }
                     return;
                 }
@@ -553,7 +624,7 @@ async fn main() {
                     let endpoint = format!("/v1/instances/{}/change-os", instance_id);
                     let payload = serde_json::json!({"osId": os_id});
                     let resp = api_call_wrapper(&state, "POST", &endpoint, Some(payload), None).await;
-                    println!("{}", serde_json::to_string_pretty(&resp).unwrap_or_else(|_| "<non-json>".into()));
+                    print_api_response(&resp);
                     return;
                 }
                 InstanceCommands::Resize { instance_id, r#type, product_id, cpu, ram_in_gb, disk_in_gb, bandwidth_in_tb } => {
@@ -572,20 +643,20 @@ async fn main() {
                         if !obj.is_empty() { payload["resource"] = serde_json::Value::Object(obj); }
                     }
                     let resp = api_call_wrapper(&state, "POST", &endpoint, Some(payload), None).await;
-                    println!("{}", serde_json::to_string_pretty(&resp).unwrap_or_else(|_| "<non-json>".into()));
+                    print_api_response(&resp);
                     return;
                 }
                 InstanceCommands::AddTraffic { instance_id, amount } => {
                     let endpoint = format!("/v1/instances/{}/add-traffic", instance_id);
                     let payload = serde_json::json!({"amount": amount});
                     let resp = api_call_wrapper(&state, "POST", &endpoint, Some(payload), None).await;
-                    println!("{}", serde_json::to_string_pretty(&resp).unwrap_or_else(|_| "<non-json>".into()));
+                    print_api_response(&resp);
                     return;
                 }
                 InstanceCommands::SubscriptionRefund { instance_id } => {
                     let endpoint = format!("/v1/instances/{}/subscription-refund", instance_id);
                     let resp = api_call_wrapper(&state, "GET", &endpoint, None, None).await;
-                    println!("{}", serde_json::to_string_pretty(&resp).unwrap_or_else(|_| "<non-json>".into()));
+                    print_api_response(&resp);
                     return;
                 }
             }
