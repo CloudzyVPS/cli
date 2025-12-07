@@ -159,6 +159,7 @@ async fn start_server(mut state: AppState, host: &str, port: u16, stylesheet: Op
     };
     let app = build_app(state.clone());
     tracing::info!(%addr, "Starting Zy Rust server");
+    println!("Web server running on http://{}", addr);
     match tokio::net::TcpListener::bind(addr).await {
         Ok(listener) => {
             // Run the server and log any errors (do not panic with unwrap()).
@@ -225,6 +226,12 @@ Examples:
 struct Cli {
     #[command(subcommand)]
     command: Option<Commands>,
+    /// Disable colorized output
+    #[arg(long, global = true)]
+    no_color: bool,
+    /// Disable request/response logging
+    #[arg(long, global = true)]
+    silent: bool,
 }
 
 #[derive(Subcommand)]
@@ -336,6 +343,14 @@ async fn main() {
 
     // CLI parsing
     let cli = Cli::parse();
+
+    if cli.no_color {
+        yansi::whenever(yansi::Condition::NEVER);
+    }
+
+    if cli.silent {
+        crate::api::client::set_silent(true);
+    }
 
     // If CLI provided an env-file or not, we will load it per command below
     // Note: we avoid constructing a default `state` here; commands build the per-command state
