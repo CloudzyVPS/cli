@@ -39,6 +39,11 @@ async fn build_state_from_env(env_file: Option<&str>) -> AppState {
     let users = load_users_from_file().await;
     let disabled_instances = std::sync::Arc::new(config::get_disabled_instance_ids());
     
+    let client = reqwest::Client::builder()
+        .user_agent(format!("Zy/{}", env!("CARGO_PKG_VERSION")))
+        .build()
+        .expect("Failed to create HTTP client");
+    
     AppState {
         users,
         sessions: Arc::new(Mutex::new(HashMap::new())),
@@ -47,7 +52,7 @@ async fn build_state_from_env(env_file: Option<&str>) -> AppState {
         api_base_url: config::get_api_base_url(),
         api_token: config::get_api_token(),
         public_base_url: config::get_public_base_url(),
-        client: reqwest::Client::new(),
+        client,
         disabled_instances,
         custom_css: None,
     }
