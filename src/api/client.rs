@@ -43,9 +43,14 @@ pub async fn api_call(
     parts.push(format!("'{}'", Paint::new(&url_for_log).fg(yansi::Color::Cyan)));
 
     if !api_token.is_empty() {
+        let masked_token = if api_token.len() > 8 {
+            format!("{}...", &api_token[..8])
+        } else {
+            "****".to_string()
+        };
         parts.push(format!("{} {}", 
             Paint::new("-H").fg(yansi::Color::Magenta), 
-            Paint::new(format!("'API-Token: {}'", api_token)).fg(yansi::Color::Magenta)
+            Paint::new(format!("'API-Token: {}'", masked_token)).fg(yansi::Color::Magenta)
         ));
     }
     if body.is_some() {
