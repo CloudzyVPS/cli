@@ -120,12 +120,10 @@ mod tests {
         // We can't guarantee which platform we're on, but we can check the error type
         match result {
             Ok(_) => {
-                // Supported platform
-                assert!(true);
+                // Supported platform - test passes
             }
             Err(UpdateError::UnsupportedPlatform(_)) => {
-                // Unsupported platform - still valid test
-                assert!(true);
+                // Unsupported platform - still a valid test outcome
             }
             Err(_) => {
                 panic!("Unexpected error type");

@@ -76,10 +76,10 @@ fn test_parse_invalid_non_numeric() {
 #[test]
 fn test_current_version() {
     let current = Version::current();
-    // Should not panic and should be valid
-    assert!(current.major >= 0);
-    assert!(current.minor >= 0);
-    assert!(current.patch >= 0);
+    // Should not panic and should be valid semver format
+    let version_str = current.to_string();
+    assert!(version_str.contains('.'));
+    assert!(version_str.split('.').count() >= 3);
 }
 
 #[test]
