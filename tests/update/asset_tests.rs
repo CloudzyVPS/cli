@@ -1,5 +1,5 @@
 /// Tests for asset selection and parsing
-use zy::update::{Asset, Platform, asset::{parse_asset_name, select_asset_for_platform}};
+use zy::update::{Asset, Platform, parse_asset_name, select_asset_for_platform};
 
 #[test]
 fn test_parse_asset_name_linux_x64() {

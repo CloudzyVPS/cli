@@ -22,7 +22,7 @@ pub struct Asset {
 /// # Examples
 /// 
 /// ```
-/// use zy::update::asset::parse_asset_name;
+/// use zy::update::parse_asset_name;
 /// 
 /// let result = parse_asset_name("zy-1.0.1-x86_64-unknown-linux-gnu");
 /// assert_eq!(result, Some(("1.0.1".to_string(), "x86_64-unknown-linux-gnu".to_string())));
@@ -74,7 +74,7 @@ pub fn parse_asset_name(name: &str) -> Option<(String, String)> {
 /// # Examples
 /// 
 /// ```no_run
-/// use zy::update::{Asset, Platform, asset::select_asset_for_platform};
+/// use zy::update::{Asset, Platform, select_asset_for_platform};
 /// 
 /// let platform = Platform::current();
 /// let assets = vec![
