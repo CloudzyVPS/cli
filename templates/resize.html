@@ -39,15 +39,8 @@
         </dl>
     </fieldset>
 
-    {% if is_disabled %}
-    <div>
-        <div>
-            <h2>Instance locked</h2>
-            <p>Actions are disabled for this instance.</p>
-        </div>
-    </div>
     <form method="post" action="{{ base_url }}/instance/{{ instance.id }}/resize">
-        <fieldset>
+        <fieldset {% if is_disabled %}disabled{% endif %}>
             <legend>Resize options</legend>
             <div>
                 <label for="type">Resize type</label>
@@ -67,6 +60,7 @@
                 <h3>Custom configuration</h3>
                 <label for="region_id">Region</label>
                 <select id="region_id" name="region_id">
+                    <option value="">(Select region)</option>
                     {% for region in regions %}
                     <option value="{{ region.id }}">{{ region.name }}</option>
                     {% endfor %}
@@ -88,16 +82,12 @@
 
         <footer class="mt-5">
             <a href="{{ base_url }}/instance/{{ instance.id }}">Cancel</a>
-            <button type="button" disabled>Resize instance</button>
-        </footer>
-    </form>
-    {% else %}
-    <form method="post" action="{{ base_url }}/instance/{{ instance.id }}/resize">
-        <footer class="mt-5">
-            <a href="{{ base_url }}/instance/{{ instance.id }}">Cancel</a>
+            {% if is_disabled %}
+            <button type="button" disabled>Resize instance (Locked)</button>
+            {% else %}
             <button type="submit">Resize instance</button>
+            {% endif %}
         </footer>
     </form>
-    {% endif %}
 </section>
 {% endblock %}

@@ -558,22 +558,58 @@ pub async fn instance_resize_post(
     }
     let endpoint = format!("/v1/instances/{}/resize", instance_id);
     let mut payload = serde_json::json!({"type": form.r#type});
-    if form.r#type.to_uppercase() == "FIXED" {
-        if let Some(pid) = form.product_id {
+
+    if let Some(pid) = form.product_id {
+        if !pid.trim().is_empty() {
             payload["productId"] = Value::from(pid);
         }
-    } else {
-        let mut obj = serde_json::Map::new();
-        if let Some(rid) = form.region_id { obj.insert("regionId".into(), Value::from(rid)); }
-        if let Some(cpu) = form.cpu { if let Ok(n) = cpu.parse::<i64>() { obj.insert("cpu".into(), Value::from(n)); }}
-        if let Some(ram) = form.ram_in_gb { if let Ok(n) = ram.parse::<i64>() { obj.insert("ramInGB".into(), Value::from(n)); }}
-        if let Some(disk) = form.disk_in_gb { if let Ok(n) = disk.parse::<i64>() { obj.insert("diskInGB".into(), Value::from(n)); }}
-        if let Some(bw) = form.bandwidth_in_tb { if let Ok(n) = bw.parse::<i64>() { obj.insert("bandwidthInTB".into(), Value::from(n)); }}
-        if !obj.is_empty() {
-            payload["resource"] = Value::Object(obj);
+    }
+
+    if let Some(rid) = form.region_id {
+        if !rid.trim().is_empty() {
+            payload["regionId"] = Value::from(rid);
         }
     }
-    let _ = api_call_wrapper(&state, "POST", &endpoint, Some(payload), None).await;
+
+    if form.r#type.to_uppercase() == "CUSTOM" {
+        let mut extra_resource = serde_json::Map::new();
+        if let Some(cpu) = form.cpu {
+            if let Ok(n) = cpu.parse::<i64>() {
+                extra_resource.insert("cpu".into(), Value::from(n));
+            }
+        }
+        if let Some(ram) = form.ram_in_gb {
+            if let Ok(n) = ram.parse::<i64>() {
+                extra_resource.insert("ramInGB".into(), Value::from(n));
+            }
+        }
+        if let Some(disk) = form.disk_in_gb {
+            if let Ok(n) = disk.parse::<i64>() {
+                extra_resource.insert("diskInGB".into(), Value::from(n));
+            }
+        }
+        if let Some(bw) = form.bandwidth_in_tb {
+            if let Ok(n) = bw.parse::<i64>() {
+                extra_resource.insert("bandwidthInTB".into(), Value::from(n));
+            }
+        }
+        if !extra_resource.is_empty() {
+            payload["extraResource"] = Value::Object(extra_resource);
+        }
+    }
+    let resp = api_call_wrapper(&state, "POST", &endpoint, Some(payload), None).await;
+    
+    if let Some(sid) = jar.get("session_id") {
+        let mut flashes = state.flash_store.lock().unwrap();
+        let entry = flashes.entry(sid.value().to_string()).or_default();
+        if resp.get("code").and_then(|c| c.as_str()) == Some("OKAY") {
+            entry.push("Instance resize initiated successfully.".into());
+        } else {
+            let detail = resp.get("detail").and_then(|d| d.as_str()).unwrap_or("Unknown error");
+            entry.push(format!("Resize failed: {}", detail));
+        }
+    }
+
     Redirect::to(&format!("/instance/{}", instance_id)).into_response()
 }
 
