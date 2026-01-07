@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 //! Self-update infrastructure for the Zy CLI
 //! 
 //! This module provides functionality for checking, downloading, and installing
@@ -40,7 +41,9 @@ mod github;
 pub use error::UpdateError;
 pub use version::Version;
 pub use channel::Channel;
+#[allow(unused_imports)]
 pub use platform::Platform;
+#[allow(unused_imports)]
 pub use asset::{Asset, parse_asset_name, select_asset_for_platform};
 pub use github::{GitHubClient, Release};
 
