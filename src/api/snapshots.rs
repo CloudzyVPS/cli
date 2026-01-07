@@ -9,9 +9,12 @@ pub struct SnapshotView {
     pub size: Option<i64>,
     pub status: String,
     pub created_at: Option<i64>,
+    #[allow(dead_code)]
     pub last_restored_at: Option<i64>,
+    #[allow(dead_code)]
     pub is_instance_deleted: bool,
     pub instance_id: String,
+    #[allow(dead_code)]
     pub region_id: Option<String>,
 }
 
@@ -76,8 +79,8 @@ pub async fn load_snapshots(
     }
     
     let actual_total = if total_count > 0 { total_count } else { snapshots.len() };
-    let total_pages = if per_page > 0 { (actual_total + per_page - 1) / per_page } else { 1 };
-    let current_page = if page > 0 { page } else { 1 };
+    let total_pages = if per_page > 0 { actual_total.div_ceil(per_page) } else { 1 };
+    let current_page = if page >= 1 { page } else { 1 };
     
     PaginatedSnapshots {
         snapshots,

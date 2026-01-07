@@ -8,7 +8,7 @@ use serde::Deserialize;
 use crate::models::AppState;
 use crate::handlers::helpers::{
     build_template_globals, current_username_from_jar,
-    render_template, api_call_wrapper, TemplateGlobals, ensure_owner,
+    render_template, TemplateGlobals, ensure_owner,
 };
 use crate::api::{load_snapshots, create_snapshot, get_snapshot, delete_snapshot, restore_snapshot};
 use crate::services::instance_service::enforce_instance_access;
