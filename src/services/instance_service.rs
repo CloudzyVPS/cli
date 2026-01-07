@@ -58,19 +58,7 @@ pub async fn enforce_instance_access(state: &AppState, username: Option<&str>, i
 pub async fn get_instance_for_action(state: &AppState, instance_id: &str) -> InstanceView {
     let endpoint = format!("/v1/instances/{}", instance_id);
     let payload = crate::api::api_call(&state.client, &state.api_base_url, &state.api_token, "GET", &endpoint, None, None).await;
-    let mut instance = InstanceView {
-        id: instance_id.to_string(),
-        hostname: "(no hostname)".into(),
-        region: "".into(),
-        main_ip: None,
-        main_ipv6: None,
-        status: "".into(),
-        status_display: "".into(),
-        vcpu_count_display: "—".into(),
-        ram_display: "—".into(),
-        disk_display: "—".into(),
-        os: None,
-    };
+    let mut instance = InstanceView::new_with_defaults(instance_id.to_string());
     if let Some(obj) = payload.as_object() {
         if let Some(data) = obj.get("data").and_then(|d| d.as_object()) {
             instance.hostname = data.get("hostname").and_then(|v| v.as_str()).unwrap_or(&instance.hostname).to_string();
