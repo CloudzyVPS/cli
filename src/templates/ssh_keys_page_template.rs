@@ -11,6 +11,10 @@ pub struct SshKeysPageTemplate<'a> {
     pub has_flash_messages: bool,
     pub ssh_keys: &'a [SshKeyView],
     pub customer_id: Option<String>,
+    pub current_page: usize,
+    pub total_pages: usize,
+    pub per_page: usize,
+    pub total_count: usize,
 }
 
 crate::impl_base_template!(SshKeysPageTemplate<'_>);

@@ -3,7 +3,6 @@ use axum::{
     response::{IntoResponse, Redirect},
 };
 use axum_extra::extract::cookie::CookieJar;
-use std::collections::HashMap;
 use serde::Deserialize;
 use serde_json::Value;
 
@@ -12,9 +11,18 @@ use crate::templates::SshKeysTemplate;
 use crate::handlers::helpers::{
     build_template_globals, ensure_owner,
     fetch_default_customer_id, render_template, TemplateGlobals,
-    detail_requires_customer, api_call_wrapper, load_ssh_keys_api,
+    detail_requires_customer, api_call_wrapper, load_ssh_keys_paginated_wrapper,
     plain_html,
 };
+
+#[derive(Deserialize)]
+pub struct SshKeysQuery {
+    customer_id: Option<String>,
+    #[serde(default = "default_page")]
+    page: usize,
+    #[serde(default = "default_per_page")]
+    per_page: usize,
+}
 
 #[derive(Deserialize)]
 pub struct SshKeysForm {
@@ -24,20 +32,28 @@ pub struct SshKeysForm {
     ssh_key_id: Option<String>,
 }
 
+fn default_page() -> usize {
+    1
+}
+
+fn default_per_page() -> usize {
+    10
+}
+
 pub async fn ssh_keys_get(
     State(state): State<AppState>,
     jar: CookieJar,
-    Query(q): Query<HashMap<String, String>>,
+    Query(q): Query<SshKeysQuery>,
 ) -> impl IntoResponse {
     if let Some(r) = ensure_owner(&state, &jar) {
         return r.into_response();
     }
-    let customer_id = if let Some(id) = q.get("customer_id").cloned() {
+    let customer_id = if let Some(id) = q.customer_id.clone() {
         Some(id)
     } else {
         fetch_default_customer_id(&state).await
     };
-    let keys = load_ssh_keys_api(&state, customer_id.clone()).await;
+    let paginated = load_ssh_keys_paginated_wrapper(&state, customer_id.clone(), q.page, q.per_page).await;
     
     let TemplateGlobals { current_user, api_hostname, base_url, flash_messages, has_flash_messages } = build_template_globals(&state, &jar);
     render_template(&state, &jar, SshKeysTemplate {
@@ -46,8 +62,12 @@ pub async fn ssh_keys_get(
             base_url,
             flash_messages,
             has_flash_messages,
-            ssh_keys: &keys,
+            ssh_keys: &paginated.ssh_keys,
             customer_id,
+            current_page: paginated.current_page,
+            total_pages: paginated.total_pages,
+            per_page: paginated.per_page,
+            total_count: paginated.total_count,
         },
     )
 }

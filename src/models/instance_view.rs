@@ -11,5 +11,6 @@ pub struct InstanceView {
     pub ram_display: String,
     pub disk_display: String,
     pub main_ip: Option<String>,
+    pub main_ipv6: Option<String>,
     pub os: Option<OsItem>,
 }

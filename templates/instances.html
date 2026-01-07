@@ -24,6 +24,7 @@
             <tr>
                 <th>Hostname</th>
                 <th>ID</th>
+                <th>Network</th>
                 <th>Status</th>
                 <th class="text-right">Actions</th>
             </tr>
@@ -33,6 +34,17 @@
                 <tr>
                     <td><strong>{{ instance.hostname }}</strong></td>
                     <td><code>{{ instance.id }}</code></td>
+                    <td>
+                        {% if instance.main_ip.is_some() %}
+                        <div class="small">{{ instance.main_ip.as_ref().unwrap() }}</div>
+                        {% endif %}
+                        {% if instance.main_ipv6.is_some() %}
+                        <div class="small text-muted">{{ instance.main_ipv6.as_ref().unwrap() }}</div>
+                        {% endif %}
+                        {% if instance.main_ip.is_none() && instance.main_ipv6.is_none() %}
+                        <span class="text-muted small">—</span>
+                        {% endif %}
+                    </td>
                     <td>
                         <span class="status-badge status-{{ instance.status|lower }}">
                             {{ instance.status_display }}

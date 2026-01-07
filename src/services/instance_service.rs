@@ -63,6 +63,7 @@ pub async fn get_instance_for_action(state: &AppState, instance_id: &str) -> Ins
         hostname: "(no hostname)".into(),
         region: "".into(),
         main_ip: None,
+        main_ipv6: None,
         status: "".into(),
         status_display: "".into(),
         vcpu_count_display: "—".into(),

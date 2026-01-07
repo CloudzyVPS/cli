@@ -4,7 +4,10 @@ use axum_extra::extract::cookie::CookieJar;
 use serde::Deserialize;
 use serde_json::Value;
 
-use crate::api::{api_call, load_ssh_keys, load_regions, load_products, load_os_list, load_instances_for_user, PaginatedInstances};
+use crate::api::{
+    api_call, load_ssh_keys, load_ssh_keys_paginated, load_regions, load_products, 
+    load_os_list, load_instances_for_user, PaginatedInstances, PaginatedSshKeys
+};
 use crate::models::{AppState, CurrentUser, SshKeyView, Region, ProductView, OsItem, InstanceView};
 use std::collections::HashMap;
 
@@ -240,6 +243,15 @@ pub async fn fetch_default_customer_id(state: &AppState) -> Option<String> {
 
 pub async fn load_ssh_keys_api(state: &AppState, customer_id: Option<String>) -> Vec<SshKeyView> {
     load_ssh_keys(&state.client, &state.api_base_url, &state.api_token, customer_id).await
+}
+
+pub async fn load_ssh_keys_paginated_wrapper(
+    state: &AppState,
+    customer_id: Option<String>,
+    page: usize,
+    per_page: usize,
+) -> PaginatedSshKeys {
+    load_ssh_keys_paginated(&state.client, &state.api_base_url, &state.api_token, customer_id, page, per_page).await
 }
 
 pub async fn load_regions_wrapper(state: &AppState) -> (Vec<Region>, HashMap<String, Region>) {

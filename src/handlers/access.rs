@@ -67,6 +67,9 @@ pub async fn access_get(State(state): State<AppState>, jar: CookieJar) -> impl I
                     .and_then(|v| v.as_str())
                     .unwrap_or_default()
                     .to_string();
+                let main_ip = obj.get("mainIp").and_then(|v| v.as_str()).map(|s| s.to_string());
+                let main_ipv6 = obj.get("mainIpv6").and_then(|v| v.as_str()).map(|s| s.to_string());
+                
                 list.push(InstanceView { 
                     id, 
                     hostname, 
@@ -76,7 +79,8 @@ pub async fn access_get(State(state): State<AppState>, jar: CookieJar) -> impl I
                     vcpu_count_display: "—".into(),
                     ram_display: "—".into(),
                     disk_display: "—".into(),
-                    main_ip: None,
+                    main_ip,
+                    main_ipv6,
                     os: None,
                 });
             }

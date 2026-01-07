@@ -12,4 +12,4 @@ pub use regions::load_regions;
 pub use products::load_products;
 pub use operating_systems::load_os_list;
 pub use instances::{load_instances_for_user, PaginatedInstances};
-pub use ssh_keys::load_ssh_keys;
+pub use ssh_keys::{load_ssh_keys, load_ssh_keys_paginated, PaginatedSshKeys};
