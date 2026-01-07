@@ -104,6 +104,10 @@ fn build_app(state: AppState) -> Router {
             "/instance/:instance_id/change-pass",
             get(handlers::instances::instance_change_pass_get).post(handlers::instances::instance_change_pass_post),
         )
+        .route(
+            "/instance/:instance_id/change-os",
+            get(handlers::instances::instance_change_os_get).post(handlers::instances::instance_change_os_post),
+        )
         .route("/instance/:instance_id/resize", get(handlers::instances::instance_resize_get).post(handlers::instances::instance_resize_post))
         .route("/coming-soon/:feature", get(handlers::system::coming_soon))
         .route(

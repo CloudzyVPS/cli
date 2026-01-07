@@ -53,6 +53,7 @@
             <span class="btn btn-secondary btn-disabled">Reset</span>
             <span class="btn btn-secondary btn-disabled">Resize</span>
             <span class="btn btn-secondary btn-disabled">Change Password</span>
+            <span class="btn btn-secondary btn-disabled">Change OS</span>
             <span class="btn btn-secondary btn-disabled">Delete</span>
         </div>
         {% else %}
@@ -62,6 +63,7 @@
             <a href="{{ base_url }}/confirm/reset-instance/{{ instance_id }}" class="btn btn-secondary">Reset</a>
             <a href="{{ base_url }}/instance/{{ instance_id }}/resize" class="btn btn-secondary">Resize</a>
             <a href="{{ base_url }}/instance/{{ instance_id }}/change-pass" class="btn btn-secondary">Change Password</a>
+            <a href="{{ base_url }}/instance/{{ instance_id }}/change-os" class="btn btn-secondary">Change OS</a>
             <a href="{{ base_url }}/confirm/delete-instance/{{ instance_id }}" class="btn btn-secondary">Delete</a>
         </div>
         {% endif %}

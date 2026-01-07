@@ -1,0 +1,101 @@
+{% extends "base.html" %}
+
+{% block title %}Change OS{% endblock %}
+
+{% block content %}
+<header class="page-header">
+    <p class="breadcrumb"><a href="{{ base_url }}/instance/{{ instance.id }}">← Back to instance</a></p>
+    <h1>Change operating system</h1>
+    <p>Select a new operating system for this instance. This will reinstall the OS and erase all data.</p>
+</header>
+
+<section>
+    <fieldset>
+        <legend>Instance details</legend>
+        <dl>
+            <div>
+                <dt>Hostname</dt>
+                <dd><strong>{{ instance.hostname }}</strong></dd>
+            </div>
+            <div>
+                <dt>Instance ID</dt>
+                <dd><code>{{ instance.id }}</code></dd>
+            </div>
+            <div>
+                <dt>Current OS</dt>
+                <dd>{% if instance.os.is_some() %}{{ instance.os.as_ref().unwrap().name }}{% else %}N/A{% endif %}</dd>
+            </div>
+            <div>
+                <dt>Current status</dt>
+                <dd>{{ instance.status }}</dd>
+            </div>
+        </dl>
+    </fieldset>
+
+    {% if disabled_by_env %}
+    <div class="warning-banner mt-4">
+        <div>
+            <h2>Instance locked</h2>
+            <p>Actions are disabled for this instance via environment configuration (blacklisted ID).</p>
+        </div>
+    </div>
+    {% endif %}
+
+    {% if disabled_by_host %}
+    <div class="warning-banner mt-4">
+        <div>
+            <h2>Host mismatch</h2>
+            <p>Actions are disabled because this instance's hostname matches the application server's hostname.</p>
+        </div>
+    </div>
+    {% endif %}
+
+    <div class="warning-banner mt-4">
+        <div>
+            <h2>⚠️ Warning</h2>
+            <p><strong>Changing the operating system will erase all data on this instance.</strong> Make sure you have backed up any important data before proceeding.</p>
+        </div>
+    </div>
+
+    {% if disabled_by_env || disabled_by_host %}
+    <form method="post">
+        <fieldset>
+            <legend>Select new operating system</legend>
+            <label for="os_id">Operating System</label>
+            <select id="os_id" name="os_id" disabled>
+                <option value="">Select an OS...</option>
+                {% for os in os_list %}
+                <option value="{{ os.id }}">{{ os.name }} ({{ os.family }}{% if os.arch.is_some() %} - {{ os.arch.as_ref().unwrap() }}{% endif %})</option>
+                {% endfor %}
+            </select>
+        </fieldset>
+
+        <footer>
+            <a href="{{ base_url }}/instance/{{ instance.id }}">Cancel</a>
+            <button type="button" disabled>Change OS</button>
+        </footer>
+    </form>
+    {% else %}
+    <form method="post">
+        <fieldset>
+            <legend>Select new operating system</legend>
+            <label for="os_id">Operating System</label>
+            <select id="os_id" name="os_id" required>
+                <option value="">Select an OS...</option>
+                {% for os in os_list %}
+                <option value="{{ os.id }}"{% if instance.os.is_some() && instance.os.as_ref().unwrap().id == os.id %} selected{% endif %}>
+                    {{ os.name }} ({{ os.family }}{% if os.arch.is_some() %} - {{ os.arch.as_ref().unwrap() }}{% endif %})
+                </option>
+                {% endfor %}
+            </select>
+            <small>Select the operating system you want to install on this instance.</small>
+        </fieldset>
+
+        <footer class="form-actions">
+            <a class="button-secondary" href="{{ base_url }}/instance/{{ instance.id }}">Cancel</a>
+            <button type="submit">Change OS</button>
+        </footer>
+    </form>
+    {% endif %}
+</section>
+{% endblock %}
