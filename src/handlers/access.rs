@@ -61,6 +61,7 @@ pub async fn access_get(State(state): State<AppState>, jar: CookieJar) -> impl I
                     .and_then(|v| v.as_str())
                     .unwrap_or("?")
                     .to_string();
+                let status_display = crate::utils::format_status(&status);
                 let region = obj
                     .get("region")
                     .and_then(|v| v.as_str())
@@ -71,6 +72,7 @@ pub async fn access_get(State(state): State<AppState>, jar: CookieJar) -> impl I
                     hostname, 
                     region,
                     status,
+                    status_display,
                     vcpu_count_display: "—".into(),
                     ram_display: "—".into(),
                     disk_display: "—".into(),

@@ -11,6 +11,7 @@ pub struct InstanceDetailTemplate {
     pub has_flash_messages: bool,
     pub instance_id: String,
     pub hostname: String,
+    pub status: String,
     pub details: Vec<(String, String)>,
     pub disabled_by_env: bool,
     pub disabled_by_host: bool,

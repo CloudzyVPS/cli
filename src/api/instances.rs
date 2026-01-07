@@ -51,6 +51,7 @@ pub async fn load_instances_for_user(
                     let hostname = obj.get("hostname").and_then(|v| v.as_str()).unwrap_or("(no hostname)").to_string();
                     let region = obj.get("region").and_then(|v| v.as_str()).unwrap_or("").to_string();
                     let status = obj.get("status").and_then(|v| v.as_str()).unwrap_or("").to_string();
+                    let status_display = crate::utils::format_status(&status);
                     let vcpu_count_display = obj.get("vcpuCount").and_then(|v| v.as_i64()).map(|n| n.to_string()).unwrap_or_else(|| "—".into());
                     let ram_display = obj.get("ram").and_then(|v| v.as_i64()).map(|n| format!("{} MB", n)).unwrap_or_else(|| "—".into());
                     let disk_display = obj.get("disk").and_then(|v| v.as_i64()).map(|n| format!("{} GB", n)).unwrap_or_else(|| "—".into());
@@ -74,6 +75,7 @@ pub async fn load_instances_for_user(
                         hostname,
                         region,
                         status,
+                        status_display,
                         vcpu_count_display,
                         ram_display,
                         disk_display,

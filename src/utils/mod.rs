@@ -12,6 +12,9 @@ pub mod parse_int_list;
 // JSON utilities
 pub mod json_converter;
 
+// Status formatting
+pub mod status_formatter;
+
 // Re-export all utilities for convenient access
 pub use url_encoding::parse_urlencoded_body;
 pub use url_parser::hostname_from_url;
@@ -21,3 +24,4 @@ pub use parse_flag::parse_flag;
 pub use parse_int::parse_optional_int;
 pub use parse_int_list::parse_int_list;
 pub use json_converter::value_to_short_string;
+pub use status_formatter::format_status;

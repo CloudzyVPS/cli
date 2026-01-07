@@ -13,7 +13,15 @@
     {% for kv in details %}
         <div>
             <dt>{{ kv.0 }}</dt>
-            <dd>{{ kv.1 }}</dd>
+            <dd>
+                {% if kv.0 == "Status" %}
+                    <span class="status-badge status-{{ status|lower }}">
+                        {{ kv.1 }}
+                    </span>
+                {% else %}
+                    {{ kv.1 }}
+                {% endif %}
+            </dd>
         </div>
     {% endfor %}
     </dl>

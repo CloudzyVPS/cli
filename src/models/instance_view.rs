@@ -6,6 +6,7 @@ pub struct InstanceView {
     pub hostname: String,
     pub region: String,
     pub status: String,
+    pub status_display: String,
     pub vcpu_count_display: String,
     pub ram_display: String,
     pub disk_display: String,
