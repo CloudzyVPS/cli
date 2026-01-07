@@ -99,16 +99,8 @@ fn build_app(state: AppState) -> Router {
         .route("/instance/:instance_id/change-os", get(handlers::instances::instance_change_os_get).post(handlers::instances::instance_change_os_post))
         .route("/instance/:instance_id/resize", get(handlers::instances::instance_resize_get).post(handlers::instances::instance_resize_post))
         .route(
-            "/instance/:instance_id/subscription-refund",
-            get(handlers::instances::instance_subscription_refund),
-        )
-        .route(
             "/instance/:instance_id/add-traffic",
             post(handlers::instances::instance_add_traffic),
-        )
-        .route(
-            "/bulk-subscription-refund",
-            get(handlers::instances::bulk_subscription_refund_get).post(handlers::instances::bulk_subscription_refund),
         )
         .route_layer(axum::middleware::from_fn_with_state(state.clone(), handlers::middleware::auth_middleware));
 
@@ -400,9 +392,6 @@ enum InstanceCommands {
     /// Add traffic amount (e.g., 50) to an instance
     #[command(about = "Add traffic to an instance", long_about = "Add additional traffic capacity to an instance using a numeric `--amount` (e.g., 50).")]
     AddTraffic { instance_id: String, amount: f64 },
-    /// Trigger subscription refund (idempotent API query)
-    #[command(about = "Request a subscription refund", long_about = "Trigger a subscription refund for an instance; results are returned as the API response and may contain success/failure codes.")]
-    SubscriptionRefund { instance_id: String },
 }
 
 #[tokio::main]
@@ -694,12 +683,6 @@ async fn main() {
                     let endpoint = format!("/v1/instances/{}/add-traffic", instance_id);
                     let payload = serde_json::json!({"amount": amount});
                     let resp = api_call_wrapper(&state, "POST", &endpoint, Some(payload), None).await;
-                    print_api_response(&resp);
-                    return;
-                }
-                InstanceCommands::SubscriptionRefund { instance_id } => {
-                    let endpoint = format!("/v1/instances/{}/subscription-refund", instance_id);
-                    let resp = api_call_wrapper(&state, "GET", &endpoint, None, None).await;
                     print_api_response(&resp);
                     return;
                 }

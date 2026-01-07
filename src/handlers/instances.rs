@@ -1,9 +1,8 @@
 use axum::{
-    extract::{State, Path, Form, Query},
-    response::{IntoResponse, Redirect, Html},
+    extract::{State, Path, Form},
+    response::{IntoResponse, Redirect},
 };
 use axum_extra::extract::cookie::CookieJar;
-use serde::Deserialize;
 use serde_json::Value;
 
 use crate::models::{
@@ -12,10 +11,10 @@ use crate::models::{
 use crate::templates::{
     InstancesTemplate, InstanceDetailTemplate, PowerOnInstanceTemplate,
     DeleteInstanceTemplate, PowerOffInstanceTemplate, ResetInstanceTemplate,
-    ChangePassInstanceTemplate, ChangeOsTemplate, ResizeTemplate, BulkRefundTemplate,
+    ChangePassInstanceTemplate, ChangeOsTemplate, ResizeTemplate,
 };
 use crate::handlers::helpers::{
-    build_template_globals, current_username_from_jar, ensure_owner,
+    build_template_globals, current_username_from_jar,
     render_template, api_call_wrapper, TemplateGlobals,
     load_regions_wrapper, load_products_wrapper, load_os_list_wrapper,
     load_instances_for_user_paginated,
@@ -635,65 +634,4 @@ pub async fn instance_resize_post(
     }
 
     Redirect::to(&format!("/instance/{}", instance_id)).into_response()
-}
-
-pub async fn instance_subscription_refund(
-    State(state): State<AppState>,
-    jar: CookieJar,
-    Path(instance_id): Path<String>,
-) -> impl IntoResponse {
-    if !enforce_instance_access(&state, current_username_from_jar(&state, &jar).as_deref(), &instance_id).await {
-        return Redirect::to("/instances").into_response();
-    }
-    let endpoint = format!("/v1/instances/{}/subscription-refund", instance_id);
-    let payload = api_call_wrapper(&state, "GET", &endpoint, None, None).await;
-    Html(format!("<html><body><h1>Refund {}</h1><pre>{}</pre><p><a href='/instance/{}'>Back</a></p></body></html>", instance_id, serde_json::to_string_pretty(&payload).unwrap_or("{}" .into()), instance_id)).into_response()
-}
-
-#[derive(Deserialize)]
-pub struct BulkRefundForm {
-    ids: String,
-}
-
-pub async fn bulk_subscription_refund(
-    State(state): State<AppState>,
-    jar: CookieJar,
-    Form(form): Form<BulkRefundForm>,
-) -> impl IntoResponse {
-    if let Some(r) = ensure_owner(&state, &jar) {
-        return r.into_response();
-    }
-    let ids: Vec<String> = form
-        .ids
-        .split(',')
-        .map(|s| s.trim().to_string())
-        .filter(|s| !s.is_empty())
-        .collect();
-    let payload = serde_json::json!({"ids": ids});
-    let resp = api_call_wrapper(
-        &state,
-        "POST",
-        "/v1/instances/bulk-subscription-refund",
-        Some(payload),
-        None,
-    )
-    .await;
-    Html(format!("<html><body><h1>Bulk Refund Result</h1><pre>{}</pre><p><a href='/instances'>Back</a></p></body></html>", serde_json::to_string_pretty(&resp).unwrap_or("{}" .into()))).into_response()
-}
-
-pub async fn bulk_subscription_refund_get(
-    State(state): State<AppState>,
-    jar: CookieJar,
-) -> impl IntoResponse {
-    if let Some(r) = ensure_owner(&state, &jar) {
-        return r.into_response();
-    }
-    let TemplateGlobals { current_user, api_hostname, base_url, flash_messages, has_flash_messages } = build_template_globals(&state, &jar);
-    render_template(&state, &jar, BulkRefundTemplate {
-            current_user,
-            api_hostname,
-            base_url,
-            flash_messages,
-            has_flash_messages,
-        })
 }
