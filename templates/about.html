@@ -89,10 +89,7 @@
                             <div class="d-flex gap-sm justify-end">
                                 <a href="{{ release.download_url }}" target="_blank" class="btn-secondary btn-sm">GitHub</a>
                                 {% if release.version.to_string() != version %}
-                                <form method="post" action="{{ base_url }}/about/switch-version">
-                                    <input type="hidden" name="version" value="{{ release.tag_name }}">
-                                    <button type="submit" class="btn-warning btn-sm" onclick="return confirm('Switching versions requires the CLI to update itself. Proceed?');">Switch</button>
-                                </form>
+                                <a href="{{ base_url }}/confirm/switch-version/{{ release.tag_name }}" class="btn-warning btn-sm">Switch</a>
                                 {% endif %}
                             </div>
                         </td>

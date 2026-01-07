@@ -73,12 +73,12 @@
 
             <hr>
 
-            <form method="post" action="{{ base_url }}/users/{{ user.username }}/delete" onsubmit="return confirm('Are you sure you want to delete this user?');">
+            <div class="danger-zone">
                 <label class="form-label text-danger">Danger Zone</label>
                 <div>
-                    <button type="submit" class="btn-danger">Delete User</button>
+                    <a href="{{ base_url }}/confirm/delete-user/{{ user.username }}" class="btn-danger">Delete User</a>
                 </div>
-            </form>
+            </div>
         </div>
     </div>
 </div>

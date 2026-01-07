@@ -95,13 +95,14 @@ fn build_app(state: AppState) -> Router {
         )
         .route("/create/result", get(handlers::wizard::create_step_8))
         .route("/instance/:instance_id", get(handlers::instances::instance_detail))
-        .route("/instance/:instance_id/delete", get(handlers::instances::instance_delete_get).post(handlers::instances::instance_delete))
-        .route("/instance/:instance_id/poweron", get(handlers::instances::instance_poweron_get).post(handlers::instances::instance_poweron_post))
-        .route("/instance/:instance_id/poweroff", get(handlers::instances::instance_poweroff_get).post(handlers::instances::instance_poweroff_post))
-        .route("/instance/:instance_id/reset", get(handlers::instances::instance_reset_get).post(handlers::instances::instance_reset_post))
+        .route("/instance/:instance_id/delete", post(handlers::instances::instance_delete))
+        .route("/instance/:instance_id/poweron", post(handlers::instances::instance_poweron_post))
+        .route("/instance/:instance_id/poweroff", post(handlers::instances::instance_poweroff_post))
+        .route("/instance/:instance_id/reset", post(handlers::instances::instance_reset_post))
         .route("/about", get(handlers::system::about_get))
         .route("/about/check-update", post(handlers::system::about_check_update))
         .route("/about/switch-version", post(handlers::system::about_switch_version))
+        .route("/confirm/:action/:id", get(handlers::system::confirmation_get))
         .route(
             "/instance/:instance_id/change-pass",
             get(handlers::instances::instance_change_pass_get).post(handlers::instances::instance_change_pass_post),

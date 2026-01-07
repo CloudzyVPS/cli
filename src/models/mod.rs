@@ -21,6 +21,7 @@ pub mod extras;
 pub mod plan_state;
 pub mod user_row;
 pub mod admin_view;
+pub mod confirmation;
 
 // Re-export all models
 pub use user_record::UserRecord;
@@ -45,6 +46,7 @@ pub use extras::Extras;
 pub use plan_state::PlanState;
 pub use user_row::UserRow;
 pub use admin_view::{AdminView, InstanceCheckbox};
+pub use confirmation::ConfirmationAction;
 
 // Type aliases for backward compatibility
 pub type Step1FormData = RegionSelectionFormStep1;
