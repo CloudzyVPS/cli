@@ -14,10 +14,10 @@ path = "src/main.rs"
 [dependencies]
 axum = { version = "0.7", features = ["macros", "json"] }
 askama = "0.12"
-tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "fs"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "stream"] }
 tower = "0.4"
 tower-http = { version = "0.5", features = ["trace", "cors", "fs", "set-header"] }
 dotenvy = "0.15"
@@ -37,3 +37,6 @@ yansi = "1.0.1"
 comfy-table = "7.2.1"
 terminal_size = "0.4.3"
 chrono = "0.4"
+indicatif = "0.17"
+tempfile = "3"
+futures-util = "0.3"

@@ -38,4 +38,42 @@ pub enum UpdateError {
     /// GitHub API returned an error
     #[error("GitHub API error: {0}")]
     GitHubApiError(String),
+    
+    /// Failed to download update
+    #[error("Download failed: {0}")]
+    DownloadFailed(String),
+    
+    /// Checksum verification failed
+    #[error("Checksum mismatch: expected {expected}, got {actual}")]
+    ChecksumMismatch {
+        /// Expected checksum
+        expected: String,
+        /// Actual checksum
+        actual: String,
+    },
+    
+    /// Checksum file not found in release assets
+    #[error("Checksum file not found in release")]
+    ChecksumFileNotFound,
+    
+    /// Failed to install update
+    #[error("Installation failed: {0}")]
+    InstallationFailed(String),
+    
+    /// Failed to create backup
+    #[error("Backup failed: {0}")]
+    BackupFailed(String),
+    
+    /// Failed to rollback after error
+    #[error("Rollback failed: {0}")]
+    RollbackFailed(String),
+    
+    /// Permission denied during update
+    #[error("Permission denied: {0}")]
+    #[allow(dead_code)]
+    PermissionDenied(String),
+    
+    /// I/O error during update
+    #[error("I/O error: {0}")]
+    IoError(#[from] std::io::Error),
 }
