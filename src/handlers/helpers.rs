@@ -254,6 +254,7 @@ pub async fn load_os_list_wrapper(state: &AppState) -> Vec<OsItem> {
     load_os_list(&state.client, &state.api_base_url, &state.api_token).await
 }
 
+#[allow(dead_code)]
 pub async fn load_instances_for_user_wrapper(state: &AppState, username: &str) -> Vec<InstanceView> {
     let users_map = state.users.lock().unwrap().clone();
     let result = load_instances_for_user(&state.client, &state.api_base_url, &state.api_token, &users_map, username, 0, 0).await;
