@@ -5,6 +5,7 @@ mod utils;
 mod api;
 mod templates;
 mod handlers;
+mod update;
 
 use axum::{
     routing::{get, post},
