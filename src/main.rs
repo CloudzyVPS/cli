@@ -607,14 +607,14 @@ async fn main() {
                             println!(
                                 "{} {}",
                                 yansi::Paint::new("←").bold(),
-                                yansi::Paint::new(format!("Previous page: zy instances list --page {}", paginated.current_page - 1)).dim()
+                                yansi::Paint::new(format!("Previous page: zy instances list --page {} --per-page {}", paginated.current_page - 1, per_page)).dim()
                             );
                         }
                         if paginated.current_page < paginated.total_pages {
                             println!(
                                 "{} {}",
                                 yansi::Paint::new("→").bold(),
-                                yansi::Paint::new(format!("Next page: zy instances list --page {}", paginated.current_page + 1)).dim()
+                                yansi::Paint::new(format!("Next page: zy instances list --page {} --per-page {}", paginated.current_page + 1, per_page)).dim()
                             );
                         }
                     } else if page == 0 {

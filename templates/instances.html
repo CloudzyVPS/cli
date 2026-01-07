@@ -40,8 +40,6 @@
         <span class="pagination-btn pagination-btn-disabled">← Previous</span>
         {% endif %}
         
-        <span class="pagination-current">Page {{ current_page }} of {{ total_pages }}</span>
-        
         {% if current_page < total_pages %}
         <a href="{{ base_url }}/instances?page={{ current_page + 1 }}&per_page={{ per_page }}" class="pagination-btn">Next →</a>
         {% else %}
