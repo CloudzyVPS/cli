@@ -185,6 +185,12 @@ See [LICENSE](LICENSE) for details.
 
 ## 🔗 Links
 
+### Versioning & Channels
+- **Stable**: Releases with no suffix (e.g., `v1.0.2`).
+- **Release Candidate**: Includes `-rc` (e.g., `v1.0.0-rc.1`).
+- **Beta**: Includes `-beta` (e.g., `v1.0.0-beta`).
+- **Alpha**: Includes `-alpha` (e.g., `v1.0.0-alpha.1`).
+
 - [Cloudzy Website](https://cloudzy.com)
 - [API Documentation](https://api.cloudzy.com/developers)
 - [GitHub Releases](https://github.com/CloudzyVPS/cli/releases)

@@ -1,12 +1,11 @@
 use axum::{
-    extract::State,
+    extract::{Form, State},
     response::IntoResponse,
 };
 use axum_extra::extract::cookie::CookieJar;
 
 use crate::models::AppState;
 use crate::templates::AboutTemplate;
-use crate::update::{check_for_update, Channel};
 use super::helpers::{build_template_globals, render_template, TemplateGlobals};
 
 pub async fn about_get(
