@@ -101,6 +101,7 @@ fn build_app(state: AppState) -> Router {
         .route("/instance/:instance_id/reset", get(handlers::instances::instance_reset_get).post(handlers::instances::instance_reset_post))
         .route("/about", get(handlers::system::about_get))
         .route("/about/check-update", post(handlers::system::about_check_update))
+        .route("/about/switch-version", post(handlers::system::about_switch_version))
         .route(
             "/instance/:instance_id/change-pass",
             get(handlers::instances::instance_change_pass_get).post(handlers::instances::instance_change_pass_post),

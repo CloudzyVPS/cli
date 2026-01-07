@@ -56,6 +56,52 @@
                 {% endif %}
             {% endif %}
         </div>
+
+        {% if !all_releases.is_empty() %}
+        <hr>
+        <h3 class="card-title" style="margin-top: 1.5rem;">Available Versions</h3>
+        <div class="table-responsive" style="margin-top: 1rem;">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Version</th>
+                        <th>Type</th>
+                        <th class="text-right">Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for release in all_releases %}
+                    <tr>
+                        <td>
+                            v{{ release.version }}
+                            {% if release.version.to_string() == version %}
+                            <span class="badge badge-success" style="margin-left: 0.5rem;">Current</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if release.prerelease %}
+                            <span class="badge badge-warning">Pre-release</span>
+                            {% else %}
+                            <span class="badge badge-info">Stable</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-right">
+                            <div class="d-flex gap-sm justify-end">
+                                <a href="{{ release.download_url }}" target="_blank" class="btn-secondary btn-sm">GitHub</a>
+                                {% if release.version.to_string() != version %}
+                                <form method="post" action="{{ base_url }}/about/switch-version">
+                                    <input type="hidden" name="version" value="{{ release.tag_name }}">
+                                    <button type="submit" class="btn-warning btn-sm" onclick="return confirm('Switching versions requires the CLI to update itself. Proceed?');">Switch</button>
+                                </form>
+                                {% endif %}
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% endif %}
     </div>
 </div>
 {% endblock %}

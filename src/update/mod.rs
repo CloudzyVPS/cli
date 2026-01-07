@@ -100,7 +100,14 @@ pub async fn check_for_update(channel: Channel) -> Result<Option<Release>, Updat
     tracing::debug!("Current version: {}", current_version);
     
     let client = GitHubClient::new(REPO_OWNER.to_string(), REPO_NAME.to_string());
-    let latest_release = client.get_latest_release(channel).await?;
+    let latest_release = match client.get_latest_release(channel).await {
+        Ok(release) => release,
+        Err(UpdateError::NoReleaseFound(_)) => {
+            tracing::info!("No releases found for channel {:?}", channel);
+            return Ok(None);
+        }
+        Err(e) => return Err(e),
+    };
     
     tracing::debug!("Latest release: {}", latest_release.version);
     
