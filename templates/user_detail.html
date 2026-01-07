@@ -20,6 +20,8 @@
             <dd>{{ user.username }}</dd>
             <dt>Role</dt>
             <dd>{{ user.role }}</dd>
+            <dt>About</dt>
+            <dd>{{ user.about }}</dd>
             <dt>Assigned Instances</dt>
             <dd>
                 {% if user.role == "admin" %}
@@ -46,6 +48,16 @@
                         <option value="admin" {% if user.role == "admin" %}selected{% endif %}>Admin</option>
                     </select>
                     <button type="submit" class="btn-secondary">Update</button>
+                </div>
+            </form>
+            
+            <hr>
+
+            <form method="post" action="{{ base_url }}/users/{{ user.username }}/about">
+                <label class="form-label">Update About</label>
+                <div class="d-flex gap-sm">
+                    <textarea name="about" class="form-control" rows="3" placeholder="About the user...">{{ user.about }}</textarea>
+                    <button type="submit" class="btn-secondary" style="align-self: flex-start;">Update</button>
                 </div>
             </form>
             

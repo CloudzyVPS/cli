@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+
+{% block title %}About Zy{% endblock %}
+
+{% block content %}
+<header class="page-header">
+    <h1>About Zy</h1>
+</header>
+
+<div class="card">
+    <div class="card-header">
+        <h2 class="card-title">System Information</h2>
+    </div>
+    <div class="card-body">
+        <dl class="detail-list">
+            <dt>Product</dt>
+            <dd>Zy — Control and manage your Cloudzy services right from home.</dd>
+            <dt>Current Version</dt>
+            <dd>v{{ version }}</dd>
+            {% if let Some(latest) = latest_version %}
+            <dt>Latest Version</dt>
+            <dd>
+                v{{ latest }}
+                {% if latest != version %}
+                <span class="badge badge-warning" style="margin-left: 0.5rem;">Update Available!</span>
+                {% else %}
+                <span class="badge badge-success" style="margin-left: 0.5rem;">Up to date</span>
+                {% endif %}
+            </dd>
+            {% endif %}
+        </dl>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <h2 class="card-title">Software Update</h2>
+    </div>
+    <div class="card-body">
+        <p>You can check for updates and update the Zy CLI to the latest version.</p>
+        
+        <div class="action-grid">
+            <form method="post" action="{{ base_url }}/about/check-update">
+                <button type="submit" class="btn-primary">Check for Updates</button>
+            </form>
+            
+            {% if let Some(latest) = latest_version %}
+                {% if latest != version %}
+                <hr>
+                <div class="alert alert-info">
+                    <p>A new version (v{{ latest }}) is available. You can update now from the CLI using <code>zy update</code> or download it from GitHub.</p>
+                    <div style="margin-top: 1rem;">
+                        <a href="https://github.com/CloudzyVPS/cli/releases/latest" target="_blank" class="btn-secondary">View on GitHub</a>
+                    </div>
+                </div>
+                {% endif %}
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}
+

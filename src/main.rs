@@ -73,6 +73,7 @@ fn build_app(state: AppState) -> Router {
         .route("/users/:username", get(handlers::users::user_detail))
         .route("/users/:username/reset-password", post(handlers::users::reset_password))
         .route("/users/:username/role", post(handlers::users::update_role))
+        .route("/users/:username/about", post(handlers::users::update_about))
         .route("/users/:username/delete", post(handlers::users::delete_user))
         .route("/access", get(handlers::access::access_get))
         .route("/access/:username", post(handlers::access::update_access))
@@ -98,6 +99,8 @@ fn build_app(state: AppState) -> Router {
         .route("/instance/:instance_id/poweron", get(handlers::instances::instance_poweron_get).post(handlers::instances::instance_poweron_post))
         .route("/instance/:instance_id/poweroff", get(handlers::instances::instance_poweroff_get).post(handlers::instances::instance_poweroff_post))
         .route("/instance/:instance_id/reset", get(handlers::instances::instance_reset_get).post(handlers::instances::instance_reset_post))
+        .route("/about", get(handlers::system::about_get))
+        .route("/about/check-update", post(handlers::system::about_check_update))
         .route(
             "/instance/:instance_id/change-pass",
             get(handlers::instances::instance_change_pass_get).post(handlers::instances::instance_change_pass_post),
@@ -329,6 +332,12 @@ enum Commands {
         #[command(subcommand)]
         sub: InstanceCommands,
     },
+    /// Update the Zy CLI to the latest version
+    Update {
+        /// Release channel to check (stable, beta, alpha, rc)
+        #[arg(long, default_value = "stable")]
+        channel: String,
+    },
 }
 
 #[derive(Subcommand)]
@@ -503,6 +512,7 @@ async fn main() {
                             password: hash,
                             role: role.clone(),
                             assigned_instances: vec![],
+                            about: String::new(),
                         },
                     );
                     drop(users);
@@ -557,6 +567,7 @@ async fn main() {
                             password: hash,
                             role: "owner".to_string(),
                             assigned_instances: vec![],
+                            about: String::new(),
                         },
                     );
                     drop(users);
@@ -693,6 +704,36 @@ async fn main() {
                     return;
                 }
             }
+        }
+        Commands::Update { channel } => {
+            let channel = match channel.to_lowercase().as_str() {
+                "beta" => update::Channel::Beta,
+                "alpha" => update::Channel::Alpha,
+                "rc" => update::Channel::ReleaseCandidate,
+                _ => update::Channel::Stable,
+            };
+
+            println!("{}", yansi::Paint::new(format!("Checking for updates on {:?} channel...", channel)).cyan());
+
+            match update::check_for_update(channel).await {
+                Ok(Some(release)) => {
+                    println!(
+                        "{} A newer version (v{}) is available!",
+                        yansi::Paint::new("Update available:").yellow().bold(),
+                        release.version
+                    );
+                    println!("Download it from: {}", yansi::Paint::new(release.download_url).underline());
+                    println!("\n(Note: Automatic background updates are coming in Phase 2)");
+                }
+                Ok(None) => {
+                    println!("{}", yansi::Paint::new("You are already running the latest version.").green());
+                }
+                Err(e) => {
+                    eprintln!("{}: {}", yansi::Paint::new("Error checking for updates").red(), e);
+                    process::exit(1);
+                }
+            }
+            return;
         }
     }
 

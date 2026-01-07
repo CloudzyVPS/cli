@@ -2,6 +2,7 @@
 use super::error::UpdateError;
 
 /// Represents the current platform's details
+#[allow(dead_code)]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Platform {
     /// Target triple (e.g., "x86_64-unknown-linux-gnu")
@@ -14,6 +15,7 @@ pub struct Platform {
     pub extension: Option<String>,
 }
 
+#[allow(dead_code)]
 impl Platform {
     /// Detect the current platform at runtime
     /// 

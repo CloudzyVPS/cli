@@ -1,4 +1,3 @@
-#![allow(dead_code)]
 //! Self-update infrastructure for the Zy CLI
 //! 
 //! This module provides functionality for checking, downloading, and installing
@@ -53,10 +52,8 @@ pub const REPO_OWNER: &str = "CloudzyVPS";
 /// Repository name on GitHub
 pub const REPO_NAME: &str = "cli";
 
-/// Ed25519 public key for verifying release signatures (placeholder for Phase 2)
-/// 
-/// This will be used in Phase 2 to verify the authenticity of downloaded binaries.
-pub const RELEASE_PUBLIC_KEY: &[u8] = b"PLACEHOLDER_PUBLIC_KEY_PHASE_2";
+// TODO: Phase 2 - Add Ed25519 public key for verifying release signatures
+// pub const RELEASE_PUBLIC_KEY: &[u8] = b"...";
 
 /// Check if a newer version is available for the specified channel
 /// 

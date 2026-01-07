@@ -53,6 +53,7 @@ impl Channel {
     /// assert_eq!(Channel::Beta.should_include_prerelease(), true);
     /// assert_eq!(Channel::ReleaseCandidate.should_include_prerelease(), true);
     /// ```
+    #[allow(dead_code)]
     pub fn should_include_prerelease(&self) -> bool {
         !matches!(self, Channel::Stable)
     }

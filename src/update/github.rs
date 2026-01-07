@@ -29,8 +29,10 @@ pub struct Release {
     /// Parsed semantic version
     pub version: Version,
     /// Whether this is a pre-release
+    #[allow(dead_code)]
     pub prerelease: bool,
     /// Release assets (binaries, checksums, etc.)
+    #[allow(dead_code)]
     pub assets: Vec<Asset>,
     /// Direct download URL for the release page
     pub download_url: String,
@@ -174,6 +176,13 @@ impl GitHubClient {
     /// ```
     pub async fn get_latest_release(&self, channel: Channel) -> Result<Release, UpdateError> {
         let releases = self.get_all_releases().await?;
+        
+        if releases.is_empty() {
+            return Err(UpdateError::GitHubApiError(format!(
+                "No releases found in the repository {}/{}",
+                self.repo_owner, self.repo_name
+            )));
+        }
         
         // Filter releases by channel
         let filtered: Vec<_> = releases

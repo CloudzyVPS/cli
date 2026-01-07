@@ -28,6 +28,7 @@ pub async fn users_list(State(state): State<AppState>, jar: CookieJar) -> impl I
                 username: k.clone(),
                 role: v.role.clone(),
                 assigned,
+                about: v.about.clone(),
             }
         })
         .collect();
@@ -71,6 +72,7 @@ pub async fn user_detail(
             username: uname.clone(),
             role: rec.role.clone(),
             assigned,
+            about: rec.about.clone(),
         }
     } else {
         return plain_html("User not found");
@@ -100,6 +102,7 @@ pub struct CreateUserForm {
     pub username: String,
     pub password: String,
     pub role: String,
+    pub about: Option<String>,
 }
 
 #[axum::debug_handler]
@@ -130,6 +133,7 @@ pub async fn users_create(
                 password: hash,
                 role: form.role.clone(),
                 assigned_instances: vec![],
+                about: form.about.unwrap_or_default(),
             },
         );
     }
@@ -214,6 +218,39 @@ pub async fn update_role(
         }
         if let Some(rec) = users.get_mut(&uname) {
             rec.role = form.role.clone();
+        }
+    }
+    match persist_users_file(&state.users).await {
+        Ok(_) => (),
+        Err(e) => {
+            tracing::error!(%e, "Failed to persist users");
+            return plain_html("Failed to persist users");
+        }
+    }
+    axum::response::Redirect::to(&format!("/users/{}", uname)).into_response()
+}
+
+#[derive(Deserialize)]
+pub struct UpdateAboutForm {
+    pub about: String,
+}
+
+pub async fn update_about(
+    State(state): State<AppState>,
+    jar: CookieJar,
+    Path(username): Path<String>,
+    Form(form): Form<UpdateAboutForm>,
+) -> impl IntoResponse {
+    if let Some(r) = ensure_owner(&state, &jar) {
+        return r.into_response();
+    }
+    let uname = username.to_lowercase();
+    {
+        let mut users = state.users.lock().unwrap();
+        if let Some(rec) = users.get_mut(&uname) {
+            rec.about = form.about;
+        } else {
+            return plain_html("User not found");
         }
     }
     match persist_users_file(&state.users).await {

@@ -5,4 +5,6 @@ pub struct UserRecord {
     pub password: String,
     pub role: String,
     pub assigned_instances: Vec<String>,
+    #[serde(default)]
+    pub about: String,
 }

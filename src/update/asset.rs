@@ -30,6 +30,7 @@ pub struct Asset {
 /// let result = parse_asset_name("zy-1.0.1-x86_64-pc-windows-msvc.exe");
 /// assert_eq!(result, Some(("1.0.1".to_string(), "x86_64-pc-windows-msvc".to_string())));
 /// ```
+#[allow(dead_code)]
 pub fn parse_asset_name(name: &str) -> Option<(String, String)> {
     // Remove .exe extension if present
     let name = name.strip_suffix(".exe").unwrap_or(name);
@@ -89,6 +90,7 @@ pub fn parse_asset_name(name: &str) -> Option<(String, String)> {
 /// // This will succeed if running on Linux x86_64
 /// // let asset = select_asset_for_platform(&assets, &platform).unwrap();
 /// ```
+#[allow(dead_code)]
 pub fn select_asset_for_platform(
     assets: &[Asset],
     platform: &Platform,

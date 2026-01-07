@@ -55,6 +55,11 @@ pub async fn load_users_from_file() -> Arc<Mutex<HashMap<String, UserRecord>>> {
                                 .and_then(|x| x.as_str())
                                 .unwrap_or("admin")
                                 .to_string();
+                            let about = v
+                                .get("about")
+                                .and_then(|x| x.as_str())
+                                .unwrap_or("")
+                                .to_string();
                             let assigned_instances = v
                                 .get("assigned_instances")
                                 .and_then(|a| a.as_array())
@@ -70,6 +75,7 @@ pub async fn load_users_from_file() -> Arc<Mutex<HashMap<String, UserRecord>>> {
                                     password: pw.to_string(),
                                     role,
                                     assigned_instances,
+                                    about,
                                 },
                             );
                         }
@@ -93,11 +99,17 @@ pub async fn load_users_from_file() -> Arc<Mutex<HashMap<String, UserRecord>>> {
                 password: full,
                 role: DEFAULT_OWNER_ROLE.into(),
                 assigned_instances: vec![],
+                about: String::new(),
             },
         );
         let mut serialized: serde_json::Map<String, serde_json::Value> = serde_json::Map::new();
         for (u, rec) in map.iter() {
-            serialized.insert(u.clone(), serde_json::json!({"password": rec.password, "role": rec.role, "assigned_instances": rec.assigned_instances }));
+            serialized.insert(u.clone(), serde_json::json!({
+                "password": rec.password, 
+                "role": rec.role, 
+                "assigned_instances": rec.assigned_instances,
+                "about": rec.about
+            }));
         }
         let _ = tokio::fs::write(
             path,
@@ -113,7 +125,12 @@ pub async fn persist_users_file(users_arc: &Arc<Mutex<HashMap<String, UserRecord
         let users = users_arc.lock().unwrap();
         let mut serialized: serde_json::Map<String, serde_json::Value> = serde_json::Map::new();
         for (u, rec) in users.iter() {
-            serialized.insert(u.clone(), serde_json::json!({"password": rec.password, "role": rec.role, "assigned_instances": rec.assigned_instances }));
+            serialized.insert(u.clone(), serde_json::json!({
+                "password": rec.password, 
+                "role": rec.role, 
+                "assigned_instances": rec.assigned_instances,
+                "about": rec.about
+            }));
         }
         serde_json::to_string_pretty(&serde_json::Value::Object(serialized))?
     };

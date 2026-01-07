@@ -5,4 +5,5 @@ pub struct UserRow {
     pub username: String,
     pub role: String,
     pub assigned: String,
+    pub about: String,
 }
