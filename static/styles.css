@@ -1635,6 +1635,14 @@ form > footer {
   color: var(--gray-500);
 }
 
+.product-id-footer {
+  font-size: 0.65rem;
+  color: var(--gray-400);
+  margin-top: auto;
+  padding-top: var(--space-2);
+  word-break: break-all;
+}
+
 .invoice {
   display: flex;
   flex-direction: column;
