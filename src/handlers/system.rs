@@ -5,8 +5,39 @@ use axum::{
 use axum_extra::extract::cookie::CookieJar;
 
 use crate::models::{AppState, ConfirmationAction};
-use crate::templates::{AboutTemplate, ConfirmationTemplate};
+use crate::templates::{AboutTemplate, ConfirmationTemplate, ComingSoonTemplate};
 use super::helpers::{build_template_globals, render_template, TemplateGlobals};
+
+pub async fn coming_soon(
+    State(state): State<AppState>,
+    jar: CookieJar,
+    Path(feature): Path<String>,
+) -> impl IntoResponse {
+    let feature_name = match feature.as_str() {
+        "floating-ips" => "Floating IP Management",
+        "custom-isos" => "Custom ISO Management",
+        "images" => "Image Management",
+        "backups" => "Backup Management",
+        _ => "Feature",
+    }.to_string();
+
+    let TemplateGlobals {
+        current_user,
+        api_hostname,
+        base_url,
+        flash_messages,
+        has_flash_messages,
+    } = build_template_globals(&state, &jar);
+
+    render_template(&state, &jar, ComingSoonTemplate {
+        current_user,
+        api_hostname,
+        base_url,
+        flash_messages,
+        has_flash_messages,
+        feature_name,
+    })
+}
 
 pub async fn about_get(
     State(state): State<AppState>,

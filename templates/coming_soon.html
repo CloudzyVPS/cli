@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+
+{% block title %}{{ feature_name }} - Coming Soon{% endblock %}
+
+{% block content %}
+<div class="empty-state mt-6">
+    <div style="font-size: 4rem; margin-bottom: 1rem;">🚀</div>
+    <h1>{{ feature_name }}</h1>
+    <p>This feature is currently under development and will be available in a future update.</p>
+    <div class="mt-4">
+        <a href="{{ base_url }}/instances" class="btn btn-primary">Back to Instances</a>
+    </div>
+</div>
+{% endblock %}
+

@@ -38,6 +38,14 @@
   --space-7: 2.5rem;
   --transition-fast: 0.15s ease-in-out;
   --transition-slow: 0.3s ease-in-out;
+
+  /* Danger/Error colors */
+  --red-50: #fef2f2;
+  --red-100: #fee2e2;
+  --red-400: #f87171;
+  --red-500: #ef4444;
+  --red-600: #dc2626;
+  --red-700: #b91c1c;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -68,6 +76,14 @@
     --shadow-card: 0 4px 8px rgba(0, 0, 0, 0.15), 0 8px 16px rgba(0, 0, 0, 0.2);
     --shadow-focus: 0 0 0 3px rgba(88, 166, 255, 0.4);
     --border-color: #30363d;
+
+    /* Danger/Error colors - Dark mode */
+    --red-50: #2d1616;
+    --red-100: #451a1a;
+    --red-400: #f87171;
+    --red-500: #f85149;
+    --red-600: #da3633;
+    --red-700: #b62324;
   }
 }
 
@@ -967,11 +983,13 @@ input[type="submit"]:disabled,
 .btn-danger:disabled,
 .btn-warning:disabled,
 .btn-ghost:disabled,
-.btn-hero:disabled {
+.btn-hero:disabled,
+.btn-disabled {
   opacity: 0.55;
   cursor: not-allowed;
   transform: translateY(0);
   box-shadow: none;
+  pointer-events: none;
 }
 
 .btn-primary {
@@ -1000,15 +1018,21 @@ input[type="submit"]:disabled,
 }
 
 .btn-danger {
-  background: linear-gradient(180deg, rgba(255, 255, 255, 1), rgba(255,255,255,0.98));
-  color: var(--red-400);
+  background: var(--red-600);
+  color: var(--white);
+  border-color: var(--red-600);
   box-shadow: var(--shadow-soft);
 }
 
 .btn-danger:hover,
 .btn-danger:focus-visible {
-  color: var(--red-400);
-  border-color: var(--red-400);
+  background: var(--red-700);
+  border-color: var(--red-700);
+  color: var(--white);
+}
+
+.btn-danger:active {
+  background: var(--red-700);
 }
 
 .btn-warning {
@@ -1916,48 +1940,29 @@ section[data-instance-overview] dd {
 }
 
 section[data-instance-actions] {
-  margin-top: var(--space-5);
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-4);
-}
-
-section[data-instance-actions] > h2 {
-  margin: 0;
-  font-size: 1.5rem;
-  color: var(--gray-900);
-}
-
-section > div {
-  display: grid;
-  gap: var(--space-2);
-  grid-template-columns: 1fr; /* Single column */
-}
-
-section > div form,
-section > div a {
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  margin-top: var(--space-6);
+  background: var(--gray-50);
+  border: 1px solid var(--border-color);
 }
 
 .action-grid {
   display: grid;
-  gap: var(--space-2);
+  gap: var(--space-3);
   grid-template-columns: 1fr;
+  margin-top: var(--space-4);
 }
 
-.action-grid form button,
-.action-grid a {
+.action-grid .btn {
   width: 100%;
+  min-width: 160px;
+  height: 42px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   border-radius: var(--border-radius);
-  padding: var(--space-2) var(--space-3);
-  font-weight: 500;
-  font-size: 0.875rem;
-  text-align: center;
-  text-decoration: none;
-  border: 1px solid transparent;
-  transition: transform var(--transition-fast), box-shadow var(--transition-fast), background var(--transition-fast);
+  font-weight: 600;
+  font-size: 0.9rem;
+  transition: all var(--transition-fast);
 }
 
 .action-grid form button:hover,
@@ -2206,8 +2211,8 @@ section[aria-labelledby="regions-heading"] > div[role="list"] > article > footer
 }
 
 ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 4px;
+  height: 4px;
 }
 
 ::-webkit-scrollbar-thumb {
@@ -2483,4 +2488,21 @@ code {
   border: 2px dashed var(--border-color);
   border-radius: var(--radius-lg);
   color: var(--text-muted);
+}
+
+/* Danger Page Theme */
+.page-danger {
+  background-color: var(--red-50);
+  min-height: 100vh;
+  transition: background-color var(--transition-slow);
+}
+
+.page-danger .card {
+  border-color: var(--red-400);
+}
+
+.page-danger .card-header {
+  background-color: var(--red-100);
+  border-bottom-color: var(--red-400);
+  color: var(--red-700);
 }
