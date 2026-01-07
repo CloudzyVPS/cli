@@ -120,20 +120,13 @@ jobs:
         with:
           tool: cross
 
-      # Build the binary using cargo or cross
-      - name: Build release binary
-        run: |
-          if [ "${{ matrix.use_cross }}" = "true" ]; then
-            cross build --release --target ${{ matrix.target }}
-          else
-            cargo build --release --target ${{ matrix.target }}
-          fi
+      # Run tests natively before building release binaries
+      - name: Run tests
+        run: cargo test --release
         shell: bash
 
-      # Run tests (only for native builds, skip cross-compiled)
-      - name: Run tests
-        if: matrix.use_cross == false
-        run: cargo test --release --target ${{ matrix.target }}
+      # Build the binary using cargo or cross
+      - name: Build release binary
 
       # Prepare binary for upload (handle Windows .exe extension)
       - name: Prepare binary

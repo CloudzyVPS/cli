@@ -41,9 +41,9 @@ pub struct Release {
 
 /// GitHub Releases API client
 pub struct GitHubClient {
-    repo_owner: String,
-    repo_name: String,
-    client: reqwest::Client,
+    pub repo_owner: String,
+    pub repo_name: String,
+    pub client: reqwest::Client,
 }
 
 impl GitHubClient {
@@ -276,19 +276,4 @@ impl GitHubClient {
         
         Ok(())
     }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_client_creation() {
-        let client = GitHubClient::new("CloudzyVPS".to_string(), "cli".to_string());
-        assert_eq!(client.repo_owner, "CloudzyVPS");
-        assert_eq!(client.repo_name, "cli");
-    }
-
-    // Note: Integration tests that actually call the GitHub API should be
-    // run sparingly to avoid rate limiting. Consider mocking for unit tests.
 }
