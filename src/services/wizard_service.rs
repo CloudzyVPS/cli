@@ -44,6 +44,10 @@ pub fn parse_wizard_base(query: &HashMap<String, String>) -> BaseState {
         .get("os_id")
         .map(|s| s.trim().to_string())
         .unwrap_or_default();
+    let app_id = query
+        .get("app_id")
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty());
     BaseState {
         hostnames,
         region,
@@ -54,6 +58,7 @@ pub fn parse_wizard_base(query: &HashMap<String, String>) -> BaseState {
         floating_ip_count,
         ssh_key_ids,
         os_id,
+        app_id,
     }
 }
 
@@ -80,6 +85,11 @@ pub fn build_base_query_pairs(state: &BaseState) -> Vec<(String, String)> {
     }
     if !state.os_id.is_empty() {
         pairs.push(("os_id".into(), state.os_id.clone()));
+    }
+    if let Some(ref app_id) = state.app_id {
+        if !app_id.is_empty() {
+            pairs.push(("app_id".into(), app_id.clone()));
+        }
     }
     pairs
 }

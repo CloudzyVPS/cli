@@ -11,4 +11,5 @@ pub struct BaseState {
     pub floating_ip_count: i32,
     pub ssh_key_ids: Vec<i64>,
     pub os_id: String,
+    pub app_id: Option<String>,
 }

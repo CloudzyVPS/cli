@@ -6,6 +6,7 @@ pub mod operating_systems;
 pub mod instances;
 pub mod ssh_keys;
 pub mod snapshots;
+pub mod applications;
 
 // Re-export commonly used functions
 pub use client::api_call;
@@ -18,3 +19,4 @@ pub use snapshots::{
     load_snapshots, create_snapshot, get_snapshot, delete_snapshot, restore_snapshot,
     SnapshotView,
 };
+pub use applications::{load_applications, Application};

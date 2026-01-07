@@ -69,6 +69,43 @@
         {% else %}
         <p class="form-help error">No operating systems are available for this plan.</p>
         {% endif %}
+    <input type="hidden" name="os_id" value="{{ selected_os_id }}">
+    
+    <fieldset>
+        <legend>One-Click Application (Optional)</legend>
+        <p class="help-text">Optionally select a pre-configured application to install with your OS.</p>
+        {% if applications.len() > 0 %}
+        <div class="product-grid" role="list">
+            <label class="product-card" role="listitem" {% if selected_app_id == "" %}aria-current="true"{% endif %}>
+                <input type="radio" name="app_id" value="" {% if selected_app_id == "" %}checked{% endif %}>
+                <div class="product-card-body">
+                    <h2>None</h2>
+                    <p class="product-plan">No application</p>
+                </div>
+            </label>
+            {% for app in applications %}
+            <label class="product-card" role="listitem" {% if selected_app_id == app.id %}aria-current="true"{% endif %}>
+                <input type="radio" name="app_id" value="{{ app.id }}" {% if selected_app_id == app.id %}checked{% endif %}>
+                <div class="product-card-body">
+                    <h2>{{ app.name }}</h2>
+                    {% if app.description.is_some() %}
+                    <p class="product-plan">{{ app.description.as_ref().unwrap() }}</p>
+                    {% endif %}
+                    {% if app.category.is_some() %}
+                    <dl>
+                        <div>
+                            <dt>Category</dt>
+                            <dd>{{ app.category.as_ref().unwrap() }}</dd>
+                        </div>
+                    </dl>
+                    {% endif %}
+                </div>
+            </label>
+            {% endfor %}
+        </div>
+        {% else %}
+        <p class="form-help">No applications available.</p>
+        {% endif %}
     </fieldset>
 
     <footer class="form-actions">
