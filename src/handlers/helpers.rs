@@ -4,7 +4,7 @@ use axum_extra::extract::cookie::CookieJar;
 use serde::Deserialize;
 use serde_json::Value;
 
-use crate::api::{api_call, load_ssh_keys, load_regions, load_products, load_os_list, load_instances_for_user};
+use crate::api::{api_call, load_ssh_keys, load_regions, load_products, load_os_list, load_instances_for_user, PaginatedInstances};
 use crate::models::{AppState, CurrentUser, SshKeyView, Region, ProductView, OsItem, InstanceView};
 use std::collections::HashMap;
 
@@ -254,7 +254,19 @@ pub async fn load_os_list_wrapper(state: &AppState) -> Vec<OsItem> {
     load_os_list(&state.client, &state.api_base_url, &state.api_token).await
 }
 
+#[allow(dead_code)]
 pub async fn load_instances_for_user_wrapper(state: &AppState, username: &str) -> Vec<InstanceView> {
     let users_map = state.users.lock().unwrap().clone();
-    load_instances_for_user(&state.client, &state.api_base_url, &state.api_token, &users_map, username).await
+    let result = load_instances_for_user(&state.client, &state.api_base_url, &state.api_token, &users_map, username, 0, 0).await;
+    result.instances
+}
+
+pub async fn load_instances_for_user_paginated(
+    state: &AppState,
+    username: &str,
+    page: usize,
+    per_page: usize,
+) -> PaginatedInstances {
+    let users_map = state.users.lock().unwrap().clone();
+    load_instances_for_user(&state.client, &state.api_base_url, &state.api_token, &users_map, username, page, per_page).await
 }

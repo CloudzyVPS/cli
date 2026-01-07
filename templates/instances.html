@@ -27,6 +27,28 @@
         {% endfor %}
     </tbody>
 </table>
+
+{% if total_pages > 1 %}
+<div class="pagination">
+    <div class="pagination-info">
+        Showing {{ instances.len() }} of {{ total_count }} instances (Page {{ current_page }} of {{ total_pages }})
+    </div>
+    <div class="pagination-controls">
+        {% if current_page > 1 %}
+        <a href="{{ base_url }}/instances?page={{ current_page - 1 }}&per_page={{ per_page }}" class="pagination-btn">← Previous</a>
+        {% else %}
+        <span class="pagination-btn pagination-btn-disabled">← Previous</span>
+        {% endif %}
+        
+        {% if current_page < total_pages %}
+        <a href="{{ base_url }}/instances?page={{ current_page + 1 }}&per_page={{ per_page }}" class="pagination-btn">Next →</a>
+        {% else %}
+        <span class="pagination-btn pagination-btn-disabled">Next →</span>
+        {% endif %}
+    </div>
+</div>
+{% endif %}
+
 {% else %}
 <p>No instances found.</p>
 {% endif %}

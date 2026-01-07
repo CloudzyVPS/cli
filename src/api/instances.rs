@@ -2,15 +2,31 @@ use std::collections::HashMap;
 use crate::models::{InstanceView, OsItem, UserRecord};
 use super::client::api_call;
 
-/// Load instances for a specific user from the API.
+/// Paginated result structure for instances
+#[derive(Clone, Debug)]
+pub struct PaginatedInstances {
+    pub instances: Vec<InstanceView>,
+    pub total_count: usize,
+    pub current_page: usize,
+    pub total_pages: usize,
+    pub per_page: usize,
+}
+
+/// Load instances for a specific user from the API with pagination support.
 /// Filters instances based on user role and assigned instances.
+/// 
+/// # Parameters
+/// - `page`: Page number (1-indexed). Use 0 to disable pagination and return all instances.
+/// - `per_page`: Number of items per page. Default is 20.
 pub async fn load_instances_for_user(
     client: &reqwest::Client,
     api_base_url: &str,
     api_token: &str,
     users_map: &HashMap<String, UserRecord>,
     username: &str,
-) -> Vec<InstanceView> {
+    page: usize,
+    per_page: usize,
+) -> PaginatedInstances {
     let payload = api_call(client, api_base_url, api_token, "GET", "/v1/instances", None, None).await;
     let mut all_instances = Vec::new();
     
@@ -66,17 +82,60 @@ pub async fn load_instances_for_user(
             }
     }
     
-    if username.is_empty() {
-        return all_instances;
-    }
-    
-    let uname = username.to_lowercase();
-    if let Some(user_rec) = users_map.get(&uname) {
-        if user_rec.role == "owner" {
-            return all_instances;
+    // Filter instances based on user permissions
+    let filtered_instances = if username.is_empty() {
+        all_instances
+    } else {
+        let uname = username.to_lowercase();
+        if let Some(user_rec) = users_map.get(&uname) {
+            if user_rec.role == "owner" {
+                all_instances
+            } else {
+                all_instances.into_iter().filter(|inst| user_rec.assigned_instances.contains(&inst.id)).collect()
+            }
+        } else {
+            vec![]
         }
-        return all_instances.into_iter().filter(|inst| user_rec.assigned_instances.contains(&inst.id)).collect();
+    };
+    
+    let total_count = filtered_instances.len();
+    
+    // If page is 0 or per_page is 0, return all instances without pagination
+    if page == 0 || per_page == 0 {
+        return PaginatedInstances {
+            instances: filtered_instances,
+            total_count,
+            current_page: 0,
+            total_pages: 1,
+            per_page: total_count,
+        };
     }
     
-    vec![]
+    // Calculate pagination
+    let total_pages = if total_count == 0 {
+        1
+    } else {
+        (total_count + per_page - 1) / per_page
+    };
+    
+    // Clamp page to valid range
+    let current_page = page.max(1).min(total_pages);
+    
+    // Calculate slice range
+    let start_idx = (current_page - 1) * per_page;
+    let end_idx = (start_idx + per_page).min(total_count);
+    
+    let paginated_instances = if start_idx < total_count {
+        filtered_instances[start_idx..end_idx].to_vec()
+    } else {
+        vec![]
+    };
+    
+    PaginatedInstances {
+        instances: paginated_instances,
+        total_count,
+        current_page,
+        total_pages,
+        per_page,
+    }
 }
