@@ -4,3 +4,4 @@
 //! including the self-update mechanism.
 
 pub mod update;
+pub mod config;

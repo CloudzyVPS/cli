@@ -1,4 +1,3 @@
-mod config;
 mod models;
 mod services;
 mod utils;
@@ -6,6 +5,8 @@ mod api;
 mod templates;
 mod handlers;
 mod update;
+
+use zy::config;
 
 use axum::{
     routing::{get, post},

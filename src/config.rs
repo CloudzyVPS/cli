@@ -23,7 +23,7 @@ pub fn load_env_file(env_file: Option<&str>) {
 }
 
 pub fn get_api_base_url() -> String {
-    env::var("API_BASE_URL").unwrap_or_else(|_| DEFAULT_API_BASE_URL.to_string())
+    sanitize_base_url(&env::var("API_BASE_URL").unwrap_or_else(|_| DEFAULT_API_BASE_URL.to_string()))
 }
 
 pub fn get_api_token() -> String {
@@ -48,7 +48,7 @@ pub fn get_disabled_instance_ids() -> std::collections::HashSet<String> {
     set
 }
 
-fn sanitize_base_url(raw: &str) -> String {
+pub fn sanitize_base_url(raw: &str) -> String {
     let trimmed = raw.trim().trim_end_matches('/');
     if trimmed.is_empty() {
         "http://localhost:5000".to_string()
