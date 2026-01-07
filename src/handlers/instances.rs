@@ -147,6 +147,9 @@ pub async fn instance_detail(
         }
     }
     let TemplateGlobals { current_user, api_hostname, base_url, flash_messages, has_flash_messages } = build_template_globals(&state, &jar);
+    let disabled_by_env = state.is_instance_disabled(&instance_id);
+    let disabled_by_host = state.is_hostname_blocked(&hostname);
+    
     render_template(&state, &jar, InstanceDetailTemplate {
             current_user,
             api_hostname,
@@ -156,7 +159,8 @@ pub async fn instance_detail(
             instance_id: instance_id.clone(),
             hostname,
             details,
-            is_disabled: state.is_instance_disabled(&instance_id),
+            disabled_by_env,
+            disabled_by_host,
         },
     )
 }
@@ -194,7 +198,9 @@ pub async fn instance_poweron_get(
         }
     }
     let TemplateGlobals { current_user, api_hostname, base_url, flash_messages, has_flash_messages } = build_template_globals(&state, &jar);
-    render_template(&state, &jar, PowerOnInstanceTemplate { current_user, api_hostname, base_url, flash_messages, has_flash_messages, instance, is_disabled: state.is_instance_disabled(&instance_id) })
+    let disabled_by_env = state.is_instance_disabled(&instance_id);
+    let disabled_by_host = state.is_hostname_blocked(&instance.hostname);
+    render_template(&state, &jar, PowerOnInstanceTemplate { current_user, api_hostname, base_url, flash_messages, has_flash_messages, instance, disabled_by_env, disabled_by_host })
 }
 
 pub async fn instance_poweron_post(
@@ -205,11 +211,11 @@ pub async fn instance_poweron_post(
     if !enforce_instance_access(&state, current_username_from_jar(&state, &jar).as_deref(), &instance_id).await {
         return Redirect::to("/instances").into_response();
     }
-    if state.is_instance_disabled(&instance_id) {
+    if let Some(reason) = crate::services::instance_service::check_instance_block(&state, &instance_id, None).await {
         if let Some(sid) = jar.get("session_id") {
             let mut flashes = state.flash_store.lock().unwrap();
             let entry = flashes.entry(sid.value().to_string()).or_default();
-            entry.push("Actions are disabled for this instance.".into());
+            entry.push(reason.message());
         }
         return Redirect::to(&format!("/instance/{}", instance_id)).into_response();
     }
@@ -250,7 +256,9 @@ pub async fn instance_delete_get(
         }
     }
     let TemplateGlobals { current_user, api_hostname, base_url, flash_messages, has_flash_messages } = build_template_globals(&state, &jar);
-    render_template(&state, &jar, DeleteInstanceTemplate { current_user, api_hostname, base_url, flash_messages, has_flash_messages, instance, is_disabled: state.is_instance_disabled(&instance_id) })
+    let disabled_by_env = state.is_instance_disabled(&instance_id);
+    let disabled_by_host = state.is_hostname_blocked(&instance.hostname);
+    render_template(&state, &jar, DeleteInstanceTemplate { current_user, api_hostname, base_url, flash_messages, has_flash_messages, instance, disabled_by_env, disabled_by_host })
 }
 
 pub async fn instance_poweroff_get(
@@ -273,7 +281,9 @@ pub async fn instance_poweroff_get(
         }
     }
     let TemplateGlobals { current_user, api_hostname, base_url, flash_messages, has_flash_messages } = build_template_globals(&state, &jar);
-    render_template(&state, &jar, PowerOffInstanceTemplate { current_user, api_hostname, base_url, flash_messages, has_flash_messages, instance, is_disabled: state.is_instance_disabled(&instance_id) })
+    let disabled_by_env = state.is_instance_disabled(&instance_id);
+    let disabled_by_host = state.is_hostname_blocked(&instance.hostname);
+    render_template(&state, &jar, PowerOffInstanceTemplate { current_user, api_hostname, base_url, flash_messages, has_flash_messages, instance, disabled_by_env, disabled_by_host })
 }
 
 pub async fn instance_poweroff_post(
@@ -284,11 +294,11 @@ pub async fn instance_poweroff_post(
     if !enforce_instance_access(&state, current_username_from_jar(&state, &jar).as_deref(), &instance_id).await {
         return Redirect::to("/instances").into_response();
     }
-    if state.is_instance_disabled(&instance_id) {
+    if let Some(reason) = crate::services::instance_service::check_instance_block(&state, &instance_id, None).await {
         if let Some(sid) = jar.get("session_id") {
             let mut flashes = state.flash_store.lock().unwrap();
             let entry = flashes.entry(sid.value().to_string()).or_default();
-            entry.push("Actions are disabled for this instance.".into());
+            entry.push(reason.message());
         }
         return Redirect::to(&format!("/instance/{}", instance_id)).into_response();
     }
@@ -316,7 +326,9 @@ pub async fn instance_reset_get(
         }
     }
     let TemplateGlobals { current_user, api_hostname, base_url, flash_messages, has_flash_messages } = build_template_globals(&state, &jar);
-    render_template(&state, &jar, ResetInstanceTemplate { current_user, api_hostname, base_url, flash_messages, has_flash_messages, instance, is_disabled: state.is_instance_disabled(&instance_id) })
+    let disabled_by_env = state.is_instance_disabled(&instance_id);
+    let disabled_by_host = state.is_hostname_blocked(&instance.hostname);
+    render_template(&state, &jar, ResetInstanceTemplate { current_user, api_hostname, base_url, flash_messages, has_flash_messages, instance, disabled_by_env, disabled_by_host })
 }
 
 pub async fn instance_reset_post(
@@ -327,11 +339,11 @@ pub async fn instance_reset_post(
     if !enforce_instance_access(&state, current_username_from_jar(&state, &jar).as_deref(), &instance_id).await {
         return Redirect::to("/instances").into_response();
     }
-    if state.is_instance_disabled(&instance_id) {
+    if let Some(reason) = crate::services::instance_service::check_instance_block(&state, &instance_id, None).await {
         if let Some(sid) = jar.get("session_id") {
             let mut flashes = state.flash_store.lock().unwrap();
             let entry = flashes.entry(sid.value().to_string()).or_default();
-            entry.push("Actions are disabled for this instance.".into());
+            entry.push(reason.message());
         }
         return Redirect::to(&format!("/instance/{}", instance_id)).into_response();
     }
@@ -359,7 +371,9 @@ pub async fn instance_change_pass_get(
         }
     }
     let TemplateGlobals { current_user, api_hostname, base_url, flash_messages, has_flash_messages } = build_template_globals(&state, &jar);
-    render_template(&state, &jar, ChangePassInstanceTemplate { current_user, api_hostname, base_url, flash_messages, has_flash_messages, instance, new_password: None, is_disabled: state.is_instance_disabled(&instance_id) })
+    let disabled_by_env = state.is_instance_disabled(&instance_id);
+    let disabled_by_host = state.is_hostname_blocked(&instance.hostname);
+    render_template(&state, &jar, ChangePassInstanceTemplate { current_user, api_hostname, base_url, flash_messages, has_flash_messages, instance, new_password: None, disabled_by_env, disabled_by_host })
 }
 
 pub async fn instance_change_pass_post(
@@ -370,11 +384,11 @@ pub async fn instance_change_pass_post(
     if !enforce_instance_access(&state, current_username_from_jar(&state, &jar).as_deref(), &instance_id).await {
         return Redirect::to("/instances").into_response();
     }
-    if state.is_instance_disabled(&instance_id) {
+    if let Some(reason) = crate::services::instance_service::check_instance_block(&state, &instance_id, None).await {
         if let Some(sid) = jar.get("session_id") {
             let mut flashes = state.flash_store.lock().unwrap();
             let entry = flashes.entry(sid.value().to_string()).or_default();
-            entry.push("Actions are disabled for this instance.".into());
+            entry.push(reason.message());
         }
         return Redirect::to(&format!("/instance/{}/change-pass", instance_id)).into_response();
     }
@@ -393,7 +407,9 @@ pub async fn instance_change_pass_post(
         }
     }
     let TemplateGlobals { current_user, api_hostname, base_url, flash_messages, has_flash_messages } = build_template_globals(&state, &jar);
-    render_template(&state, &jar, ChangePassInstanceTemplate { current_user, api_hostname, base_url, flash_messages, has_flash_messages, instance, new_password, is_disabled: state.is_instance_disabled(&instance_id) })
+    let disabled_by_env = state.is_instance_disabled(&instance_id);
+    let disabled_by_host = state.is_hostname_blocked(&instance.hostname);
+    render_template(&state, &jar, ChangePassInstanceTemplate { current_user, api_hostname, base_url, flash_messages, has_flash_messages, instance, new_password, disabled_by_env, disabled_by_host })
 }
 
 pub async fn instance_delete(
@@ -404,11 +420,11 @@ pub async fn instance_delete(
     if !enforce_instance_access(&state, current_username_from_jar(&state, &jar).as_deref(), &instance_id).await {
         return Redirect::to("/instances").into_response();
     }
-    if state.is_instance_disabled(&instance_id) {
+    if let Some(reason) = crate::services::instance_service::check_instance_block(&state, &instance_id, None).await {
         if let Some(sid) = jar.get("session_id") {
             let mut flashes = state.flash_store.lock().unwrap();
             let entry = flashes.entry(sid.value().to_string()).or_default();
-            entry.push("Actions are disabled for this instance.".into());
+            entry.push(reason.message());
         }
         return Redirect::to(&format!("/instance/{}", instance_id)).into_response();
     }
@@ -460,11 +476,11 @@ pub async fn instance_add_traffic(
     if !enforce_instance_access(&state, current_username_from_jar(&state, &jar).as_deref(), &instance_id).await {
         return Redirect::to("/instances").into_response();
     }
-    if state.is_instance_disabled(&instance_id) {
+    if let Some(reason) = crate::services::instance_service::check_instance_block(&state, &instance_id, None).await {
         if let Some(sid) = jar.get("session_id") {
             let mut flashes = state.flash_store.lock().unwrap();
             let entry = flashes.entry(sid.value().to_string()).or_default();
-            entry.push("Actions are disabled for this instance.".into());
+            entry.push(reason.message());
         }
         return Redirect::to(&format!("/instance/{}", instance_id)).into_response();
     }
@@ -509,7 +525,9 @@ pub async fn instance_change_os_get(
     }
     let os_list = load_os_list_wrapper(&state).await;
     let TemplateGlobals { current_user, api_hostname, base_url, flash_messages, has_flash_messages } = build_template_globals(&state, &jar);
-    render_template(&state, &jar, ChangeOsTemplate { current_user, api_hostname, base_url, flash_messages, has_flash_messages, instance, os_list: &os_list, is_disabled: state.is_instance_disabled(&instance_id) })
+    let disabled_by_env = state.is_instance_disabled(&instance_id);
+    let disabled_by_host = state.is_hostname_blocked(&instance.hostname);
+    render_template(&state, &jar, ChangeOsTemplate { current_user, api_hostname, base_url, flash_messages, has_flash_messages, instance, os_list: &os_list, disabled_by_env, disabled_by_host })
 }
 
 pub async fn instance_change_os_post(
@@ -521,11 +539,11 @@ pub async fn instance_change_os_post(
     if !enforce_instance_access(&state, current_username_from_jar(&state, &jar).as_deref(), &instance_id).await {
         return Redirect::to("/instances").into_response();
     }
-    if state.is_instance_disabled(&instance_id) {
+    if let Some(reason) = crate::services::instance_service::check_instance_block(&state, &instance_id, None).await {
         if let Some(sid) = jar.get("session_id") {
             let mut flashes = state.flash_store.lock().unwrap();
             let entry = flashes.entry(sid.value().to_string()).or_default();
-            entry.push("Actions are disabled for this instance.".into());
+            entry.push(reason.message());
         }
         return Redirect::to(&format!("/instance/{}/change-os", instance_id)).into_response();
     }
@@ -559,7 +577,9 @@ pub async fn instance_resize_get(
     }
     let (regions, _map) = load_regions_wrapper(&state).await;
     let TemplateGlobals { current_user, api_hostname, base_url, flash_messages, has_flash_messages } = build_template_globals(&state, &jar);
-    render_template(&state, &jar, ResizeTemplate { current_user, api_hostname, base_url, flash_messages, has_flash_messages, instance, regions: &regions, is_disabled: state.is_instance_disabled(&instance_id) })
+    let disabled_by_env = state.is_instance_disabled(&instance_id);
+    let disabled_by_host = state.is_hostname_blocked(&instance.hostname);
+    render_template(&state, &jar, ResizeTemplate { current_user, api_hostname, base_url, flash_messages, has_flash_messages, instance, regions: &regions, disabled_by_env, disabled_by_host })
 }
 
 pub async fn instance_resize_post(
@@ -571,11 +591,11 @@ pub async fn instance_resize_post(
     if !enforce_instance_access(&state, current_username_from_jar(&state, &jar).as_deref(), &instance_id).await {
         return Redirect::to("/instances").into_response();
     }
-    if state.is_instance_disabled(&instance_id) {
+    if let Some(reason) = crate::services::instance_service::check_instance_block(&state, &instance_id, None).await {
         if let Some(sid) = jar.get("session_id") {
             let mut flashes = state.flash_store.lock().unwrap();
             let entry = flashes.entry(sid.value().to_string()).or_default();
-            entry.push("Actions are disabled for this instance.".into());
+            entry.push(reason.message());
         }
         return Redirect::to(&format!("/instance/{}/resize", instance_id)).into_response();
     }

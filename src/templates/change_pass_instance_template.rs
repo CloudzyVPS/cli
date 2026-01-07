@@ -11,7 +11,8 @@ pub struct ChangePassInstanceTemplate {
     pub has_flash_messages: bool,
     pub instance: InstanceView,
     pub new_password: Option<String>,
-    pub is_disabled: bool,
+    pub disabled_by_env: bool,
+    pub disabled_by_host: bool,
 }
 
 crate::impl_base_template!(ChangePassInstanceTemplate);

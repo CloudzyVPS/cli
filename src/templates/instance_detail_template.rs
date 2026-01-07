@@ -12,7 +12,8 @@ pub struct InstanceDetailTemplate {
     pub instance_id: String,
     pub hostname: String,
     pub details: Vec<(String, String)>,
-    pub is_disabled: bool,
+    pub disabled_by_env: bool,
+    pub disabled_by_host: bool,
 }
 
 crate::impl_base_template!(InstanceDetailTemplate);

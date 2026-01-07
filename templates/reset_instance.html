@@ -21,51 +21,49 @@
     </div>
 </div>
 
-<section>
-    <fieldset>
-        <legend>Instance details</legend>
-        <dl>
-            <div>
-                <dt>Hostname</dt>
-                <dd><strong>{{ instance.hostname }}</strong></dd>
-            </div>
-            <div>
-                <dt>Instance ID</dt>
-                <dd><code>{{ instance.id }}</code></dd>
-            </div>
-            <div>
-                <dt>Current status</dt>
-                <dd>{{ instance.status }}</dd>
-            </div>
+    <section>
+        <fieldset>
+            <legend>Instance details</legend>
+            <dl>
+                <div>
+                    <dt>Hostname</dt>
+                    <dd><strong>{{ instance.hostname }}</strong></dd>
+                </div>
+                <div>
+                    <dt>Instance ID</dt>
+                    <dd><code>{{ instance.id }}</code></dd>
+                </div>
+                <div>
+                    <dt>Current status</dt>
+                    <dd>{{ instance.status }}</dd>
+                </div>
+                <div>
+                    <dt>Region</dt>
+                    <dd>{{ instance.region }}</dd>
+                </div>
             </dl>
         </fieldset>
     </section>
 
-    {% if is_disabled %}
-    <div>
+    {% if disabled_by_env %}
+    <div class="warning-banner mt-4">
         <div>
             <h2>Instance locked</h2>
-            <p>Actions are disabled for this instance.</p>
+            <p>Actions are disabled for this instance via environment configuration (blacklisted ID).</p>
         </div>
     </div>
-    <form method="post" action="{{ base_url }}/instance/{{ instance.id }}/reset">
-        <button type="button" disabled>Confirm Restart</button>
-        <a href="{{ base_url }}/instance/{{ instance.id }}">Cancel</a>
-    </form>
-    {% else %}
-    <form method="post" action="{{ base_url }}/instance/{{ instance.id }}/reset">
-        <button type="submit">Confirm Restart</button>
-        <a class="button-secondary" href="{{ base_url }}/instance/{{ instance.id }}">Cancel</a>
-    </form>
     {% endif %}
-            <div>
-                <dt>Region</dt>
-                <dd>{{ instance.region }}</dd>
-            </div>
-        </dl>
-    </fieldset>
 
-    {% if is_disabled %}
+    {% if disabled_by_host %}
+    <div class="warning-banner mt-4">
+        <div>
+            <h2>Host mismatch</h2>
+            <p>Actions are disabled because this instance's hostname matches the application server's hostname.</p>
+        </div>
+    </div>
+    {% endif %}
+
+    {% if disabled_by_env || disabled_by_host %}
     <form method="post">
         <footer>
             <a href="{{ base_url }}/instance/{{ instance.id }}">Cancel</a>

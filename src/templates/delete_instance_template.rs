@@ -10,7 +10,8 @@ pub struct DeleteInstanceTemplate {
     pub flash_messages: Vec<String>,
     pub has_flash_messages: bool,
     pub instance: InstanceView,
-    pub is_disabled: bool,
+    pub disabled_by_env: bool,
+    pub disabled_by_host: bool,
 }
 
 crate::impl_base_template!(DeleteInstanceTemplate);

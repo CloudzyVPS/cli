@@ -11,7 +11,8 @@ pub struct ChangeOsTemplate<'a> {
     pub has_flash_messages: bool,
     pub instance: InstanceView,
     pub os_list: &'a [OsItem],
-    pub is_disabled: bool,
+    pub disabled_by_env: bool,
+    pub disabled_by_host: bool,
 }
 
 crate::impl_base_template!(ChangeOsTemplate<'_>);

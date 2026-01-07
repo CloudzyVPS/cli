@@ -14,11 +14,19 @@ pub struct AppState {
     pub public_base_url: String,
     pub client: reqwest::Client,
     pub disabled_instances: Arc<std::collections::HashSet<String>>,
+    pub current_hostname: String,
     pub custom_css: Option<String>,
 }
 
 impl AppState {
     pub fn is_instance_disabled(&self, id: &str) -> bool {
         self.disabled_instances.contains(id)
+    }
+
+    pub fn is_hostname_blocked(&self, instance_hostname: &str) -> bool {
+        if self.current_hostname.is_empty() || instance_hostname.is_empty() {
+            return false;
+        }
+        self.current_hostname.to_lowercase() == instance_hostname.to_lowercase()
     }
 }

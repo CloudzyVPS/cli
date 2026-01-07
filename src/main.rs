@@ -40,6 +40,11 @@ async fn build_state_from_env(env_file: Option<&str>) -> AppState {
     let users = load_users_from_file().await;
     let disabled_instances = std::sync::Arc::new(config::get_disabled_instance_ids());
     
+    let current_hostname = std::process::Command::new("hostname")
+        .output()
+        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+        .unwrap_or_default();
+
     let client = reqwest::Client::builder()
         .user_agent(format!("Zy/{}", env!("CARGO_PKG_VERSION")))
         .build()
@@ -55,6 +60,7 @@ async fn build_state_from_env(env_file: Option<&str>) -> AppState {
         public_base_url: config::get_public_base_url(),
         client,
         disabled_instances,
+        current_hostname,
         custom_css: None,
     }
 }

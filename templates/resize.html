@@ -40,8 +40,18 @@
     </fieldset>
 
     <form method="post" action="{{ base_url }}/instance/{{ instance.id }}/resize">
-        <fieldset {% if is_disabled %}disabled{% endif %}>
+        <fieldset {% if disabled_by_env || disabled_by_host %}disabled{% endif %}>
             <legend>Resize options</legend>
+            {% if disabled_by_env %}
+            <div class="warning-banner mb-4">
+                <p><strong>Instance locked:</strong> Actions are disabled for this instance via environment configuration (blacklisted ID).</p>
+            </div>
+            {% endif %}
+            {% if disabled_by_host %}
+            <div class="warning-banner mb-4">
+                <p><strong>Host mismatch:</strong> Actions are disabled because this instance's hostname matches the application server's hostname.</p>
+            </div>
+            {% endif %}
             <div>
                 <label for="type">Resize type</label>
                 <select id="type" name="type" required>
@@ -82,7 +92,7 @@
 
         <footer class="mt-5">
             <a href="{{ base_url }}/instance/{{ instance.id }}">Cancel</a>
-            {% if is_disabled %}
+            {% if disabled_by_env || disabled_by_host %}
             <button type="button" disabled>Resize instance (Locked)</button>
             {% else %}
             <button type="submit">Resize instance</button>

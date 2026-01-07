@@ -7,6 +7,40 @@ pub async fn simple_instance_action(state: &AppState, action: &str, instance_id:
     crate::api::api_call(&state.client, &state.api_base_url, &state.api_token, "POST", &endpoint, None, None).await
 }
 
+pub enum BlockReason {
+    Blacklisted,
+    HostnameMatch(String),
+}
+
+impl BlockReason {
+    pub fn message(&self) -> String {
+        match self {
+            BlockReason::Blacklisted => "Actions are disabled for this instance.".into(),
+            BlockReason::HostnameMatch(h) => format!("Actions are disabled because the instance hostname ({}) matches the hostname of this application server.", h),
+        }
+    }
+}
+
+pub async fn check_instance_block(state: &AppState, instance_id: &str, hostname: Option<&str>) -> Option<BlockReason> {
+    if state.is_instance_disabled(instance_id) {
+        return Some(BlockReason::Blacklisted);
+    }
+    
+    if let Some(h) = hostname {
+        if state.is_hostname_blocked(h) {
+            return Some(BlockReason::HostnameMatch(h.to_string()));
+        }
+    } else {
+        // Fetch hostname if not provided
+        let instance = get_instance_for_action(state, instance_id).await;
+        if state.is_hostname_blocked(&instance.hostname) {
+            return Some(BlockReason::HostnameMatch(instance.hostname));
+        }
+    }
+    
+    None
+}
+
 pub async fn enforce_instance_access(state: &AppState, username: Option<&str>, instance_id: &str) -> bool {
     if let Some(username) = username {
         let users = state.users.lock().unwrap();
