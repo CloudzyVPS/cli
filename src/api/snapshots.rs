@@ -40,8 +40,8 @@ pub async fn load_snapshots(
         params.push(("instanceId".to_string(), iid));
     }
     
-    // Add pagination if page > 0
-    if page > 0 {
+    // Add pagination (page 1 is the first page)
+    if page >= 1 {
         params.push(("page".to_string(), page.to_string()));
         params.push(("per_page".to_string(), per_page.to_string()));
     }
