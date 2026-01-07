@@ -1,6 +1,6 @@
 use crate::models::os_item::OsItem;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct InstanceView {
     pub id: String,
     pub hostname: String,

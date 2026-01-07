@@ -1,5 +1,5 @@
 use axum::{
-    extract::{State, Path, Form},
+    extract::{State, Path, Form, Query},
     response::{IntoResponse, Redirect, Html},
 };
 use axum_extra::extract::cookie::CookieJar;
@@ -18,14 +18,34 @@ use crate::handlers::helpers::{
     build_template_globals, current_username_from_jar, ensure_owner,
     render_template, api_call_wrapper, TemplateGlobals,
     load_regions_wrapper, load_products_wrapper, load_os_list_wrapper,
-    load_instances_for_user_wrapper,
+    load_instances_for_user_paginated,
 };
 use crate::services::instance_service::{enforce_instance_access, simple_instance_action};
 use crate::services::persist_users_file;
 
-pub async fn instances_real(State(state): State<AppState>, jar: CookieJar) -> impl IntoResponse {
+#[derive(Deserialize)]
+pub struct PaginationParams {
+    #[serde(default = "default_page")]
+    page: usize,
+    #[serde(default = "default_per_page")]
+    per_page: usize,
+}
+
+fn default_page() -> usize {
+    1
+}
+
+fn default_per_page() -> usize {
+    20
+}
+
+pub async fn instances_real(
+    State(state): State<AppState>,
+    jar: CookieJar,
+    Query(params): Query<PaginationParams>,
+) -> impl IntoResponse {
     let username = current_username_from_jar(&state, &jar).expect("Middleware ensures user is logged in");
-    let list = load_instances_for_user_wrapper(&state, &username).await;
+    let paginated = load_instances_for_user_paginated(&state, &username, params.page, params.per_page).await;
     let TemplateGlobals { current_user, api_hostname, base_url, flash_messages, has_flash_messages } = build_template_globals(&state, &jar);
     render_template(&state, &jar, InstancesTemplate {
             current_user,
@@ -33,7 +53,11 @@ pub async fn instances_real(State(state): State<AppState>, jar: CookieJar) -> im
             base_url,
             flash_messages,
             has_flash_messages,
-            instances: &list,
+            instances: &paginated.instances,
+            current_page: paginated.current_page,
+            total_pages: paginated.total_pages,
+            per_page: paginated.per_page,
+            total_count: paginated.total_count,
         },
     )
 }
