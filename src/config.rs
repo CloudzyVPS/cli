@@ -146,7 +146,7 @@ mod tests {
         
         let result = get_api_base_url();
         
-        // When default is empty, sanitize_base_url returns "http://localhost:5000"
+        // DEFAULT_API_BASE_URL is empty, so sanitize_base_url returns localhost fallback
         assert_eq!(result, "http://localhost:5000");
     }
 }
