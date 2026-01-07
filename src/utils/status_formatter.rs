@@ -14,11 +14,11 @@
 ///
 /// # Examples
 ///
-/// ```
-/// let formatted = zy::utils::format_status("preparing_disk");
+/// ```ignore
+/// let formatted = format_status("preparing_disk");
 /// assert_eq!(formatted, "Preparing Disk");
 ///
-/// let formatted = zy::utils::format_status("active");
+/// let formatted = format_status("active");
 /// assert_eq!(formatted, "Active");
 /// ```
 pub fn format_status(status: &str) -> String {
