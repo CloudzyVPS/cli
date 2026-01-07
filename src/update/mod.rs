@@ -95,21 +95,30 @@ pub const REPO_NAME: &str = "cli";
 /// ```
 pub async fn check_for_update(channel: Channel) -> Result<Option<Release>, UpdateError> {
     tracing::info!("Checking for updates on channel: {:?}", channel);
+    println!("Checking for updates on channel: {:?}...", channel);
     
     let current_version = Version::current();
     tracing::debug!("Current version: {}", current_version);
+    println!("Current binary version: {}", current_version);
     
+    println!("Connecting to GitHub repository: {}/{}...", REPO_OWNER, REPO_NAME);
     let client = GitHubClient::new(REPO_OWNER.to_string(), REPO_NAME.to_string());
     let latest_release = match client.get_latest_release(channel).await {
         Ok(release) => release,
         Err(UpdateError::NoReleaseFound(_)) => {
             tracing::info!("No releases found for channel {:?}", channel);
+            println!("No releases found for channel: {:?}", channel);
             return Ok(None);
         }
-        Err(e) => return Err(e),
+        Err(e) => {
+            tracing::error!(%e, "Failed to fetch latest release");
+            println!("Error: {}", e);
+            return Err(e);
+        }
     };
     
-    tracing::debug!("Latest release: {}", latest_release.version);
+    tracing::debug!("Latest release found: {} (tag: {})", latest_release.version, latest_release.tag_name);
+    println!("Latest release found on GitHub: {} (tag: {})", latest_release.version, latest_release.tag_name);
     
     if latest_release.version.is_newer_than(&current_version) {
         tracing::info!(
@@ -117,9 +126,11 @@ pub async fn check_for_update(channel: Channel) -> Result<Option<Release>, Updat
             current_version,
             latest_release.version
         );
+        println!("Update available: {} -> {}", current_version, latest_release.version);
         Ok(Some(latest_release))
     } else {
         tracing::info!("Already on the latest version");
+        println!("You are already running the latest version.");
         Ok(None)
     }
 }

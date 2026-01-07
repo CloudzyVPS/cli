@@ -3,6 +3,7 @@ use super::{asset::Asset, channel::Channel, error::UpdateError, version::Version
 use reqwest::header::{HeaderMap, HeaderValue, USER_AGENT};
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
+use yansi::Paint;
 
 /// GitHub API release response
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -88,11 +89,23 @@ impl GitHubClient {
             self.repo_owner, self.repo_name
         );
         
-        tracing::debug!("Fetching releases from: {}", url);
+        // --- Curl Logging ---
+        let mut parts = Vec::new();
+        parts.push(Paint::new("curl").fg(yansi::Color::Green).bold().to_string());
+        parts.push(format!("-X {}", Paint::new("GET").fg(yansi::Color::Yellow).bold()));
+        parts.push(format!("'{}'", Paint::new(&url).fg(yansi::Color::Cyan)));
+        parts.push(format!("{} {}", 
+            Paint::new("-H").fg(yansi::Color::Magenta), 
+            Paint::new("'Accept: application/vnd.github.v3+json'").fg(yansi::Color::Magenta)
+        ));
+        
+        println!("Request:\n{}", parts.join(" "));
+        // --------------------
         
         let response = self
             .client
             .get(&url)
+            .header("Accept", "application/vnd.github.v3+json")
             .send()
             .await
             .map_err(|e| UpdateError::Network(e.to_string()))?;
@@ -108,15 +121,23 @@ impl GitHubClient {
                 .text()
                 .await
                 .unwrap_or_else(|_| "Unknown error".to_string());
+            
+            println!("Response:\n{}", Paint::new(format!("HTTP {}: {}", status, error_text)).fg(yansi::Color::Red));
+            
             return Err(UpdateError::GitHubApiError(format!(
                 "HTTP {}: {}",
                 status, error_text
             )));
         }
         
-        let github_releases: Vec<GitHubRelease> = response
-            .json()
-            .await
+        let text = response.text().await.map_err(|e| UpdateError::Network(e.to_string()))?;
+        
+        // Colorize the response JSON for better readability in the terminal
+        // Grayed out color (dimmed/dark gray)
+        let response_str = Paint::new(&text).rgb(100, 100, 100).to_string();
+        println!("Response:\n{}", response_str);
+        
+        let github_releases: Vec<GitHubRelease> = serde_json::from_str(&text)
             .map_err(|e| UpdateError::GitHubApiError(format!("Failed to parse JSON: {}", e)))?;
         
         tracing::debug!("Found {} releases", github_releases.len());
@@ -205,9 +226,10 @@ impl GitHubClient {
             filtered.len(),
             channel
         );
+        println!("Found {} releases matching channel {:?}", filtered.len(), channel);
         
         // Find the newest version
-        filtered
+        let latest = filtered
             .into_iter()
             .max_by(|a, b| {
                 if a.version.is_newer_than(&b.version) {
@@ -218,7 +240,13 @@ impl GitHubClient {
                     std::cmp::Ordering::Equal
                 }
             })
-            .ok_or(UpdateError::NoReleaseFound(channel))
+            .ok_or(UpdateError::NoReleaseFound(channel));
+
+        if let Ok(ref release) = latest {
+            println!("Latest release for channel {:?}: {} (tag: {})", channel, release.version, release.tag_name);
+        }
+
+        latest
     }
     
     /// Check rate limiting headers and return error if exceeded

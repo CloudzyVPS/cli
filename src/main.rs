@@ -714,23 +714,13 @@ async fn main() {
                 _ => update::Channel::Stable,
             };
 
-            println!("{}", yansi::Paint::new(format!("Checking for updates on {:?} channel...", channel)).cyan());
-
             match update::check_for_update(channel).await {
                 Ok(Some(release)) => {
-                    println!(
-                        "{} A newer version (v{}) is available!",
-                        yansi::Paint::new("Update available:").yellow().bold(),
-                        release.version
-                    );
-                    println!("Download it from: {}", yansi::Paint::new(release.download_url).underline());
-                    println!("\n(Note: Automatic background updates are coming in Phase 2)");
+                    println!("\nDownload it from: {}", yansi::Paint::new(release.download_url).underline());
+                    println!("(Note: Automatic background updates are coming in Phase 2)");
                 }
-                Ok(None) => {
-                    println!("{}", yansi::Paint::new("You are already running the latest version.").green());
-                }
-                Err(e) => {
-                    eprintln!("{}: {}", yansi::Paint::new("Error checking for updates").red(), e);
+                Ok(None) => {}
+                Err(_) => {
                     process::exit(1);
                 }
             }

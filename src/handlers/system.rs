@@ -90,6 +90,7 @@ pub async fn about_switch_version(
     // Phase 2: Implementation of version switching/self-update
     // For now, we just redirect back with a message that it's coming soon
     tracing::info!("User requested switch to version: {}", form.version);
+    println!("User requested switch to version: {}", form.version);
     
     // In a real implementation, this would trigger the background update process
     // and potentially restart the server.
