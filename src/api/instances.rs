@@ -27,7 +27,9 @@ pub async fn load_instances_for_user(
     page: usize,
     per_page: usize,
 ) -> PaginatedInstances {
-    let payload = api_call(client, api_base_url, api_token, "GET", "/v1/instances", None, None).await;
+    let mut params = Vec::new();
+    params.push(("per_page".to_string(), "1000".to_string()));
+    let payload = api_call(client, api_base_url, api_token, "GET", "/v1/instances", None, Some(params)).await;
     let mut all_instances = Vec::new();
     
     if payload.get("code").and_then(|c| c.as_str()) == Some("OKAY") {

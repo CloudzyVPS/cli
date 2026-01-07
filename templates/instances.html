@@ -47,46 +47,44 @@
     </table>
 </div>
 
-<div class="pagination-container mt-5">
+<div class="pagination-container">
     <div class="pagination-info">
-        Showing {{ instances.len() }} of {{ total_count }} instances
+        Showing <strong>{{ instances.len() }}</strong> of <strong>{{ total_count }}</strong> instances
     </div>
     
-    <nav class="pagination" aria-label="Instance pagination">
-        <div class="pagination-controls">
-            {% if current_page > 1 %}
-            <a href="{{ base_url }}/instances?page={{ current_page - 1 }}&per_page={{ per_page }}" class="pagination-btn" aria-label="Previous page">
-                <span aria-hidden="true">←</span> Previous
-            </a>
-            {% else %}
-            <span class="pagination-btn pagination-btn-disabled">
-                <span aria-hidden="true">←</span> Previous
-            </span>
-            {% endif %}
-            
-            {% if total_pages > 1 %}
-            <div class="pagination-numbers">
-                {% for p in 1..total_pages + 1 %}
-                    {% if p == current_page %}
-                    <span class="pagination-number pagination-number-active">{{ p }}</span>
-                    {% else %}
-                    <a href="{{ base_url }}/instances?page={{ p }}&per_page={{ per_page }}" class="pagination-number">{{ p }}</a>
-                    {% endif %}
-                {% endfor %}
-            </div>
-            {% endif %}
-            
-            {% if current_page < total_pages %}
-            <a href="{{ base_url }}/instances?page={{ current_page + 1 }}&per_page={{ per_page }}" class="pagination-btn" aria-label="Next page">
-                Next <span aria-hidden="true">→</span>
-            </a>
-            {% else %}
-            <span class="pagination-btn pagination-btn-disabled">
-                Next <span aria-hidden="true">→</span>
-            </span>
-            {% endif %}
+    <div class="pagination-controls" role="navigation" aria-label="Instance pagination">
+        {% if current_page > 1 %}
+        <a href="{{ base_url }}/instances?page={{ current_page - 1 }}&per_page={{ per_page }}" class="pagination-btn" aria-label="Previous page">
+            <span aria-hidden="true">←</span> Previous
+        </a>
+        {% else %}
+        <span class="pagination-btn pagination-btn-disabled">
+            <span aria-hidden="true">←</span> Previous
+        </span>
+        {% endif %}
+        
+        {% if total_pages > 1 %}
+        <div class="pagination-numbers">
+            {% for p in 1..total_pages + 1 %}
+                {% if p == current_page %}
+                <span class="pagination-number pagination-number-active">{{ p }}</span>
+                {% else %}
+                <a href="{{ base_url }}/instances?page={{ p }}&per_page={{ per_page }}" class="pagination-number">{{ p }}</a>
+                {% endif %}
+            {% endfor %}
         </div>
-    </nav>
+        {% endif %}
+        
+        {% if current_page < total_pages %}
+        <a href="{{ base_url }}/instances?page={{ current_page + 1 }}&per_page={{ per_page }}" class="pagination-btn" aria-label="Next page">
+            Next <span aria-hidden="true">→</span>
+        </a>
+        {% else %}
+        <span class="pagination-btn pagination-btn-disabled">
+            Next <span aria-hidden="true">→</span>
+        </span>
+        {% endif %}
+    </div>
 </div>
 
 {% else %}

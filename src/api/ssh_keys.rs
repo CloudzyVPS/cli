@@ -9,8 +9,12 @@ pub async fn load_ssh_keys(
     api_token: &str,
     customer_id: Option<String>,
 ) -> Vec<SshKeyView> {
-    let params = customer_id.map(|cid| vec![("customerId".to_string(), cid)]);
-    let payload = api_call(client, api_base_url, api_token, "GET", "/v1/ssh-keys", None, params).await;
+    let mut params = match customer_id {
+        Some(cid) => vec![("customerId".to_string(), cid)],
+        None => vec![],
+    };
+    params.push(("per_page".to_string(), "1000".to_string()));
+    let payload = api_call(client, api_base_url, api_token, "GET", "/v1/ssh-keys", None, Some(params)).await;
     
     // Debug logging
     tracing::info!(?payload, "SSH Keys API Response");

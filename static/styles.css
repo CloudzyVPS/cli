@@ -2375,7 +2375,7 @@ code {
   border-color: rgba(34, 197, 94, 0.2);
 }
 
-.status-inactive, .status-stopped, .status-offline, .status-poweroff {
+.status-inactive, .status-stopped, .status-offline, .status-poweroff, .status-shutdown {
   background-color: rgba(239, 68, 68, 0.1);
   color: #dc2626;
   border-color: rgba(239, 68, 68, 0.2);
@@ -2390,8 +2390,9 @@ code {
 /* Pagination Styles */
 .pagination-container {
   display: flex;
-  flex-direction: column;
+  justify-content: space-between;
   align-items: center;
+  flex-wrap: wrap;
   gap: var(--space-4);
   padding: var(--space-4) 0;
   border-top: 1px solid var(--border-color);
