@@ -435,8 +435,27 @@ pub async fn instance_resize_post(
         }
     }
 
-    if form.r#type.to_uppercase() == "CUSTOM" {
-        let mut extra_resource = serde_json::Map::new();
+    // Build extraResource based on resize type
+    let mut extra_resource = serde_json::Map::new();
+    
+    if form.r#type.to_uppercase() == "FIXED" {
+        // For FIXED resize: only diskInGB and bandwidthInTB are allowed
+        if let Some(disk) = form.disk_in_gb {
+            if let Ok(n) = disk.parse::<i64>() {
+                if n > 0 {
+                    extra_resource.insert("diskInGB".into(), Value::from(n));
+                }
+            }
+        }
+        if let Some(bw) = form.bandwidth_in_tb {
+            if let Ok(n) = bw.parse::<i64>() {
+                if n > 0 {
+                    extra_resource.insert("bandwidthInTB".into(), Value::from(n));
+                }
+            }
+        }
+    } else if form.r#type.to_uppercase() == "CUSTOM" {
+        // For CUSTOM resize: cpu, ramInGB, diskInGB, and bandwidthInTB are required
         if let Some(cpu) = form.cpu {
             if let Ok(n) = cpu.parse::<i64>() {
                 extra_resource.insert("cpu".into(), Value::from(n));
@@ -457,9 +476,10 @@ pub async fn instance_resize_post(
                 extra_resource.insert("bandwidthInTB".into(), Value::from(n));
             }
         }
-        if !extra_resource.is_empty() {
-            payload["extraResource"] = Value::Object(extra_resource);
-        }
+    }
+    
+    if !extra_resource.is_empty() {
+        payload["extraResource"] = Value::Object(extra_resource);
     }
     let resp = api_call_wrapper(&state, "POST", &endpoint, Some(payload), None).await;
     

@@ -687,12 +687,13 @@ async fn main() {
                             payload["productId"] = serde_json::Value::from(pid);
                         }
                     } else {
+                        // CUSTOM resize: build extraResource with all fields
                         let mut obj = serde_json::Map::new();
                         if let Some(cpu) = cpu { obj.insert("cpu".into(), serde_json::Value::from(cpu)); }
                         if let Some(ram) = ram_in_gb { obj.insert("ramInGB".into(), serde_json::Value::from(ram)); }
                         if let Some(disk) = disk_in_gb { obj.insert("diskInGB".into(), serde_json::Value::from(disk)); }
                         if let Some(bw) = bandwidth_in_tb { obj.insert("bandwidthInTB".into(), serde_json::Value::from(bw)); }
-                        if !obj.is_empty() { payload["resource"] = serde_json::Value::Object(obj); }
+                        if !obj.is_empty() { payload["extraResource"] = serde_json::Value::Object(obj); }
                     }
                     let resp = api_call_wrapper(&state, "POST", &endpoint, Some(payload), None).await;
                     print_api_response(&resp);
