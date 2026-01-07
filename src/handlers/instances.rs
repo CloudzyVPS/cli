@@ -35,7 +35,7 @@ fn default_page() -> usize {
 }
 
 fn default_per_page() -> usize {
-    20
+    10
 }
 
 pub async fn instances_real(

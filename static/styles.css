@@ -2449,6 +2449,7 @@ code {
 
 /* Utility classes */
 .gap-md { gap: 1rem; }
+.gap-sm { gap: 0.5rem; }
 .align-center { align-items: center; }
 .flex-wrap { flex-wrap: wrap; }
 .mb-0 { margin-bottom: 0; }

@@ -29,7 +29,7 @@
                     {% if product.spec_entries.len() > 0 %}
                     <div class="spec-badges">
                         {% for entry in product.spec_entries %}
-                        {% if entry.term != "RAM" and entry.term != "Storage" and entry.term != "Bandwidth" %}
+                        {% if entry.term != "RAM" && entry.term != "Storage" && entry.term != "Bandwidth" %}
                         <span class="badge">{{ entry.term }}: {{ entry.value }}</span>
                         {% endif %}
                         {% endfor %}
