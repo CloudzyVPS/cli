@@ -41,8 +41,10 @@
 name: Release
 
 on:
-  # Trigger on version tags
+  # Trigger on version tags and main branch commits
   push:
+    branches:
+      - main
     tags:
       - 'v*'
   
@@ -260,9 +262,9 @@ jobs:
             dist/zy-*
             dist/SHA256SUMS.txt
 
-      # For workflow_dispatch, just upload as workflow artifacts
+      # For workflow_dispatch or push to main, just upload as workflow artifacts
       - name: Upload workflow artifacts
-        if: github.event_name == 'workflow_dispatch'
+        if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
         uses: actions/upload-artifact@v4
         with:
           name: release-packages

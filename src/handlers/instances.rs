@@ -17,14 +17,34 @@ use crate::handlers::helpers::{
     build_template_globals, current_username_from_jar,
     render_template, api_call_wrapper, TemplateGlobals,
     load_regions_wrapper, load_products_wrapper, load_os_list_wrapper,
-    load_instances_for_user_wrapper,
+    load_instances_for_user_paginated,
 };
 use crate::services::instance_service::{enforce_instance_access, simple_instance_action};
 use crate::services::persist_users_file;
 
-pub async fn instances_real(State(state): State<AppState>, jar: CookieJar) -> impl IntoResponse {
+#[derive(Deserialize)]
+pub struct PaginationParams {
+    #[serde(default = "default_page")]
+    page: usize,
+    #[serde(default = "default_per_page")]
+    per_page: usize,
+}
+
+fn default_page() -> usize {
+    1
+}
+
+fn default_per_page() -> usize {
+    20
+}
+
+pub async fn instances_real(
+    State(state): State<AppState>,
+    jar: CookieJar,
+    Query(params): Query<PaginationParams>,
+) -> impl IntoResponse {
     let username = current_username_from_jar(&state, &jar).expect("Middleware ensures user is logged in");
-    let list = load_instances_for_user_wrapper(&state, &username).await;
+    let paginated = load_instances_for_user_paginated(&state, &username, params.page, params.per_page).await;
     let TemplateGlobals { current_user, api_hostname, base_url, flash_messages, has_flash_messages } = build_template_globals(&state, &jar);
     render_template(&state, &jar, InstancesTemplate {
             current_user,
@@ -32,7 +52,11 @@ pub async fn instances_real(State(state): State<AppState>, jar: CookieJar) -> im
             base_url,
             flash_messages,
             has_flash_messages,
-            instances: &list,
+            instances: &paginated.instances,
+            current_page: paginated.current_page,
+            total_pages: paginated.total_pages,
+            per_page: paginated.per_page,
+            total_count: paginated.total_count,
         },
     )
 }
@@ -557,21 +581,57 @@ pub async fn instance_resize_post(
     }
     let endpoint = format!("/v1/instances/{}/resize", instance_id);
     let mut payload = serde_json::json!({"type": form.r#type});
-    if form.r#type.to_uppercase() == "FIXED" {
-        if let Some(pid) = form.product_id {
+
+    if let Some(pid) = form.product_id {
+        if !pid.trim().is_empty() {
             payload["productId"] = Value::from(pid);
         }
-    } else {
-        let mut obj = serde_json::Map::new();
-        if let Some(rid) = form.region_id { obj.insert("regionId".into(), Value::from(rid)); }
-        if let Some(cpu) = form.cpu { if let Ok(n) = cpu.parse::<i64>() { obj.insert("cpu".into(), Value::from(n)); }}
-        if let Some(ram) = form.ram_in_gb { if let Ok(n) = ram.parse::<i64>() { obj.insert("ramInGB".into(), Value::from(n)); }}
-        if let Some(disk) = form.disk_in_gb { if let Ok(n) = disk.parse::<i64>() { obj.insert("diskInGB".into(), Value::from(n)); }}
-        if let Some(bw) = form.bandwidth_in_tb { if let Ok(n) = bw.parse::<i64>() { obj.insert("bandwidthInTB".into(), Value::from(n)); }}
-        if !obj.is_empty() {
-            payload["resource"] = Value::Object(obj);
+    }
+
+    if let Some(rid) = form.region_id {
+        if !rid.trim().is_empty() {
+            payload["regionId"] = Value::from(rid);
         }
     }
-    let _ = api_call_wrapper(&state, "POST", &endpoint, Some(payload), None).await;
+
+    if form.r#type.to_uppercase() == "CUSTOM" {
+        let mut extra_resource = serde_json::Map::new();
+        if let Some(cpu) = form.cpu {
+            if let Ok(n) = cpu.parse::<i64>() {
+                extra_resource.insert("cpu".into(), Value::from(n));
+            }
+        }
+        if let Some(ram) = form.ram_in_gb {
+            if let Ok(n) = ram.parse::<i64>() {
+                extra_resource.insert("ramInGB".into(), Value::from(n));
+            }
+        }
+        if let Some(disk) = form.disk_in_gb {
+            if let Ok(n) = disk.parse::<i64>() {
+                extra_resource.insert("diskInGB".into(), Value::from(n));
+            }
+        }
+        if let Some(bw) = form.bandwidth_in_tb {
+            if let Ok(n) = bw.parse::<i64>() {
+                extra_resource.insert("bandwidthInTB".into(), Value::from(n));
+            }
+        }
+        if !extra_resource.is_empty() {
+            payload["extraResource"] = Value::Object(extra_resource);
+        }
+    }
+    let resp = api_call_wrapper(&state, "POST", &endpoint, Some(payload), None).await;
+    
+    if let Some(sid) = jar.get("session_id") {
+        let mut flashes = state.flash_store.lock().unwrap();
+        let entry = flashes.entry(sid.value().to_string()).or_default();
+        if resp.get("code").and_then(|c| c.as_str()) == Some("OKAY") {
+            entry.push("Instance resize initiated successfully.".into());
+        } else {
+            let detail = resp.get("detail").and_then(|d| d.as_str()).unwrap_or("Unknown error");
+            entry.push(format!("Resize failed: {}", detail));
+        }
+    }
+
     Redirect::to(&format!("/instance/{}", instance_id)).into_response()
 }

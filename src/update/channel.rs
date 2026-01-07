@@ -1,0 +1,100 @@
+/// Release channel management
+use serde::{Deserialize, Serialize};
+
+/// Release channels for updates
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum Channel {
+    /// Stable releases (no pre-release tags)
+    Stable,
+    /// Beta releases (tags containing "beta")
+    Beta,
+    /// Alpha releases (tags containing "alpha")
+    Alpha,
+    /// Release candidates (tags containing "rc")
+    ReleaseCandidate,
+}
+
+impl Channel {
+    /// Detect channel from a version string or tag name
+    /// 
+    /// # Examples
+    /// 
+    /// ```
+    /// use zy::update::Channel;
+    /// 
+    /// assert_eq!(Channel::from_version("1.0.0"), Channel::Stable);
+    /// assert_eq!(Channel::from_version("1.0.0-alpha.1"), Channel::Alpha);
+    /// assert_eq!(Channel::from_version("v1.0.0-beta"), Channel::Beta);
+    /// assert_eq!(Channel::from_version("1.0.0-rc.1"), Channel::ReleaseCandidate);
+    /// ```
+    pub fn from_version(version: &str) -> Self {
+        let lower = version.to_lowercase();
+        
+        if lower.contains("alpha") {
+            Channel::Alpha
+        } else if lower.contains("beta") {
+            Channel::Beta
+        } else if lower.contains("rc") {
+            Channel::ReleaseCandidate
+        } else {
+            Channel::Stable
+        }
+    }
+    
+    /// Check if this channel should include pre-release versions
+    /// 
+    /// # Examples
+    /// 
+    /// ```
+    /// use zy::update::Channel;
+    /// 
+    /// assert_eq!(Channel::Stable.should_include_prerelease(), false);
+    /// assert_eq!(Channel::Alpha.should_include_prerelease(), true);
+    /// assert_eq!(Channel::Beta.should_include_prerelease(), true);
+    /// assert_eq!(Channel::ReleaseCandidate.should_include_prerelease(), true);
+    /// ```
+    pub fn should_include_prerelease(&self) -> bool {
+        !matches!(self, Channel::Stable)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_from_version_stable() {
+        assert_eq!(Channel::from_version("1.0.0"), Channel::Stable);
+        assert_eq!(Channel::from_version("v1.0.0"), Channel::Stable);
+        assert_eq!(Channel::from_version("2.1.3"), Channel::Stable);
+    }
+
+    #[test]
+    fn test_from_version_alpha() {
+        assert_eq!(Channel::from_version("1.0.0-alpha"), Channel::Alpha);
+        assert_eq!(Channel::from_version("v1.0.0-alpha.1"), Channel::Alpha);
+        assert_eq!(Channel::from_version("1.0.0-ALPHA"), Channel::Alpha);
+    }
+
+    #[test]
+    fn test_from_version_beta() {
+        assert_eq!(Channel::from_version("1.0.0-beta"), Channel::Beta);
+        assert_eq!(Channel::from_version("v1.0.0-beta.2"), Channel::Beta);
+        assert_eq!(Channel::from_version("1.0.0-BETA"), Channel::Beta);
+    }
+
+    #[test]
+    fn test_from_version_rc() {
+        assert_eq!(Channel::from_version("1.0.0-rc"), Channel::ReleaseCandidate);
+        assert_eq!(Channel::from_version("v1.0.0-rc.1"), Channel::ReleaseCandidate);
+        assert_eq!(Channel::from_version("1.0.0-RC"), Channel::ReleaseCandidate);
+    }
+
+    #[test]
+    fn test_should_include_prerelease() {
+        assert!(!Channel::Stable.should_include_prerelease());
+        assert!(Channel::Alpha.should_include_prerelease());
+        assert!(Channel::Beta.should_include_prerelease());
+        assert!(Channel::ReleaseCandidate.should_include_prerelease());
+    }
+}

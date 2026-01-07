@@ -5,6 +5,7 @@ mod utils;
 mod api;
 mod templates;
 mod handlers;
+mod update;
 
 use axum::{
     routing::{get, post},
@@ -352,11 +353,17 @@ enum UserCommands {
 #[derive(Subcommand)]
 enum InstanceCommands {
     /// List instances (optional --username to filter)
-    #[command(about = "List instances", long_about = "List instances the configured API user may access. Provide `--username` to filter instances assigned to a local user.")]
+    #[command(about = "List instances", long_about = "List instances the configured API user may access. Provide `--username` to filter instances assigned to a local user. Use `--page` and `--per-page` for pagination.")]
     List {
         /// Optional username to filter instances by assigned user (use empty to list all)
         #[arg(long)]
         username: Option<String>,
+        /// Page number to display (1-indexed). Use 0 to show all instances without pagination.
+        #[arg(long, short = 'p', default_value = "0")]
+        page: usize,
+        /// Number of instances per page (default: 20, only used when page > 0)
+        #[arg(long, default_value = "20")]
+        per_page: usize,
     },
     /// Show instance details
     #[command(about = "Show instance details", long_about = "Show the raw JSON payload returned by the API for an instance ID.")]
@@ -559,9 +566,9 @@ async fn main() {
         Commands::Instances { sub } => {
             let state = build_state_from_env(None).await;
             match sub {
-                InstanceCommands::List { username } => {
+                InstanceCommands::List { username, page, per_page } => {
                     let uname = username.unwrap_or_default();
-                    let list = handlers::helpers::load_instances_for_user_wrapper(&state, &uname).await;
+                    let paginated = handlers::helpers::load_instances_for_user_paginated(&state, &uname, page, per_page).await;
                     
                     let mut table = Table::new();
                     table.load_preset(presets::UTF8_FULL);
@@ -571,10 +578,42 @@ async fn main() {
                         table.set_width(w - 4);
                     }
                     table.set_header(vec!["ID", "Hostname", "Status"]);
-                    for i in list {
-                        table.add_row(vec![i.id, i.hostname, i.status]);
+                    for i in &paginated.instances {
+                        table.add_row(vec![&i.id, &i.hostname, &i.status]);
                     }
-                    println!("\n{table}\n");
+                    println!("\n{table}");
+                    
+                    // Display pagination information
+                    if page > 0 && paginated.total_pages > 1 {
+                        println!("\n{}", yansi::Paint::new(format!(
+                            "Page {} of {} | Showing {} of {} total instances",
+                            paginated.current_page,
+                            paginated.total_pages,
+                            paginated.instances.len(),
+                            paginated.total_count
+                        )).cyan());
+                        
+                        if paginated.current_page > 1 {
+                            println!(
+                                "{} {}",
+                                yansi::Paint::new("←").bold(),
+                                yansi::Paint::new(format!("Previous page: zy instances list --page {} --per-page {}", paginated.current_page - 1, per_page)).dim()
+                            );
+                        }
+                        if paginated.current_page < paginated.total_pages {
+                            println!(
+                                "{} {}",
+                                yansi::Paint::new("→").bold(),
+                                yansi::Paint::new(format!("Next page: zy instances list --page {} --per-page {}", paginated.current_page + 1, per_page)).dim()
+                            );
+                        }
+                    } else if page == 0 {
+                        println!("\n{}", yansi::Paint::new(format!(
+                            "Showing all {} instances (use --page 1 --per-page 20 to enable pagination)",
+                            paginated.total_count
+                        )).dim());
+                    }
+                    println!();
                     return;
                 }
                 InstanceCommands::Show { instance_id } => {
