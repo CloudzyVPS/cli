@@ -37,9 +37,6 @@
             <a href="{{ base_url }}/instances">Instances</a>
                     {% if current_user.as_ref().unwrap().role == "owner" %}
             <a href="{{ base_url }}/create/step-1">Create</a>
-            <a href="{{ base_url }}/regions">Regions</a>
-            <a href="{{ base_url }}/os">OS</a>
-            <a href="{{ base_url }}/applications">Apps</a>
             <a href="{{ base_url }}/ssh-keys">SSH Keys</a>
             <a href="{{ base_url }}/users">Users</a>
             <a href="{{ base_url }}/access">Assignments</a>

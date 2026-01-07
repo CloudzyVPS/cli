@@ -10,7 +10,10 @@ pub async fn load_products(
     api_token: &str,
     region_id: &str,
 ) -> Vec<ProductView> {
-    let params = vec![("regionId".into(), region_id.to_string())];
+    let params = vec![
+        ("regionId".into(), region_id.to_string()),
+        ("per_page".into(), "1000".into()),
+    ];
     let payload = api_call(client, api_base_url, api_token, "GET", "/v1/products", None, Some(params)).await;
     let mut out = vec![];
     

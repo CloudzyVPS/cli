@@ -4,10 +4,6 @@ pub use base_template::BaseTemplate;
 
 // Individual template files
 pub mod login_template;
-pub mod regions_page_template;
-pub mod products_page_template;
-pub mod os_catalog_template;
-pub mod applications_template;
 pub mod instance_detail_template;
 pub mod users_page_template;
 pub mod user_detail_template;
@@ -17,7 +13,6 @@ pub mod confirmation_template;
 pub mod ssh_keys_page_template;
 pub mod instances_page_template;
 pub mod change_pass_instance_template;
-pub mod change_os_template;
 pub mod resize_template;
 
 // Wizard templates (now in templates/)
@@ -33,10 +28,6 @@ pub mod step8_template;
 
 // Re-export all templates
 pub use login_template::LoginTemplate;
-pub use regions_page_template::RegionsPageTemplate;
-pub use products_page_template::ProductsPageTemplate;
-pub use os_catalog_template::OsCatalogTemplate;
-pub use applications_template::ApplicationsTemplate;
 pub use instance_detail_template::InstanceDetailTemplate;
 pub use users_page_template::UsersPageTemplate;
 pub use user_detail_template::UserDetailTemplate;
@@ -46,7 +37,6 @@ pub use confirmation_template::ConfirmationTemplate;
 pub use ssh_keys_page_template::SshKeysPageTemplate;
 pub use instances_page_template::InstancesPageTemplate;
 pub use change_pass_instance_template::ChangePassInstanceTemplate;
-pub use change_os_template::ChangeOsTemplate;
 pub use resize_template::ResizeTemplate;
 
 // Wizard templates

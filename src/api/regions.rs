@@ -9,7 +9,8 @@ pub async fn load_regions(
     api_base_url: &str,
     api_token: &str,
 ) -> (Vec<Region>, HashMap<String, Region>) {
-    let payload = api_call(client, api_base_url, api_token, "GET", "/v1/regions", None, None).await;
+    let params = vec![("per_page".to_string(), "1000".to_string())];
+    let payload = api_call(client, api_base_url, api_token, "GET", "/v1/regions", None, Some(params)).await;
     let mut regions = Vec::new();
     let mut map = HashMap::new();
     

@@ -8,7 +8,8 @@ pub async fn load_os_list(
     api_base_url: &str,
     api_token: &str,
 ) -> Vec<OsItem> {
-    let payload = api_call(client, api_base_url, api_token, "GET", "/v1/os", None, None).await;
+    let params = vec![("per_page".to_string(), "1000".to_string())];
+    let payload = api_call(client, api_base_url, api_token, "GET", "/v1/os", None, Some(params)).await;
     let mut out = vec![];
     
     if payload.get("code").and_then(|c| c.as_str()) == Some("OKAY") {

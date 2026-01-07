@@ -7,11 +7,11 @@ use serde::Deserialize;
 use serde_json::Value;
 
 use crate::models::{
-    AppState, InstanceView, OsItem, AddTrafficForm, ChangeOsForm, ResizeForm,
+    AppState, InstanceView, AddTrafficForm, ResizeForm,
 };
 use crate::templates::{
     InstancesTemplate, InstanceDetailTemplate,
-    ChangePassInstanceTemplate, ChangeOsTemplate, ResizeTemplate,
+    ChangePassInstanceTemplate, ResizeTemplate,
 };
 use crate::handlers::helpers::{
     build_template_globals, current_username_from_jar,
@@ -365,68 +365,6 @@ pub async fn instance_add_traffic(
             let _ = api_call_wrapper(&state, "POST", &endpoint, Some(payload), None).await;
         }
     }
-    Redirect::to(&format!("/instance/{}", instance_id)).into_response()
-}
-
-pub async fn instance_change_os_get(
-    State(state): State<AppState>,
-    jar: CookieJar,
-    Path(instance_id): Path<String>,
-) -> impl IntoResponse {
-    if !enforce_instance_access(&state, current_username_from_jar(&state, &jar).as_deref(), &instance_id).await {
-        return Redirect::to("/instances").into_response();
-    }
-    let endpoint = format!("/v1/instances/{}", instance_id);
-    let payload = api_call_wrapper(&state, "GET", &endpoint, None, None).await;
-    let mut instance = InstanceView { id: instance_id.clone(), hostname: "(no hostname)".into(), region: "".into(), main_ip: None, status: "".into(), vcpu_count_display: "—".into(), ram_display: "—".into(), disk_display: "—".into(), os: None };
-    if let Some(obj) = payload.as_object() {
-        if let Some(data) = obj.get("data").and_then(|d| d.as_object()) {
-            instance.hostname = data.get("hostname").and_then(|v| v.as_str()).unwrap_or(&instance.hostname).to_string();
-            if let Some(os_obj) = data.get("os").and_then(|v| v.as_object()) {
-                instance.os = Some(OsItem {
-                    id: os_obj.get("id").and_then(|v| v.as_str()).unwrap_or("").to_string(),
-                    name: os_obj.get("name").and_then(|v| v.as_str()).unwrap_or("").to_string(),
-                    family: os_obj.get("family").and_then(|v| v.as_str()).unwrap_or("").to_string(),
-                    arch: os_obj.get("arch").and_then(|v| v.as_str()).map(|s| s.to_string()),
-                    min_ram: os_obj.get("minRam").and_then(|v| v.as_str()).map(|s| s.to_string()),
-                    is_default: os_obj.get("isDefault").and_then(|v| v.as_bool()).unwrap_or(false),
-                });
-            }
-            instance.region = data.get("region").and_then(|v| v.as_str()).unwrap_or("").to_string();
-            instance.main_ip = data.get("mainIp").and_then(|v| v.as_str()).map(|s| s.to_string());
-            instance.status = data.get("status").and_then(|v| v.as_str()).unwrap_or("").to_string();
-        }
-    }
-    let os_list = load_os_list_wrapper(&state).await;
-    let TemplateGlobals { current_user, api_hostname, base_url, flash_messages, has_flash_messages } = build_template_globals(&state, &jar);
-    let disabled_by_env = state.is_instance_disabled(&instance_id);
-    let disabled_by_host = state.is_hostname_blocked(&instance.hostname);
-    render_template(&state, &jar, ChangeOsTemplate { current_user, api_hostname, base_url, flash_messages, has_flash_messages, instance, os_list: &os_list, disabled_by_env, disabled_by_host })
-}
-
-pub async fn instance_change_os_post(
-    State(state): State<AppState>,
-    jar: CookieJar,
-    Path(instance_id): Path<String>,
-    Form(form): Form<ChangeOsForm>,
-) -> impl IntoResponse {
-    if !enforce_instance_access(&state, current_username_from_jar(&state, &jar).as_deref(), &instance_id).await {
-        return Redirect::to("/instances").into_response();
-    }
-    if let Some(reason) = crate::services::instance_service::check_instance_block(&state, &instance_id, None).await {
-        if let Some(sid) = jar.get("session_id") {
-            let mut flashes = state.flash_store.lock().unwrap();
-            let entry = flashes.entry(sid.value().to_string()).or_default();
-            entry.push(reason.message());
-        }
-        return Redirect::to(&format!("/instance/{}/change-os", instance_id)).into_response();
-    }
-    if form.os_id.trim().is_empty() {
-        return Redirect::to(&format!("/instance/{}/change-os", instance_id)).into_response();
-    }
-    let endpoint = format!("/v1/instances/{}/change-os", instance_id);
-    let payload = serde_json::json!({"osId": form.os_id});
-    let _ = api_call_wrapper(&state, "POST", &endpoint, Some(payload), None).await;
     Redirect::to(&format!("/instance/{}", instance_id)).into_response()
 }
 

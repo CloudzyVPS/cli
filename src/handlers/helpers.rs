@@ -153,7 +153,7 @@ pub fn render_template<T: askama::Template>(state: &AppState, jar: &CookieJar, t
     }
 }
 
-static LOGGING_IGNORE_ENDPOINTS: &[&str] = &["/v1/os", "/v1/products", "/os", "/products"];
+static LOGGING_IGNORE_ENDPOINTS: &[&str] = &["/v1/os", "/v1/products"];
 
 pub async fn api_call_wrapper(
     state: &AppState,

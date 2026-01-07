@@ -80,10 +80,6 @@ fn build_app(state: AppState) -> Router {
         .route("/access/:username", post(handlers::access::update_access))
         .route("/ssh-keys", get(handlers::ssh_keys::ssh_keys_get).post(handlers::ssh_keys::ssh_keys_post))
         .route("/instances", get(handlers::instances::instances_real))
-        .route("/regions", get(handlers::catalog::regions_get))
-        .route("/products", get(handlers::catalog::products_get))
-        .route("/os", get(handlers::catalog::os_get))
-        .route("/applications", get(handlers::catalog::applications_get))
         .route("/create/step-1", get(handlers::wizard::create_step_1))
         .route("/create/step-2", get(handlers::wizard::create_step_2))
         .route("/create/step-3", get(handlers::wizard::create_step_3))
@@ -108,7 +104,6 @@ fn build_app(state: AppState) -> Router {
             "/instance/:instance_id/change-pass",
             get(handlers::instances::instance_change_pass_get).post(handlers::instances::instance_change_pass_post),
         )
-        .route("/instance/:instance_id/change-os", get(handlers::instances::instance_change_os_get).post(handlers::instances::instance_change_os_post))
         .route("/instance/:instance_id/resize", get(handlers::instances::instance_resize_get).post(handlers::instances::instance_resize_post))
         .route(
             "/instance/:instance_id/add-traffic",
@@ -470,9 +465,9 @@ async fn main() {
             if !ok {
                 process::exit(1);
             }
-            let resp = api_call_wrapper(&state, "GET", "/v1/regions", None, None).await;
+            let resp = api_call_wrapper(&state, "GET", "/v1/profile", None, None).await;
             if resp.get("code").and_then(|c| c.as_str()) == Some("OKAY") {
-                println!("{}", yansi::Paint::new("Configuration looks valid (regions returned)").green());
+                println!("{}", yansi::Paint::new("Configuration looks valid (profile returned)").green());
                 process::exit(0);
             } else {
                 let json_str = serde_json::to_string_pretty(&resp).unwrap_or_else(|_| "<non-json>".into());
