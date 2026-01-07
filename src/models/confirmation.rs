@@ -12,6 +12,9 @@ pub enum ConfirmationAction {
     ChangeOs,
     ResizeInstance,
     AddTraffic,
+    CreateSnapshot,
+    DeleteSnapshot,
+    RestoreSnapshot,
 }
 
 impl ConfirmationAction {
@@ -26,6 +29,9 @@ impl ConfirmationAction {
             "change-os" => Some(Self::ChangeOs),
             "resize-instance" => Some(Self::ResizeInstance),
             "add-traffic" => Some(Self::AddTraffic),
+            "create-snapshot" => Some(Self::CreateSnapshot),
+            "delete-snapshot" => Some(Self::DeleteSnapshot),
+            "restore-snapshot" => Some(Self::RestoreSnapshot),
             _ => None,
         }
     }
@@ -42,6 +48,9 @@ impl ConfirmationAction {
             Self::ChangeOs => "change-os",
             Self::ResizeInstance => "resize-instance",
             Self::AddTraffic => "add-traffic",
+            Self::CreateSnapshot => "create-snapshot",
+            Self::DeleteSnapshot => "delete-snapshot",
+            Self::RestoreSnapshot => "restore-snapshot",
         }
     }
 }

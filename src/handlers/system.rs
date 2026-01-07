@@ -205,6 +205,31 @@ pub async fn confirmation_get(
             button_class = "btn-warning".into();
             hidden_fields.push(("version".into(), id.clone()));
         }
+        ConfirmationAction::CreateSnapshot => {
+            title = "Create Snapshot".into();
+            message = format!("Create a snapshot of instance '{}'? This will capture the current state of the instance.", id);
+            target_url = format!("{}/snapshots/create", base_url);
+            confirm_label = "Create Snapshot".into();
+            cancel_url = format!("{}/instance/{}", base_url, id);
+            button_class = "btn-primary".into();
+            hidden_fields.push(("instance_id".into(), id.clone()));
+        }
+        ConfirmationAction::DeleteSnapshot => {
+            title = "Delete Snapshot".into();
+            message = format!("Are you sure you want to permanently delete snapshot '{}'?", id);
+            target_url = format!("{}/snapshots/{}/delete", base_url, id);
+            confirm_label = "Delete Snapshot".into();
+            cancel_url = format!("{}/snapshots/{}", base_url, id);
+            button_class = "btn-danger".into();
+        }
+        ConfirmationAction::RestoreSnapshot => {
+            title = "Restore Snapshot".into();
+            message = format!("Restore instance from snapshot '{}'? This will overwrite the current instance data.", id);
+            target_url = format!("{}/snapshots/{}/restore", base_url, id);
+            confirm_label = "Restore Snapshot".into();
+            cancel_url = format!("{}/snapshots/{}", base_url, id);
+            button_class = "btn-warning".into();
+        }
         _ => {}
     }
 

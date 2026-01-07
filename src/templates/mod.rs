@@ -16,6 +16,8 @@ pub mod change_pass_instance_template;
 pub mod change_os_instance_template;
 pub mod resize_template;
 pub mod coming_soon_template;
+pub mod snapshots_template;
+pub mod snapshot_detail_template;
 
 // Wizard templates (now in templates/)
 pub mod step1_template;
@@ -42,6 +44,8 @@ pub use change_pass_instance_template::ChangePassInstanceTemplate;
 pub use change_os_instance_template::ChangeOsInstanceTemplate;
 pub use resize_template::ResizeTemplate;
 pub use coming_soon_template::ComingSoonTemplate;
+pub use snapshots_template::SnapshotsTemplate;
+pub use snapshot_detail_template::SnapshotDetailTemplate;
 
 // Wizard templates
 pub use step1_template::Step1Template;
