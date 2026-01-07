@@ -38,6 +38,39 @@
         </article>
         {% endfor %}
     </div>
+
+    <div class="pagination-container mt-4">
+        <div class="pagination-info">
+            Showing <strong>{{ ssh_keys.len() }}</strong> of <strong>{{ total_count }}</strong> keys
+        </div>
+        
+        <div class="per-page-selector">
+            <span class="text-muted small">Items per page:</span>
+            <div class="d-flex gap-sm">
+                <a href="{{ base_url }}/ssh-keys?per_page=10&page=1{% if customer_id.is_some() %}&customer_id={{ customer_id.as_ref().unwrap() }}{% endif %}" class="btn {% if per_page == 10 %}btn-primary{% else %}btn-secondary{% endif %} btn-sm">10</a>
+                <a href="{{ base_url }}/ssh-keys?per_page=20&page=1{% if customer_id.is_some() %}&customer_id={{ customer_id.as_ref().unwrap() }}{% endif %}" class="btn {% if per_page == 20 %}btn-primary{% else %}btn-secondary{% endif %} btn-sm">20</a>
+                <a href="{{ base_url }}/ssh-keys?per_page=50&page=1{% if customer_id.is_some() %}&customer_id={{ customer_id.as_ref().unwrap() }}{% endif %}" class="btn {% if per_page == 50 %}btn-primary{% else %}btn-secondary{% endif %} btn-sm">50</a>
+            </div>
+        </div>
+
+        <div class="pagination-controls" role="navigation" aria-label="SSH keys pagination">
+            {% if total_pages > 1 %}
+            <div class="pagination-numbers">
+                {% for p in 1..total_pages + 1 %}
+                    {% if p == 1 || p == total_pages || (p >= current_page - 1 && p <= current_page + 1) %}
+                        {% if p == current_page %}
+                        <span class="pagination-number pagination-number-active">{{ p }}</span>
+                        {% else %}
+                        <a href="{{ base_url }}/ssh-keys?page={{ p }}&per_page={{ per_page }}{% if customer_id.is_some() %}&customer_id={{ customer_id.as_ref().unwrap() }}{% endif %}" class="pagination-number">{{ p }}</a>
+                        {% endif %}
+                    {% else if (p == 2 && current_page > 3) || (p == total_pages - 1 && current_page < total_pages - 2) %}
+                        <span class="pagination-ellipsis">...</span>
+                    {% endif %}
+                {% endfor %}
+            </div>
+            {% endif %}
+        </div>
+    </div>
     {% endif %}
 </section>
 

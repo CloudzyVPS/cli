@@ -30,12 +30,14 @@ section[aria-labelledby="regions-heading"] > div[role="list"] > article dl {
 }
 
 section dl > div {
-  grid-template-columns: 140px 1fr;
-  gap: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
 }
 
 .action-grid {
-  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: var(--space-4);
 }
 
 /* Navigation - Sidebar Layout */

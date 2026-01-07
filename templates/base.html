@@ -35,6 +35,10 @@
         </header>
         <div role="navigation">
             <a href="{{ base_url }}/instances">Instances</a>
+            <a href="{{ base_url }}/coming-soon/floating-ips">Floating IPs</a>
+            <a href="{{ base_url }}/coming-soon/custom-isos">Custom ISOs</a>
+            <a href="{{ base_url }}/coming-soon/images">Images</a>
+            <a href="{{ base_url }}/coming-soon/backups">Backups</a>
                     {% if current_user.as_ref().unwrap().role == "owner" %}
             <a href="{{ base_url }}/create/step-1">Create</a>
             <a href="{{ base_url }}/ssh-keys">SSH Keys</a>
@@ -49,7 +53,7 @@
     </nav>
     {% endif %}
 
-    <main>
+    <main class="{% block main_class %}{% endblock %}">
         {% if has_flash_messages %}
         <section class="flash-messages">
             {% for message in flash_messages %}

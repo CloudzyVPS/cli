@@ -16,7 +16,7 @@ use crate::templates::{
 use crate::handlers::helpers::{
     build_template_globals, current_username_from_jar,
     render_template, api_call_wrapper, TemplateGlobals,
-    load_regions_wrapper, load_products_wrapper, load_os_list_wrapper,
+    load_regions_wrapper, load_products_wrapper,
     load_instances_for_user_paginated,
 };
 use crate::services::instance_service::{enforce_instance_access, simple_instance_action};
@@ -74,6 +74,7 @@ pub async fn instance_detail(
     
     let mut details: Vec<(String, String)> = Vec::new();
     let mut hostname = "(no hostname)".to_string();
+    let mut status = "".to_string();
     if let Some(obj) = payload.as_object() {
         if let Some(data) = obj.get("data").and_then(|d| d.as_object()) {
             hostname = data
@@ -82,12 +83,13 @@ pub async fn instance_detail(
                 .unwrap_or("(no hostname)")
                 .to_string();
             details.push(("Hostname".into(), hostname.clone()));
-            let status = data
+            status = data
                 .get("status")
                 .and_then(|v| v.as_str())
                 .unwrap_or("")
                 .to_string();
-            details.push(("Status".into(), status));
+            let status_display = crate::utils::format_status(&status);
+            details.push(("Status".into(), status_display));
             let region = data
                 .get("region")
                 .and_then(|v| v.as_str())
@@ -158,6 +160,7 @@ pub async fn instance_detail(
             has_flash_messages,
             instance_id: instance_id.clone(),
             hostname,
+            status,
             details,
             disabled_by_env,
             disabled_by_host,
@@ -235,13 +238,15 @@ pub async fn instance_change_pass_get(
     }
     let endpoint = format!("/v1/instances/{}", instance_id);
     let payload = api_call_wrapper(&state, "GET", &endpoint, None, None).await;
-    let mut instance = InstanceView { id: instance_id.clone(), hostname: "(no hostname)".into(), region: "".into(), main_ip: None, status: "".into(), vcpu_count_display: "—".into(), ram_display: "—".into(), disk_display: "—".into(), os: None };
+    let mut instance = InstanceView { id: instance_id.clone(), hostname: "(no hostname)".into(), region: "".into(), main_ip: None, main_ipv6: None, status: "".into(), status_display: "".into(), vcpu_count_display: "—".into(), ram_display: "—".into(), disk_display: "—".into(), os: None };
     if let Some(obj) = payload.as_object() {
         if let Some(data) = obj.get("data").and_then(|d| d.as_object()) {
             instance.hostname = data.get("hostname").and_then(|v| v.as_str()).unwrap_or(&instance.hostname).to_string();
             instance.region = data.get("region").and_then(|v| v.as_str()).unwrap_or("").to_string();
             instance.main_ip = data.get("mainIp").and_then(|v| v.as_str()).map(|s| s.to_string());
+            instance.main_ipv6 = data.get("mainIpv6").and_then(|v| v.as_str()).map(|s| s.to_string());
             instance.status = data.get("status").and_then(|v| v.as_str()).unwrap_or("").to_string();
+            instance.status_display = crate::utils::format_status(&instance.status);
         }
     }
     let TemplateGlobals { current_user, api_hostname, base_url, flash_messages, has_flash_messages } = build_template_globals(&state, &jar);
@@ -271,13 +276,15 @@ pub async fn instance_change_pass_post(
     let new_password = payload.get("data").and_then(|d| d.get("password")).and_then(|v| v.as_str()).map(|s| s.to_string());
     let get_endpoint = format!("/v1/instances/{}", instance_id);
     let payload2 = api_call_wrapper(&state, "GET", &get_endpoint, None, None).await;
-    let mut instance = InstanceView { id: instance_id.clone(), hostname: "(no hostname)".into(), region: "".into(), main_ip: None, status: "".into(), vcpu_count_display: "—".into(), ram_display: "—".into(), disk_display: "—".into(), os: None };
+    let mut instance = InstanceView { id: instance_id.clone(), hostname: "(no hostname)".into(), region: "".into(), main_ip: None, main_ipv6: None, status: "".into(), status_display: "".into(), vcpu_count_display: "—".into(), ram_display: "—".into(), disk_display: "—".into(), os: None };
     if let Some(obj) = payload2.as_object() {
         if let Some(data) = obj.get("data").and_then(|d| d.as_object()) {
             instance.hostname = data.get("hostname").and_then(|v| v.as_str()).unwrap_or(&instance.hostname).to_string();
             instance.region = data.get("region").and_then(|v| v.as_str()).unwrap_or("").to_string();
             instance.main_ip = data.get("mainIp").and_then(|v| v.as_str()).map(|s| s.to_string());
+            instance.main_ipv6 = data.get("mainIpv6").and_then(|v| v.as_str()).map(|s| s.to_string());
             instance.status = data.get("status").and_then(|v| v.as_str()).unwrap_or("").to_string();
+            instance.status_display = crate::utils::format_status(&instance.status);
         }
     }
     let TemplateGlobals { current_user, api_hostname, base_url, flash_messages, has_flash_messages } = build_template_globals(&state, &jar);
@@ -378,12 +385,13 @@ pub async fn instance_resize_get(
     }
     let endpoint = format!("/v1/instances/{}", instance_id);
     let payload = api_call_wrapper(&state, "GET", &endpoint, None, None).await;
-    let mut instance = InstanceView { id: instance_id.clone(), hostname: "(no hostname)".into(), region: "".into(), main_ip: None, status: "".into(), vcpu_count_display: "—".into(), ram_display: "—".into(), disk_display: "—".into(), os: None };
+    let mut instance = InstanceView { id: instance_id.clone(), hostname: "(no hostname)".into(), region: "".into(), main_ip: None, main_ipv6: None, status: "".into(), status_display: "".into(), vcpu_count_display: "—".into(), ram_display: "—".into(), disk_display: "—".into(), os: None };
     if let Some(obj) = payload.as_object() {
         if let Some(data) = obj.get("data").and_then(|d| d.as_object()) {
             instance.hostname = data.get("hostname").and_then(|v| v.as_str()).unwrap_or(&instance.hostname).to_string();
             instance.region = data.get("region").and_then(|v| v.as_str()).unwrap_or("").to_string();
             instance.main_ip = data.get("mainIp").and_then(|v| v.as_str()).map(|s| s.to_string());
+            instance.main_ipv6 = data.get("mainIpv6").and_then(|v| v.as_str()).map(|s| s.to_string());
             instance.status = data.get("status").and_then(|v| v.as_str()).unwrap_or("").to_string();
         }
     }

@@ -2,6 +2,8 @@
 
 {% block title %}{{ title }}{% endblock %}
 
+{% block main_class %}{% if button_class == "btn-danger" %}page-danger{% endif %}{% endblock %}
+
 {% block content %}
 <div class="confirmation-container fade-in">
     <div class="card card-narrow mx-auto">

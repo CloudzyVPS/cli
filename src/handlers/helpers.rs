@@ -4,8 +4,11 @@ use axum_extra::extract::cookie::CookieJar;
 use serde::Deserialize;
 use serde_json::Value;
 
-use crate::api::{api_call, load_ssh_keys, load_regions, load_products, load_os_list, load_instances_for_user, PaginatedInstances};
-use crate::models::{AppState, CurrentUser, SshKeyView, Region, ProductView, OsItem, InstanceView};
+use crate::api::{
+    api_call, load_ssh_keys, load_ssh_keys_paginated, load_regions, load_products, 
+    load_instances_for_user, PaginatedInstances, PaginatedSshKeys
+};
+use crate::models::{AppState, CurrentUser, SshKeyView, Region, ProductView, InstanceView};
 use std::collections::HashMap;
 
 #[derive(Deserialize, Debug)]
@@ -85,26 +88,6 @@ pub fn build_template_globals(state: &AppState, jar: &CookieJar) -> TemplateGlob
     }
 }
 
-pub fn inject_context(state: &AppState, jar: &CookieJar, mut html: String) -> Response {
-    // Inject a global context object into the HTML.
-    // We don't use this currently but it's for potential JS needs.
-    let api_hostname = crate::utils::hostname_from_url(&state.api_base_url);
-    let base_url = state.public_base_url.clone();
-    let current_user = build_current_user(state, jar);
-    let context = serde_json::json!({
-        "apiHostname": api_hostname,
-        "baseUrl": base_url,
-        "currentUser": current_user,
-    });
-    let context_str = serde_json::to_string(&context).unwrap();
-    let inject = format!(
-        r#"<script>window.__APP_CONTEXT__ = {};</script></body>"#,
-        context_str
-    );
-    html = html.replace("</body>", &inject);
-    Html(html).into_response()
-}
-
 pub fn absolute_url_from_state(state: &AppState, path: &str) -> String {
     crate::utils::absolute_url(&state.public_base_url, path)
 }
@@ -143,9 +126,9 @@ pub fn plain_html<S: AsRef<str>>(s: S) -> Response {
     Html(format!("<!DOCTYPE html><html><body><p>{}</p></body></html>", s.as_ref())).into_response()
 }
 
-pub fn render_template<T: askama::Template>(state: &AppState, jar: &CookieJar, t: T) -> Response {
+pub fn render_template<T: askama::Template>(_state: &AppState, _jar: &CookieJar, t: T) -> Response {
     match t.render() {
-        Ok(body) => inject_context(state, jar, body),
+        Ok(body) => Html(body).into_response(),
         Err(e) => {
             tracing::error!(%e, "Template render error");
             (StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error").into_response()
@@ -242,16 +225,21 @@ pub async fn load_ssh_keys_api(state: &AppState, customer_id: Option<String>) ->
     load_ssh_keys(&state.client, &state.api_base_url, &state.api_token, customer_id).await
 }
 
+pub async fn load_ssh_keys_paginated_wrapper(
+    state: &AppState,
+    customer_id: Option<String>,
+    page: usize,
+    per_page: usize,
+) -> PaginatedSshKeys {
+    load_ssh_keys_paginated(&state.client, &state.api_base_url, &state.api_token, customer_id, page, per_page).await
+}
+
 pub async fn load_regions_wrapper(state: &AppState) -> (Vec<Region>, HashMap<String, Region>) {
     load_regions(&state.client, &state.api_base_url, &state.api_token).await
 }
 
 pub async fn load_products_wrapper(state: &AppState, region_id: &str) -> Vec<ProductView> {
     load_products(&state.client, &state.api_base_url, &state.api_token, region_id).await
-}
-
-pub async fn load_os_list_wrapper(state: &AppState) -> Vec<OsItem> {
-    load_os_list(&state.client, &state.api_base_url, &state.api_token).await
 }
 
 #[allow(dead_code)]

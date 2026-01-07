@@ -13,12 +13,20 @@
     {% for kv in details %}
         <div>
             <dt>{{ kv.0 }}</dt>
-            <dd>{{ kv.1 }}</dd>
+            <dd>
+                {% if kv.0 == "Status" %}
+                    <span class="status-badge status-{{ status|lower }}">
+                        {{ kv.1 }}
+                    </span>
+                {% else %}
+                    {{ kv.1 }}
+                {% endif %}
+            </dd>
         </div>
     {% endfor %}
     </dl>
 </section>
-    <section>
+    <section data-instance-actions>
         <h2>Actions</h2>
         {% if disabled_by_env %}
         <div class="warning-banner">
@@ -39,22 +47,22 @@
         {% endif %}
 
         {% if disabled_by_env || disabled_by_host %}
-        <div>
-            <span>Power On</span>
-            <span>Power Off</span>
-            <span>Reset</span>
-            <span>Resize</span>
-            <span>Change Password</span>
-            <span>Delete</span>
+        <div class="action-grid">
+            <span class="btn btn-secondary btn-disabled">Power On</span>
+            <span class="btn btn-secondary btn-disabled">Power Off</span>
+            <span class="btn btn-secondary btn-disabled">Reset</span>
+            <span class="btn btn-secondary btn-disabled">Resize</span>
+            <span class="btn btn-secondary btn-disabled">Change Password</span>
+            <span class="btn btn-secondary btn-disabled">Delete</span>
         </div>
         {% else %}
-        <div>
-            <a href="{{ base_url }}/confirm/power-on-instance/{{ instance_id }}">Power On</a>
-            <a href="{{ base_url }}/confirm/power-off-instance/{{ instance_id }}">Power Off</a>
-            <a href="{{ base_url }}/confirm/reset-instance/{{ instance_id }}">Reset</a>
-            <a href="{{ base_url }}/instance/{{ instance_id }}/resize">Resize</a>
-            <a href="{{ base_url }}/instance/{{ instance_id }}/change-pass">Change Password</a>
-            <a href="{{ base_url }}/confirm/delete-instance/{{ instance_id }}">Delete</a>
+        <div class="action-grid">
+            <a href="{{ base_url }}/confirm/power-on-instance/{{ instance_id }}" class="btn btn-secondary">Power On</a>
+            <a href="{{ base_url }}/confirm/power-off-instance/{{ instance_id }}" class="btn btn-secondary">Power Off</a>
+            <a href="{{ base_url }}/confirm/reset-instance/{{ instance_id }}" class="btn btn-secondary">Reset</a>
+            <a href="{{ base_url }}/instance/{{ instance_id }}/resize" class="btn btn-secondary">Resize</a>
+            <a href="{{ base_url }}/instance/{{ instance_id }}/change-pass" class="btn btn-secondary">Change Password</a>
+            <a href="{{ base_url }}/confirm/delete-instance/{{ instance_id }}" class="btn btn-secondary">Delete</a>
         </div>
         {% endif %}
     </section>

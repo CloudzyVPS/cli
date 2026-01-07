@@ -63,7 +63,9 @@ pub async fn get_instance_for_action(state: &AppState, instance_id: &str) -> Ins
         hostname: "(no hostname)".into(),
         region: "".into(),
         main_ip: None,
+        main_ipv6: None,
         status: "".into(),
+        status_display: "".into(),
         vcpu_count_display: "—".into(),
         ram_display: "—".into(),
         disk_display: "—".into(),
@@ -88,6 +90,7 @@ pub async fn get_instance_for_action(state: &AppState, instance_id: &str) -> Ins
             instance.region = data.get("region").and_then(|v| v.as_str()).unwrap_or("").to_string();
             instance.main_ip = data.get("mainIp").and_then(|v| v.as_str()).map(|s| s.to_string());
             instance.status = data.get("status").and_then(|v| v.as_str()).unwrap_or("").to_string();
+            instance.status_display = crate::utils::format_status(&instance.status);
         }
     }
     instance

@@ -27,61 +27,95 @@ pub async fn load_instances_for_user(
     page: usize,
     per_page: usize,
 ) -> PaginatedInstances {
-    let mut params = Vec::new();
-    params.push(("per_page".to_string(), "1000".to_string()));
-    let payload = api_call(client, api_base_url, api_token, "GET", "/v1/instances", None, Some(params)).await;
-    let mut all_instances = Vec::new();
-    
-    if payload.get("code").and_then(|c| c.as_str()) == Some("OKAY") {
-        let candidates = if let Some(arr) = payload.get("data").and_then(|d| d.as_array()) {
-            arr.clone()
-        } else if let Some(data) = payload.get("data").and_then(|d| d.as_object()) {
-            if let Some(arr) = data.get("instances").and_then(|i| i.as_array()) {
-                arr.clone()
+    let mut all_instances_data = Vec::new();
+    let mut current_bookmark: Option<String> = None;
+
+    loop {
+        let mut params = Vec::new();
+        params.push(("limit".to_string(), "100".to_string()));
+        if let Some(ref b) = current_bookmark {
+            params.push(("bookmark".to_string(), b.clone()));
+        }
+
+        let payload = api_call(client, api_base_url, api_token, "GET", "/v1/instances", None, Some(params)).await;
+        
+        if payload.get("code").and_then(|c| c.as_str()) == Some("OKAY") {
+            if let Some(data) = payload.get("data").and_then(|d| d.as_object()) {
+                let instances_arr = data.get("instances").and_then(|i| i.as_array());
+                
+                if let Some(arr) = instances_arr {
+                    if arr.is_empty() {
+                        break;
+                    }
+                    all_instances_data.extend(arr.clone());
+                }
+
+                // Check for next bookmark
+                let next_bookmark = data.get("bookmark").and_then(|v| v.as_str()).map(|s| s.to_string());
+                
+                // If no bookmark, or it's the same as the one we just used, or we got no instances, break
+                if next_bookmark.is_none() || next_bookmark == current_bookmark || instances_arr.map_or(true, |a| a.is_empty()) {
+                    break;
+                }
+                current_bookmark = next_bookmark;
+            } else if let Some(arr) = payload.get("data").and_then(|d| d.as_array()) {
+                // Fallback for older API versions that might return array directly
+                all_instances_data.extend(arr.clone());
+                break;
             } else {
-                vec![]
+                break;
             }
         } else {
-            vec![]
-        };
+            break;
+        }
 
-        for item in candidates {
-            if let Some(obj) = item.as_object() {
-                    let id = obj.get("id").and_then(|v| v.as_str()).unwrap_or("").to_string();
-                    let hostname = obj.get("hostname").and_then(|v| v.as_str()).unwrap_or("(no hostname)").to_string();
-                    let region = obj.get("region").and_then(|v| v.as_str()).unwrap_or("").to_string();
-                    let status = obj.get("status").and_then(|v| v.as_str()).unwrap_or("").to_string();
-                    let vcpu_count_display = obj.get("vcpuCount").and_then(|v| v.as_i64()).map(|n| n.to_string()).unwrap_or_else(|| "—".into());
-                    let ram_display = obj.get("ram").and_then(|v| v.as_i64()).map(|n| format!("{} MB", n)).unwrap_or_else(|| "—".into());
-                    let disk_display = obj.get("disk").and_then(|v| v.as_i64()).map(|n| format!("{} GB", n)).unwrap_or_else(|| "—".into());
-                    let main_ip = obj.get("mainIp").and_then(|v| v.as_str()).map(|s| s.to_string());
-                    
-                    let os = if let Some(os_obj) = obj.get("os").and_then(|v| v.as_object()) {
-                        Some(OsItem {
-                            id: os_obj.get("id").and_then(|v| v.as_str()).unwrap_or("").to_string(),
-                            name: os_obj.get("name").and_then(|v| v.as_str()).unwrap_or("").to_string(),
-                            family: os_obj.get("family").and_then(|v| v.as_str()).unwrap_or("").to_string(),
-                            arch: os_obj.get("arch").and_then(|v| v.as_str()).map(|s| s.to_string()),
-                            min_ram: os_obj.get("minRam").and_then(|v| v.as_str()).map(|s| s.to_string()),
-                            is_default: os_obj.get("isDefault").and_then(|v| v.as_bool()).unwrap_or(false),
-                        })
-                    } else {
-                        None
-                    };
-                    
-                    all_instances.push(InstanceView {
-                        id,
-                        hostname,
-                        region,
-                        status,
-                        vcpu_count_display,
-                        ram_display,
-                        disk_display,
-                        main_ip,
-                        os,
-                    });
-                }
-            }
+        // Limit to prevent infinite loops if something goes wrong
+        if all_instances_data.len() > 5000 {
+            break;
+        }
+    }
+
+    let mut all_instances = Vec::new();
+    for item in all_instances_data {
+        if let Some(obj) = item.as_object() {
+            let id = obj.get("id").and_then(|v| v.as_str()).unwrap_or("").to_string();
+            let hostname = obj.get("hostname").and_then(|v| v.as_str()).unwrap_or("(no hostname)").to_string();
+            let region = obj.get("region").and_then(|v| v.as_str()).unwrap_or("").to_string();
+            let status = obj.get("status").and_then(|v| v.as_str()).unwrap_or("").to_string();
+            let status_display = crate::utils::format_status(&status);
+            let vcpu_count_display = obj.get("vcpuCount").and_then(|v| v.as_i64()).map(|n| n.to_string()).unwrap_or_else(|| "—".into());
+            let ram_display = obj.get("ram").and_then(|v| v.as_i64()).map(|n| format!("{} MB", n)).unwrap_or_else(|| "—".into());
+            let disk_display = obj.get("disk").and_then(|v| v.as_i64()).map(|n| format!("{} GB", n)).unwrap_or_else(|| "—".into());
+            let main_ip = obj.get("mainIp").and_then(|v| v.as_str()).map(|s| s.to_string());
+            let main_ipv6 = obj.get("mainIpv6").and_then(|v| v.as_str()).map(|s| s.to_string());
+            
+            let os = if let Some(os_obj) = obj.get("os").and_then(|v| v.as_object()) {
+                Some(OsItem {
+                    id: os_obj.get("id").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+                    name: os_obj.get("name").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+                    family: os_obj.get("family").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+                    arch: os_obj.get("arch").and_then(|v| v.as_str()).map(|s| s.to_string()),
+                    min_ram: os_obj.get("minRam").and_then(|v| v.as_str()).map(|s| s.to_string()),
+                    is_default: os_obj.get("isDefault").and_then(|v| v.as_bool()).unwrap_or(false),
+                })
+            } else {
+                None
+            };
+            
+            all_instances.push(InstanceView {
+                id,
+                hostname,
+                region,
+                status,
+                status_display,
+                vcpu_count_display,
+                ram_display,
+                disk_display,
+                main_ip,
+                main_ipv6,
+                os,
+            });
+        }
     }
     
     // Filter instances based on user permissions
