@@ -150,3 +150,66 @@ pub async fn load_ssh_keys_paginated(
         per_page,
     }
 }
+
+/// Get a single SSH key by ID
+pub async fn get_ssh_key(
+    client: &reqwest::Client,
+    api_base_url: &str,
+    api_token: &str,
+    ssh_key_id: &str,
+) -> Option<SshKeyView> {
+    let endpoint = format!("/v1/ssh-keys/{}", ssh_key_id);
+    let payload = api_call(client, api_base_url, api_token, "GET", &endpoint, None, None).await;
+    
+    if payload.get("code").and_then(|c| c.as_str()) != Some("OKAY") {
+        return None;
+    }
+    
+    let data = payload.get("data")?;
+    let obj = data.as_object()?;
+    
+    let id = obj
+        .get("id")
+        .and_then(|v| v.as_i64())
+        .map(|n| n.to_string())
+        .or_else(|| {
+            obj.get("id")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string())
+        })
+        .unwrap_or_else(|| "0".into());
+    
+    let name = obj
+        .get("name")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string())
+        .unwrap_or_else(|| format!("SSH Key {}", id));
+    
+    let fingerprint = obj
+        .get("fingerprint")
+        .or_else(|| obj.get("fingerPrint"))
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string();
+    
+    let public_key = obj
+        .get("publicKey")
+        .or_else(|| obj.get("public_key"))
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string();
+    
+    let customer_id = obj
+        .get("customerId")
+        .or_else(|| obj.get("customer_id"))
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string());
+    
+    Some(SshKeyView {
+        id,
+        name,
+        fingerprint,
+        public_key,
+        customer_id,
+    })
+}

@@ -13,7 +13,7 @@ use crate::models::{
 };
 use crate::services::{parse_wizard_base, build_base_query_pairs};
 use crate::utils::{build_query_string, parse_urlencoded_body};
-use crate::api::{load_regions, load_products, load_os_list};
+use crate::api::{load_regions, load_products, load_os_list, load_applications};
 use crate::templates::*;
 use crate::handlers::helpers::{
     build_template_globals, absolute_url_from_state,
@@ -363,6 +363,7 @@ pub async fn create_step_5(
             .unwrap_or_else(|| "1".into()),
     };
     let os_list = load_os_list_wrapper(&state).await;
+    let applications = load_applications(&state.client, &state.api_base_url, &state.api_token).await;
     let mut selected_os_id = base.os_id.clone();
     if selected_os_id.is_empty() {
         selected_os_id = q.get("os_id").cloned().unwrap_or_default();
@@ -375,6 +376,7 @@ pub async fn create_step_5(
             .or_else(|| os_list.first().map(|o| o.id.clone()))
             .unwrap_or_default();
     }
+    let selected_app_id = base.app_id.clone().or_else(|| q.get("app_id").cloned()).unwrap_or_default();
     let mut back_pairs = build_base_query_pairs(&base);
     let back_target = if base.plan_type == "fixed" {
         if !product_id.is_empty() {
@@ -407,6 +409,8 @@ pub async fn create_step_5(
             base_state: &base,
             os_list: &os_list,
             selected_os_id,
+            applications: &applications,
+            selected_app_id,
             product_id,
             extra_disk,
             extra_bandwidth,
@@ -580,6 +584,11 @@ async fn create_step_7_core(
             "assignIpv6": base.assign_ipv6,
             "osId": base.os_id,
         });
+        if let Some(ref app_id) = base.app_id {
+            if !app_id.is_empty() {
+                payload["appId"] = Value::from(app_id.clone());
+            }
+        }
         if base.floating_ip_count > 0 {
             payload["floatingIPCount"] = Value::from(base.floating_ip_count);
         }

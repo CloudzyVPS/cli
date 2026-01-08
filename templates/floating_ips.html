@@ -1,0 +1,103 @@
+{% extends "base.html" %}
+
+{% block title %}Floating IPs{% endblock %}
+
+{% block content %}
+<header class="page-header">
+    <h1>Floating IP Management</h1>
+    <p>Manage your floating IP addresses</p>
+</header>
+
+<section>
+    {% if floating_ips.is_empty() %}
+    <div class="warning-banner">
+        <div>
+            <h2>No floating IPs found</h2>
+            <p>You haven't allocated any floating IPs yet. Use the form below to create floating IPs for your instances.</p>
+        </div>
+    </div>
+    {% else %}
+    <p>Showing <strong>{{ floating_ips.len() }}</strong> of <strong>{{ total_count }}</strong> floating IPs</p>
+    <table>
+        <thead>
+            <tr>
+                <th>IP Address</th>
+                <th>Region</th>
+                <th>Instance</th>
+                <th>Auto Renew</th>
+                <th>Note</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for ip in floating_ips %}
+            <tr>
+                <td><code>{{ ip.ip_address }}</code></td>
+                <td>{{ ip.region_id }}</td>
+                <td>
+                    {% if ip.instance_id.is_some() %}
+                        <a href="{{ base_url }}/instance/{{ ip.instance_id.as_ref().unwrap() }}">{{ ip.instance_id.as_ref().unwrap() }}</a>
+                    {% else %}
+                        <span class="text-muted">Unattached</span>
+                    {% endif %}
+                </td>
+                <td>
+                    {% if ip.auto_renew %}
+                        <span class="status-badge status-active">Yes</span>
+                    {% else %}
+                        <span class="status-badge">No</span>
+                    {% endif %}
+                </td>
+                <td>
+                    {% if ip.customer_note.is_some() %}
+                        {{ ip.customer_note.as_ref().unwrap() }}
+                    {% else %}
+                        <span class="text-muted">-</span>
+                    {% endif %}
+                </td>
+                <td>
+                    <a href="{{ base_url }}/confirm/release-floating-ip/{{ ip.id }}" class="btn btn-sm btn-danger">Release</a>
+                </td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    
+    {% if total_pages > 1 %}
+    <div class="pagination">
+        {% if current_page > 1 %}
+            <a href="?page={{ current_page - 1 }}&per_page={{ per_page }}">← Previous</a>
+        {% endif %}
+        <span>Page {{ current_page }} of {{ total_pages }}</span>
+        {% if current_page < total_pages %}
+            <a href="?page={{ current_page + 1 }}&per_page={{ per_page }}">Next →</a>
+        {% endif %}
+    </div>
+    {% endif %}
+    {% endif %}
+</section>
+
+<section>
+    <h2>Create Floating IPs</h2>
+    <form method="post" action="{{ base_url }}/floating-ips/create" class="surface">
+        <fieldset>
+            <legend>Allocate New Floating IPs</legend>
+            <div class="fields-grid">
+                <div>
+                    <label for="region_id">Region *</label>
+                    <input type="text" id="region_id" name="region_id" required placeholder="e.g., us-east-1">
+                    <p class="help-text">Enter the region ID where you want to create the floating IPs.</p>
+                </div>
+                <div>
+                    <label for="count">Count *</label>
+                    <input type="number" id="count" name="count" min="1" max="5" value="1" required>
+                    <p class="help-text">Number of floating IPs to create (1-5).</p>
+                </div>
+            </div>
+        </fieldset>
+        <footer class="form-actions">
+            <button type="submit">Create Floating IPs</button>
+        </footer>
+    </form>
+</section>
+{% endblock %}

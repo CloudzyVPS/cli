@@ -9,3 +9,8 @@ pub mod system;
 
 // Temporary - these will be fully implemented
 pub mod instances;
+pub mod snapshots;
+pub mod floating_ips;
+pub mod iso;
+pub mod images;
+pub mod backups;

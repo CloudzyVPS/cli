@@ -7,11 +7,11 @@ use serde::Deserialize;
 use serde_json::Value;
 
 use crate::models::{
-    AppState, InstanceView, AddTrafficForm, ResizeForm,
+    AppState, InstanceView, AddTrafficForm, ResizeForm, OsItem,
 };
 use crate::templates::{
     InstancesTemplate, InstanceDetailTemplate,
-    ChangePassInstanceTemplate, ResizeTemplate,
+    ChangePassInstanceTemplate, ChangeOsInstanceTemplate, ResizeTemplate,
 };
 use crate::handlers::helpers::{
     build_template_globals, current_username_from_jar,
@@ -19,6 +19,7 @@ use crate::handlers::helpers::{
     load_regions_wrapper, load_products_wrapper,
     load_instances_for_user_paginated,
 };
+use crate::api::load_os_list;
 use crate::services::instance_service::{enforce_instance_access, simple_instance_action};
 use crate::services::persist_users_file;
 
@@ -494,5 +495,107 @@ pub async fn instance_resize_post(
         }
     }
 
+    Redirect::to(&format!("/instance/{}", instance_id)).into_response()
+}
+
+#[derive(Deserialize)]
+pub struct ChangeOsForm {
+    pub os_id: String,
+}
+
+pub async fn instance_change_os_get(
+    State(state): State<AppState>,
+    jar: CookieJar,
+    Path(instance_id): Path<String>,
+) -> impl IntoResponse {
+    if !enforce_instance_access(&state, current_username_from_jar(&state, &jar).as_deref(), &instance_id).await {
+        return Redirect::to("/instances").into_response();
+    }
+    let endpoint = format!("/v1/instances/{}", instance_id);
+    let payload = api_call_wrapper(&state, "GET", &endpoint, None, None).await;
+    let mut instance = InstanceView { 
+        id: instance_id.clone(), 
+        hostname: "(no hostname)".into(), 
+        region: "".into(), 
+        main_ip: None, 
+        main_ipv6: None, 
+        status: "".into(), 
+        status_display: "".into(), 
+        vcpu_count_display: "—".into(), 
+        ram_display: "—".into(), 
+        disk_display: "—".into(), 
+        os: None 
+    };
+    if let Some(obj) = payload.as_object() {
+        if let Some(data) = obj.get("data").and_then(|d| d.as_object()) {
+            instance.hostname = data.get("hostname").and_then(|v| v.as_str()).unwrap_or(&instance.hostname).to_string();
+            instance.region = data.get("region").and_then(|v| v.as_str()).unwrap_or("").to_string();
+            instance.main_ip = data.get("mainIp").and_then(|v| v.as_str()).map(|s| s.to_string());
+            instance.main_ipv6 = data.get("mainIpv6").and_then(|v| v.as_str()).map(|s| s.to_string());
+            instance.status = data.get("status").and_then(|v| v.as_str()).unwrap_or("").to_string();
+            instance.status_display = crate::utils::format_status(&instance.status);
+            if let Some(os_obj) = data.get("os").and_then(|v| v.as_object()) {
+                instance.os = Some(OsItem {
+                    id: os_obj.get("id").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+                    name: os_obj.get("name").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+                    family: os_obj.get("family").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+                    arch: os_obj.get("arch").and_then(|v| v.as_str()).map(|s| s.to_string()),
+                    min_ram: os_obj.get("minRam").and_then(|v| v.as_str()).map(|s| s.to_string()),
+                    is_default: os_obj.get("isDefault").and_then(|v| v.as_bool()).unwrap_or(false),
+                });
+            }
+        }
+    }
+    
+    let os_list = load_os_list(&state.client, &state.api_base_url, &state.api_token).await;
+    let TemplateGlobals { current_user, api_hostname, base_url, flash_messages, has_flash_messages } = build_template_globals(&state, &jar);
+    let disabled_by_env = state.is_instance_disabled(&instance_id);
+    let disabled_by_host = state.is_hostname_blocked(&instance.hostname);
+    render_template(&state, &jar, ChangeOsInstanceTemplate { 
+        current_user, 
+        api_hostname, 
+        base_url, 
+        flash_messages, 
+        has_flash_messages, 
+        instance, 
+        os_list, 
+        disabled_by_env, 
+        disabled_by_host 
+    })
+}
+
+pub async fn instance_change_os_post(
+    State(state): State<AppState>,
+    jar: CookieJar,
+    Path(instance_id): Path<String>,
+    Form(form): Form<ChangeOsForm>,
+) -> impl IntoResponse {
+    if !enforce_instance_access(&state, current_username_from_jar(&state, &jar).as_deref(), &instance_id).await {
+        return Redirect::to("/instances").into_response();
+    }
+    if let Some(reason) = crate::services::instance_service::check_instance_block(&state, &instance_id, None).await {
+        if let Some(sid) = jar.get("session_id") {
+            let mut flashes = state.flash_store.lock().unwrap();
+            let entry = flashes.entry(sid.value().to_string()).or_default();
+            entry.push(reason.message());
+        }
+        return Redirect::to(&format!("/instance/{}/change-os", instance_id)).into_response();
+    }
+    
+    let endpoint = format!("/v1/instances/{}/change-os", instance_id);
+    let payload = serde_json::json!({"osId": form.os_id});
+    let resp = api_call_wrapper(&state, "POST", &endpoint, Some(payload), None).await;
+    
+    if let Some(sid) = jar.get("session_id") {
+        let mut flashes = state.flash_store.lock().unwrap();
+        let entry = flashes.entry(sid.value().to_string()).or_default();
+        if resp.get("code").and_then(|c| c.as_str()) == Some("OKAY") {
+            entry.push("OS change initiated successfully.".into());
+        } else {
+            let detail = resp.get("detail").and_then(|d| d.as_str()).unwrap_or("Unknown error");
+            entry.push(format!("OS change failed: {}", detail));
+        }
+    }
+    
     Redirect::to(&format!("/instance/{}", instance_id)).into_response()
 }

@@ -11,10 +11,18 @@ pub mod access_page_template;
 pub mod about_template;
 pub mod confirmation_template;
 pub mod ssh_keys_page_template;
+pub mod ssh_key_detail_template;
 pub mod instances_page_template;
 pub mod change_pass_instance_template;
+pub mod change_os_instance_template;
 pub mod resize_template;
 pub mod coming_soon_template;
+pub mod snapshots_template;
+pub mod snapshot_detail_template;
+pub mod floating_ips_template;
+pub mod isos_template;
+pub mod images_template;
+pub mod backups_template;
 
 // Wizard templates (now in templates/)
 pub mod step1_template;
@@ -36,10 +44,18 @@ pub use access_page_template::AccessPageTemplate;
 pub use about_template::AboutTemplate;
 pub use confirmation_template::ConfirmationTemplate;
 pub use ssh_keys_page_template::SshKeysPageTemplate;
+pub use ssh_key_detail_template::SshKeyDetailTemplate;
 pub use instances_page_template::InstancesPageTemplate;
 pub use change_pass_instance_template::ChangePassInstanceTemplate;
+pub use change_os_instance_template::ChangeOsInstanceTemplate;
 pub use resize_template::ResizeTemplate;
 pub use coming_soon_template::ComingSoonTemplate;
+pub use snapshots_template::SnapshotsTemplate;
+pub use snapshot_detail_template::SnapshotDetailTemplate;
+pub use floating_ips_template::FloatingIpsTemplate;
+pub use isos_template::IsosTemplate;
+pub use images_template::ImagesTemplate;
+pub use backups_template::BackupsTemplate;
 
 // Wizard templates
 pub use step1_template::Step1Template;

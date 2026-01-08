@@ -79,6 +79,22 @@ fn build_app(state: AppState) -> Router {
         .route("/access", get(handlers::access::access_get))
         .route("/access/:username", post(handlers::access::update_access))
         .route("/ssh-keys", get(handlers::ssh_keys::ssh_keys_get).post(handlers::ssh_keys::ssh_keys_post))
+        .route("/ssh-keys/:key_id", get(handlers::ssh_keys::ssh_key_detail_get))
+        .route("/snapshots", get(handlers::snapshots::snapshots_list_get))
+        .route("/snapshots/create", post(handlers::snapshots::snapshot_create_post))
+        .route("/snapshots/:snapshot_id", get(handlers::snapshots::snapshot_detail_get))
+        .route("/snapshots/:snapshot_id/delete", post(handlers::snapshots::snapshot_delete_post))
+        .route("/snapshots/:snapshot_id/restore", post(handlers::snapshots::snapshot_restore_post))
+        .route("/floating-ips", get(handlers::floating_ips::floating_ips_list_get))
+        .route("/floating-ips/create", post(handlers::floating_ips::floating_ip_create_post))
+        .route("/floating-ips/:ip_id/update", post(handlers::floating_ips::floating_ip_update_post))
+        .route("/floating-ips/:ip_id/release", post(handlers::floating_ips::floating_ip_release_post))
+        .route("/isos", get(handlers::iso::isos_list_get))
+        .route("/isos/download", post(handlers::iso::iso_download_post))
+        .route("/images", get(handlers::images::images_list_get))
+        .route("/images/download", post(handlers::images::image_download_post))
+        .route("/backups", get(handlers::backups::backups_list_get))
+        .route("/backups/create", post(handlers::backups::backup_create_post))
         .route("/instances", get(handlers::instances::instances_real))
         .route("/create/step-1", get(handlers::wizard::create_step_1))
         .route("/create/step-2", get(handlers::wizard::create_step_2))
@@ -103,6 +119,10 @@ fn build_app(state: AppState) -> Router {
         .route(
             "/instance/:instance_id/change-pass",
             get(handlers::instances::instance_change_pass_get).post(handlers::instances::instance_change_pass_post),
+        )
+        .route(
+            "/instance/:instance_id/change-os",
+            get(handlers::instances::instance_change_os_get).post(handlers::instances::instance_change_os_post),
         )
         .route("/instance/:instance_id/resize", get(handlers::instances::instance_resize_get).post(handlers::instances::instance_resize_post))
         .route("/coming-soon/:feature", get(handlers::system::coming_soon))

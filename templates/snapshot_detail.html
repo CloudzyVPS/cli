@@ -1,0 +1,132 @@
+{% extends "base.html" %}
+
+{% block title %}Snapshot Details{% endblock %}
+
+{% block content %}
+<header class="page-header">
+    <p class="breadcrumb"><a href="{{ base_url }}/snapshots">← Back to snapshots</a></p>
+    <h1>Snapshot Details</h1>
+    <p>Snapshot ID: <code>{{ snapshot_id }}</code></p>
+</header>
+
+<section>
+    {% if snapshot_data.is_none() %}
+    <div class="warning-banner">
+        <div>
+            <h2>Snapshot not found</h2>
+            <p>The requested snapshot could not be found.</p>
+        </div>
+    </div>
+    {% else %}
+    {% set data = snapshot_data.as_ref().unwrap() %}
+    <dl>
+        <div>
+            <dt>Name</dt>
+            <dd><strong>{% if data.get("name").is_some() %}{{ data.get("name").unwrap().as_str().unwrap_or("N/A") }}{% else %}N/A{% endif %}</strong></dd>
+        </div>
+        <div>
+            <dt>Status</dt>
+            <dd>
+                {% set status_value = data.get("status") %}
+                {% if status_value.is_some() %}
+                    {% set status_str = status_value.unwrap().as_str().unwrap_or("UNKNOWN") %}
+                    <span class="status-badge status-{{ status_str|lower }}">{{ status_str }}</span>
+                {% else %}
+                    <span class="status-badge">UNKNOWN</span>
+                {% endif %}
+            </dd>
+        </div>
+        <div>
+            <dt>Instance ID</dt>
+            <dd><code>{% if data.get("instanceId").is_some() %}{{ data.get("instanceId").unwrap().as_str().unwrap_or("N/A") }}{% else %}N/A{% endif %}</code></dd>
+        </div>
+        <div>
+            <dt>Instance Deleted</dt>
+            <dd>
+                {% set is_deleted_val = data.get("isInstanceDeleted") %}
+                {% if is_deleted_val.is_some() %}
+                    {% set is_deleted_bool = is_deleted_val.unwrap().as_bool() %}
+                    {% if is_deleted_bool.is_some() %}
+                        {% if is_deleted_bool.unwrap() %}Yes{% else %}No{% endif %}
+                    {% else %}
+                        No
+                    {% endif %}
+                {% else %}
+                    No
+                {% endif %}
+            </dd>
+        </div>
+        <div>
+            <dt>Size</dt>
+            <dd>
+                {% set size_val = data.get("size") %}
+                {% if size_val.is_some() %}
+                    {% set size_int = size_val.unwrap().as_i64() %}
+                    {% if size_int.is_some() %}
+                        {{ size_int.unwrap() }} GB
+                    {% else %}
+                        N/A
+                    {% endif %}
+                {% else %}
+                    N/A
+                {% endif %}
+            </dd>
+        </div>
+        <div>
+            <dt>Region</dt>
+            <dd>{% if data.get("regionId").is_some() %}{{ data.get("regionId").unwrap().as_str().unwrap_or("N/A") }}{% else %}N/A{% endif %}</dd>
+        </div>
+        <div>
+            <dt>Created At</dt>
+            <dd>
+                {% set created_val = data.get("createdAt") %}
+                {% if created_val.is_some() %}
+                    {% set created_int = created_val.unwrap().as_i64() %}
+                    {% if created_int.is_some() %}
+                        {{ created_int.unwrap() }}
+                    {% else %}
+                        N/A
+                    {% endif %}
+                {% else %}
+                    N/A
+                {% endif %}
+            </dd>
+        </div>
+        <div>
+            <dt>Last Restored At</dt>
+            <dd>
+                {% set restored_val = data.get("lastRestoredAt") %}
+                {% if restored_val.is_some() %}
+                    {% set restored_int = restored_val.unwrap().as_i64() %}
+                    {% if restored_int.is_some() %}
+                        {{ restored_int.unwrap() }}
+                    {% else %}
+                        Never
+                    {% endif %}
+                {% else %}
+                    Never
+                {% endif %}
+            </dd>
+        </div>
+    </dl>
+
+    <section data-snapshot-actions>
+        <h2>Actions</h2>
+        <div class="action-grid">
+            {% set status_value = data.get("status") %}
+            {% if status_value.is_some() %}
+                {% set status_str = status_value.unwrap().as_str().unwrap_or("UNKNOWN") %}
+                {% if status_str == "ACTIVE" %}
+                    <a href="{{ base_url }}/confirm/restore-snapshot/{{ snapshot_id }}" class="btn btn-secondary">Restore</a>
+                {% else %}
+                    <span class="btn btn-secondary btn-disabled">Restore (unavailable)</span>
+                {% endif %}
+            {% else %}
+                <span class="btn btn-secondary btn-disabled">Restore (unavailable)</span>
+            {% endif %}
+            <a href="{{ base_url }}/confirm/delete-snapshot/{{ snapshot_id }}" class="btn btn-secondary">Delete</a>
+        </div>
+    </section>
+    {% endif %}
+</section>
+{% endblock %}

@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+
+{% block title %}Custom Images{% endblock %}
+
+{% block content %}
+<header class="page-header">
+    <h1>Custom Image Management</h1>
+    <p>Manage custom disk images for your instances</p>
+</header>
+
+<section>
+    {% if images.is_empty() %}
+    <p>No custom images found. Use the form below to add an image.</p>
+    {% else %}
+    <p>Showing <strong>{{ images.len() }}</strong> of <strong>{{ total_count }}</strong> images</p>
+    <table>
+        <thead>
+            <tr>
+                <th>Name</th>
+                <th>Status</th>
+                <th>Region</th>
+                <th>Format</th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for image in images %}
+            <tr>
+                <td><strong>{{ image.name }}</strong></td>
+                <td><span class="status-badge status-{{ image.status|lower }}">{{ image.status }}</span></td>
+                <td>{{ image.region_id }}</td>
+                <td>{% if image.format.is_some() %}{{ image.format.as_ref().unwrap() }}{% else %}-{% endif %}</td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    {% endif %}
+</section>
+
+<section>
+    <h2>Download Image</h2>
+    <form method="post" action="{{ base_url }}/images/download" class="surface">
+        <div class="fields-grid">
+            <div>
+                <label for="name">Name *</label>
+                <input type="text" id="name" name="name" required>
+            </div>
+            <div>
+                <label for="url">URL *</label>
+                <input type="url" id="url" name="url" required>
+            </div>
+            <div>
+                <label for="region_id">Region ID *</label>
+                <input type="text" id="region_id" name="region_id" required>
+            </div>
+            <div>
+                <label for="format">Format</label>
+                <input type="text" id="format" name="format" placeholder="e.g., qcow2, raw">
+            </div>
+        </div>
+        <button type="submit">Download Image</button>
+    </form>
+</section>
+{% endblock %}

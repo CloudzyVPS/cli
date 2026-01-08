@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+
+{% block title %}Backup Profiles{% endblock %}
+
+{% block content %}
+<header class="page-header">
+    <h1>Backup Profile Management</h1>
+    <p>Manage automated backup profiles for your instances</p>
+</header>
+
+<section>
+    {% if backups.is_empty() %}
+    <p>No backup profiles found. Use the form below to create a backup profile.</p>
+    {% else %}
+    <table>
+        <thead>
+            <tr>
+                <th>Instance ID</th>
+                <th>Status</th>
+                <th>Frequency</th>
+                <th>Max Files</th>
+                <th>Monthly Price</th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for backup in backups %}
+            <tr>
+                <td><a href="{{ base_url }}/instance/{{ backup.instance_id }}">{{ backup.instance_id }}</a></td>
+                <td><span class="status-badge status-{{ backup.status|lower }}">{{ backup.status }}</span></td>
+                <td>{% if backup.schedule_frequency.is_some() %}{{ backup.schedule_frequency.as_ref().unwrap() }}{% else %}-{% endif %}</td>
+                <td>{% if backup.max_files.is_some() %}{{ backup.max_files.unwrap() }}{% else %}-{% endif %}</td>
+                <td>{% if backup.monthly_price.is_some() %}${{ backup.monthly_price.unwrap() }}{% else %}-{% endif %}</td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    {% endif %}
+</section>
+
+<section>
+    <h2>Create Backup Profile</h2>
+    <form method="post" action="{{ base_url }}/backups/create" class="surface">
+        <div class="fields-grid">
+            <div>
+                <label for="instance_id">Instance ID *</label>
+                <input type="text" id="instance_id" name="instance_id" required>
+            </div>
+            <div>
+                <label for="schedule_frequency">Frequency *</label>
+                <select id="schedule_frequency" name="schedule_frequency" required>
+                    <option value="daily">Daily</option>
+                    <option value="weekly">Weekly</option>
+                </select>
+            </div>
+            <div>
+                <label for="period_id">Retention (days) *</label>
+                <input type="number" id="period_id" name="period_id" value="7" min="1" required>
+            </div>
+        </div>
+        <button type="submit">Create Backup Profile</button>
+    </form>
+</section>
+{% endblock %}

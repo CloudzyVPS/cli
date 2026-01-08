@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+
+{% block title %}Custom ISOs{% endblock %}
+
+{% block content %}
+<header class="page-header">
+    <h1>Custom ISO Management</h1>
+    <p>Manage custom ISO files for your instances</p>
+</header>
+
+<section>
+    {% if isos.is_empty() %}
+    <p>No custom ISOs found. Use the form below to add an ISO.</p>
+    {% else %}
+    <p>Showing <strong>{{ isos.len() }}</strong> of <strong>{{ total_count }}</strong> ISOs</p>
+    <table>
+        <thead>
+            <tr>
+                <th>Name</th>
+                <th>Status</th>
+                <th>Region</th>
+                <th>Virtio</th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for iso in isos %}
+            <tr>
+                <td><strong>{{ iso.name }}</strong></td>
+                <td><span class="status-badge status-{{ iso.status|lower }}">{{ iso.status }}</span></td>
+                <td>{{ iso.region_id }}</td>
+                <td>{% if iso.use_virtio %}Yes{% else %}No{% endif %}</td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    {% endif %}
+</section>
+
+<section>
+    <h2>Download ISO</h2>
+    <form method="post" action="{{ base_url }}/isos/download" class="surface">
+        <div class="fields-grid">
+            <div>
+                <label for="name">Name *</label>
+                <input type="text" id="name" name="name" required>
+            </div>
+            <div>
+                <label for="url">URL *</label>
+                <input type="url" id="url" name="url" required>
+            </div>
+            <div>
+                <label for="region_id">Region ID *</label>
+                <input type="text" id="region_id" name="region_id" required>
+            </div>
+            <div>
+                <label for="use_virtio">
+                    <input type="checkbox" id="use_virtio" name="use_virtio" value="true" checked>
+                    Use Virtio
+                </label>
+            </div>
+        </div>
+        <button type="submit">Download ISO</button>
+    </form>
+</section>
+{% endblock %}

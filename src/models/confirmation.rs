@@ -12,6 +12,11 @@ pub enum ConfirmationAction {
     ChangeOs,
     ResizeInstance,
     AddTraffic,
+    CreateSnapshot,
+    DeleteSnapshot,
+    RestoreSnapshot,
+    DeleteSshKey,
+    ReleaseFloatingIp,
 }
 
 impl ConfirmationAction {
@@ -26,6 +31,11 @@ impl ConfirmationAction {
             "change-os" => Some(Self::ChangeOs),
             "resize-instance" => Some(Self::ResizeInstance),
             "add-traffic" => Some(Self::AddTraffic),
+            "create-snapshot" => Some(Self::CreateSnapshot),
+            "delete-snapshot" => Some(Self::DeleteSnapshot),
+            "restore-snapshot" => Some(Self::RestoreSnapshot),
+            "delete-ssh-key" => Some(Self::DeleteSshKey),
+            "release-floating-ip" => Some(Self::ReleaseFloatingIp),
             _ => None,
         }
     }
@@ -42,6 +52,11 @@ impl ConfirmationAction {
             Self::ChangeOs => "change-os",
             Self::ResizeInstance => "resize-instance",
             Self::AddTraffic => "add-traffic",
+            Self::CreateSnapshot => "create-snapshot",
+            Self::DeleteSnapshot => "delete-snapshot",
+            Self::RestoreSnapshot => "restore-snapshot",
+            Self::DeleteSshKey => "delete-ssh-key",
+            Self::ReleaseFloatingIp => "release-floating-ip",
         }
     }
 }

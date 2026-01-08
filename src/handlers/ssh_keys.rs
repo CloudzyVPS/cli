@@ -130,3 +130,37 @@ pub async fn ssh_keys_post(
     }
     Redirect::to("/ssh-keys").into_response()
 }
+
+pub async fn ssh_key_detail_get(
+    State(state): State<AppState>,
+    jar: CookieJar,
+    axum::extract::Path(key_id): axum::extract::Path<String>,
+) -> impl IntoResponse {
+    if let Some(r) = ensure_owner(&state, &jar) {
+        return r.into_response();
+    }
+    
+    let ssh_key = crate::api::get_ssh_key(&state.client, &state.api_base_url, &state.api_token, &key_id).await;
+    
+    let TemplateGlobals {
+        current_user,
+        api_hostname,
+        base_url,
+        flash_messages,
+        has_flash_messages,
+    } = build_template_globals(&state, &jar);
+    
+    render_template(
+        &state,
+        &jar,
+        crate::templates::SshKeyDetailTemplate {
+            current_user,
+            api_hostname,
+            base_url,
+            flash_messages,
+            has_flash_messages,
+            ssh_key,
+            key_id,
+        },
+    )
+}

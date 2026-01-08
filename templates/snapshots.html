@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+
+{% block title %}Snapshots{% endblock %}
+
+{% block content %}
+<header class="page-header">
+    <h1>Snapshots</h1>
+    <p>Manage your instance snapshots</p>
+</header>
+
+<section>
+    {% if filter_instance_id.is_some() %}
+    <p class="breadcrumb">
+        <a href="{{ base_url }}/snapshots">← View all snapshots</a>
+    </p>
+    <p>Showing snapshots for instance: <code>{{ filter_instance_id.as_ref().unwrap() }}</code></p>
+    {% endif %}
+    
+    {% if snapshots.is_empty() %}
+    <div class="warning-banner">
+        <div>
+            <h2>No snapshots found</h2>
+            <p>You haven't created any snapshots yet. Snapshots allow you to save the state of your instances for backup and restore purposes.</p>
+        </div>
+    </div>
+    {% else %}
+    <p>Showing <strong>{{ snapshots.len() }}</strong> of <strong>{{ total_count }}</strong> snapshots</p>
+    <table>
+        <thead>
+            <tr>
+                <th>Name</th>
+                <th>Instance ID</th>
+                <th>Status</th>
+                <th>Size</th>
+                <th>Created</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for snapshot in snapshots %}
+            <tr>
+                <td><strong>{{ snapshot.name }}</strong></td>
+                <td><code>{{ snapshot.instance_id }}</code></td>
+                <td>
+                    <span class="status-badge status-{{ snapshot.status|lower }}">
+                        {{ snapshot.status }}
+                    </span>
+                </td>
+                <td>
+                    {% if snapshot.size.is_some() %}
+                        {{ snapshot.size.unwrap() }} GB
+                    {% else %}
+                        N/A
+                    {% endif %}
+                </td>
+                <td>
+                    {% if snapshot.created_at.is_some() %}
+                        {{ snapshot.created_at.unwrap() }}
+                    {% else %}
+                        N/A
+                    {% endif %}
+                </td>
+                <td>
+                    <a href="{{ base_url }}/snapshots/{{ snapshot.id }}" class="btn btn-sm">Details</a>
+                </td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    
+    {% if total_pages > 1 %}
+    <div class="pagination">
+        {% if current_page > 1 %}
+            <a href="?page={{ current_page - 1 }}&per_page={{ per_page }}{% if filter_instance_id.is_some() %}&instance_id={{ filter_instance_id.as_ref().unwrap() }}{% endif %}">← Previous</a>
+        {% endif %}
+        <span>Page {{ current_page }} of {{ total_pages }}</span>
+        {% if current_page < total_pages %}
+            <a href="?page={{ current_page + 1 }}&per_page={{ per_page }}{% if filter_instance_id.is_some() %}&instance_id={{ filter_instance_id.as_ref().unwrap() }}{% endif %}">Next →</a>
+        {% endif %}
+    </div>
+    {% endif %}
+    {% endif %}
+</section>
+{% endblock %}

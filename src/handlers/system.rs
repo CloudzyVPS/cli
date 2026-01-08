@@ -205,6 +205,49 @@ pub async fn confirmation_get(
             button_class = "btn-warning".into();
             hidden_fields.push(("version".into(), id.clone()));
         }
+        ConfirmationAction::CreateSnapshot => {
+            title = "Create Snapshot".into();
+            message = format!("Create a snapshot of instance '{}'? This will capture the current state of the instance.", id);
+            target_url = format!("{}/snapshots/create", base_url);
+            confirm_label = "Create Snapshot".into();
+            cancel_url = format!("{}/instance/{}", base_url, id);
+            button_class = "btn-primary".into();
+            hidden_fields.push(("instance_id".into(), id.clone()));
+        }
+        ConfirmationAction::DeleteSnapshot => {
+            title = "Delete Snapshot".into();
+            message = format!("Are you sure you want to permanently delete snapshot '{}'?", id);
+            target_url = format!("{}/snapshots/{}/delete", base_url, id);
+            confirm_label = "Delete Snapshot".into();
+            cancel_url = format!("{}/snapshots/{}", base_url, id);
+            button_class = "btn-danger".into();
+        }
+        ConfirmationAction::RestoreSnapshot => {
+            title = "Restore Snapshot".into();
+            message = format!("Restore instance from snapshot '{}'? This will overwrite the current instance data.", id);
+            target_url = format!("{}/snapshots/{}/restore", base_url, id);
+            confirm_label = "Restore Snapshot".into();
+            cancel_url = format!("{}/snapshots/{}", base_url, id);
+            button_class = "btn-warning".into();
+        }
+        ConfirmationAction::DeleteSshKey => {
+            title = "Delete SSH Key".into();
+            message = format!("Are you sure you want to permanently delete SSH key #{}?", id);
+            target_url = format!("{}/ssh-keys", base_url);
+            confirm_label = "Delete SSH Key".into();
+            cancel_url = format!("{}/ssh-keys/{}", base_url, id);
+            button_class = "btn-danger".into();
+            hidden_fields.push(("action".into(), "delete".into()));
+            hidden_fields.push(("ssh_key_id".into(), id.clone()));
+        }
+        ConfirmationAction::ReleaseFloatingIp => {
+            title = "Release Floating IP".into();
+            message = format!("Are you sure you want to release floating IP '{}'? This action cannot be undone.", id);
+            target_url = format!("{}/floating-ips/{}/release", base_url, id);
+            confirm_label = "Release IP".into();
+            cancel_url = format!("{}/floating-ips", base_url);
+            button_class = "btn-danger".into();
+        }
         _ => {}
     }
 
