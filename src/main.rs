@@ -93,6 +93,8 @@ fn build_app(state: AppState) -> Router {
         .route("/isos/download", post(handlers::iso::iso_download_post))
         .route("/images", get(handlers::images::images_list_get))
         .route("/images/download", post(handlers::images::image_download_post))
+        .route("/backups", get(handlers::backups::backups_list_get))
+        .route("/backups/create", post(handlers::backups::backup_create_post))
         .route("/instances", get(handlers::instances::instances_real))
         .route("/create/step-1", get(handlers::wizard::create_step_1))
         .route("/create/step-2", get(handlers::wizard::create_step_2))

@@ -10,6 +10,7 @@ pub mod applications;
 pub mod floating_ips;
 pub mod iso;
 pub mod images;
+pub mod backups;
 
 // Re-export commonly used functions
 pub use client::api_call;
@@ -29,3 +30,4 @@ pub use floating_ips::{
 };
 pub use iso::{load_isos, download_iso, get_iso, delete_iso, IsoView};
 pub use images::{load_images, download_image, get_image, delete_image, ImageView};
+pub use backups::{load_backups, get_backup_profile, create_backup_profile, update_backup_profile, delete_backup_profile, BackupProfileView};

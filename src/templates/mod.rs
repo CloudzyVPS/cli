@@ -22,6 +22,7 @@ pub mod snapshot_detail_template;
 pub mod floating_ips_template;
 pub mod isos_template;
 pub mod images_template;
+pub mod backups_template;
 
 // Wizard templates (now in templates/)
 pub mod step1_template;
@@ -54,6 +55,7 @@ pub use snapshot_detail_template::SnapshotDetailTemplate;
 pub use floating_ips_template::FloatingIpsTemplate;
 pub use isos_template::IsosTemplate;
 pub use images_template::ImagesTemplate;
+pub use backups_template::BackupsTemplate;
 
 // Wizard templates
 pub use step1_template::Step1Template;
