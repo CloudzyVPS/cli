@@ -16,6 +16,7 @@ pub enum ConfirmationAction {
     DeleteSnapshot,
     RestoreSnapshot,
     DeleteSshKey,
+    ReleaseFloatingIp,
 }
 
 impl ConfirmationAction {
@@ -34,6 +35,7 @@ impl ConfirmationAction {
             "delete-snapshot" => Some(Self::DeleteSnapshot),
             "restore-snapshot" => Some(Self::RestoreSnapshot),
             "delete-ssh-key" => Some(Self::DeleteSshKey),
+            "release-floating-ip" => Some(Self::ReleaseFloatingIp),
             _ => None,
         }
     }
@@ -54,6 +56,7 @@ impl ConfirmationAction {
             Self::DeleteSnapshot => "delete-snapshot",
             Self::RestoreSnapshot => "restore-snapshot",
             Self::DeleteSshKey => "delete-ssh-key",
+            Self::ReleaseFloatingIp => "release-floating-ip",
         }
     }
 }

@@ -7,6 +7,7 @@ pub mod instances;
 pub mod ssh_keys;
 pub mod snapshots;
 pub mod applications;
+pub mod floating_ips;
 
 // Re-export commonly used functions
 pub use client::api_call;
@@ -20,3 +21,7 @@ pub use snapshots::{
     SnapshotView,
 };
 pub use applications::{load_applications, Application};
+pub use floating_ips::{
+    load_floating_ips, create_floating_ips, update_floating_ip, release_floating_ip,
+    FloatingIpView,
+};

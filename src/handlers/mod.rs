@@ -10,3 +10,4 @@ pub mod system;
 // Temporary - these will be fully implemented
 pub mod instances;
 pub mod snapshots;
+pub mod floating_ips;

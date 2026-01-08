@@ -240,6 +240,14 @@ pub async fn confirmation_get(
             hidden_fields.push(("action".into(), "delete".into()));
             hidden_fields.push(("ssh_key_id".into(), id.clone()));
         }
+        ConfirmationAction::ReleaseFloatingIp => {
+            title = "Release Floating IP".into();
+            message = format!("Are you sure you want to release floating IP '{}'? This action cannot be undone.", id);
+            target_url = format!("{}/floating-ips/{}/release", base_url, id);
+            confirm_label = "Release IP".into();
+            cancel_url = format!("{}/floating-ips", base_url);
+            button_class = "btn-danger".into();
+        }
         _ => {}
     }
 

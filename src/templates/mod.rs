@@ -19,6 +19,7 @@ pub mod resize_template;
 pub mod coming_soon_template;
 pub mod snapshots_template;
 pub mod snapshot_detail_template;
+pub mod floating_ips_template;
 
 // Wizard templates (now in templates/)
 pub mod step1_template;
@@ -48,6 +49,7 @@ pub use resize_template::ResizeTemplate;
 pub use coming_soon_template::ComingSoonTemplate;
 pub use snapshots_template::SnapshotsTemplate;
 pub use snapshot_detail_template::SnapshotDetailTemplate;
+pub use floating_ips_template::FloatingIpsTemplate;
 
 // Wizard templates
 pub use step1_template::Step1Template;
