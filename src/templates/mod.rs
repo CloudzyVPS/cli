@@ -20,6 +20,8 @@ pub mod coming_soon_template;
 pub mod snapshots_template;
 pub mod snapshot_detail_template;
 pub mod floating_ips_template;
+pub mod isos_template;
+pub mod images_template;
 
 // Wizard templates (now in templates/)
 pub mod step1_template;
@@ -50,6 +52,8 @@ pub use coming_soon_template::ComingSoonTemplate;
 pub use snapshots_template::SnapshotsTemplate;
 pub use snapshot_detail_template::SnapshotDetailTemplate;
 pub use floating_ips_template::FloatingIpsTemplate;
+pub use isos_template::IsosTemplate;
+pub use images_template::ImagesTemplate;
 
 // Wizard templates
 pub use step1_template::Step1Template;

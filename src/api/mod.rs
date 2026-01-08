@@ -8,6 +8,8 @@ pub mod ssh_keys;
 pub mod snapshots;
 pub mod applications;
 pub mod floating_ips;
+pub mod iso;
+pub mod images;
 
 // Re-export commonly used functions
 pub use client::api_call;
@@ -25,3 +27,5 @@ pub use floating_ips::{
     load_floating_ips, create_floating_ips, update_floating_ip, release_floating_ip,
     FloatingIpView,
 };
+pub use iso::{load_isos, download_iso, get_iso, delete_iso, IsoView};
+pub use images::{load_images, download_image, get_image, delete_image, ImageView};

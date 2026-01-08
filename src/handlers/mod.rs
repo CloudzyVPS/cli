@@ -11,3 +11,5 @@ pub mod system;
 pub mod instances;
 pub mod snapshots;
 pub mod floating_ips;
+pub mod iso;
+pub mod images;
