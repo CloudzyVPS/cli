@@ -29,7 +29,7 @@
                 <td><span class="status-badge status-{{ backup.status|lower }}">{{ backup.status }}</span></td>
                 <td>{% if backup.schedule_frequency.is_some() %}{{ backup.schedule_frequency.as_ref().unwrap() }}{% else %}-{% endif %}</td>
                 <td>{% if backup.max_files.is_some() %}{{ backup.max_files.unwrap() }}{% else %}-{% endif %}</td>
-                <td>{% if backup.monthly_price.is_some() %} ${{ backup.monthly_price.unwrap() }}{% else %}-{% endif %}</td>
+                <td>{% if backup.monthly_price.is_some() %}${{ backup.monthly_price.unwrap() }}{% else %}-{% endif %}</td>
             </tr>
         {% endfor %}
         </tbody>
