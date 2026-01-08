@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+
+{% block title %}SSH Key Details{% endblock %}
+
+{% block content %}
+<header class="page-header">
+    <p class="breadcrumb"><a href="{{ base_url }}/ssh-keys">← Back to SSH Keys</a></p>
+    <h1>SSH Key Details</h1>
+    <p>Key ID: <code>{{ key_id }}</code></p>
+</header>
+
+<section>
+    {% if ssh_key.is_none() %}
+    <div class="warning-banner">
+        <div>
+            <h2>SSH Key not found</h2>
+            <p>The requested SSH key could not be found or you don't have access to it.</p>
+        </div>
+    </div>
+    {% else %}
+    {% set key = ssh_key.as_ref().unwrap() %}
+    <dl>
+        <div>
+            <dt>Name</dt>
+            <dd><strong>{{ key.name }}</strong></dd>
+        </div>
+        <div>
+            <dt>ID</dt>
+            <dd><code>{{ key.id }}</code></dd>
+        </div>
+        {% if key.customer_id.is_some() %}
+        <div>
+            <dt>Customer ID</dt>
+            <dd><code>{{ key.customer_id.as_ref().unwrap() }}</code></dd>
+        </div>
+        {% endif %}
+        {% if key.fingerprint != "" %}
+        <div>
+            <dt>Fingerprint</dt>
+            <dd><code>{{ key.fingerprint }}</code></dd>
+        </div>
+        {% endif %}
+        {% if key.public_key != "" %}
+        <div>
+            <dt>Public Key</dt>
+            <dd><pre style="white-space: pre-wrap; word-wrap: break-word;">{{ key.public_key }}</pre></dd>
+        </div>
+        {% endif %}
+    </dl>
+
+    <section data-ssh-key-actions>
+        <h2>Actions</h2>
+        <div class="action-grid">
+            <a href="{{ base_url }}/confirm/delete-ssh-key/{{ key.id }}" class="btn btn-secondary">Delete</a>
+        </div>
+    </section>
+    {% endif %}
+</section>
+{% endblock %}

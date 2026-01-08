@@ -79,6 +79,7 @@ fn build_app(state: AppState) -> Router {
         .route("/access", get(handlers::access::access_get))
         .route("/access/:username", post(handlers::access::update_access))
         .route("/ssh-keys", get(handlers::ssh_keys::ssh_keys_get).post(handlers::ssh_keys::ssh_keys_post))
+        .route("/ssh-keys/:key_id", get(handlers::ssh_keys::ssh_key_detail_get))
         .route("/snapshots", get(handlers::snapshots::snapshots_list_get))
         .route("/snapshots/create", post(handlers::snapshots::snapshot_create_post))
         .route("/snapshots/:snapshot_id", get(handlers::snapshots::snapshot_detail_get))

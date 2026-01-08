@@ -20,7 +20,7 @@
     <div class="card-grid">
         {% for key in ssh_keys %}
         <article>
-            <h3>{{ key.name }}</h3>
+            <h3><a href="{{ base_url }}/ssh-keys/{{ key.id }}">{{ key.name }}</a></h3>
             <small>ID #{{ key.id }}{% if key.customer_id.is_some() %} · Customer {{ key.customer_id.as_ref().unwrap() }}{% endif %}</small>
             {% if key.fingerprint != "" %}
             <p><strong>Fingerprint:</strong> {{ key.fingerprint }}</p>

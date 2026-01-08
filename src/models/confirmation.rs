@@ -15,6 +15,7 @@ pub enum ConfirmationAction {
     CreateSnapshot,
     DeleteSnapshot,
     RestoreSnapshot,
+    DeleteSshKey,
 }
 
 impl ConfirmationAction {
@@ -32,6 +33,7 @@ impl ConfirmationAction {
             "create-snapshot" => Some(Self::CreateSnapshot),
             "delete-snapshot" => Some(Self::DeleteSnapshot),
             "restore-snapshot" => Some(Self::RestoreSnapshot),
+            "delete-ssh-key" => Some(Self::DeleteSshKey),
             _ => None,
         }
     }
@@ -51,6 +53,7 @@ impl ConfirmationAction {
             Self::CreateSnapshot => "create-snapshot",
             Self::DeleteSnapshot => "delete-snapshot",
             Self::RestoreSnapshot => "restore-snapshot",
+            Self::DeleteSshKey => "delete-ssh-key",
         }
     }
 }

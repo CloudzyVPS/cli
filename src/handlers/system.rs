@@ -230,6 +230,16 @@ pub async fn confirmation_get(
             cancel_url = format!("{}/snapshots/{}", base_url, id);
             button_class = "btn-warning".into();
         }
+        ConfirmationAction::DeleteSshKey => {
+            title = "Delete SSH Key".into();
+            message = format!("Are you sure you want to permanently delete SSH key #{}?", id);
+            target_url = format!("{}/ssh-keys", base_url);
+            confirm_label = "Delete SSH Key".into();
+            cancel_url = format!("{}/ssh-keys/{}", base_url, id);
+            button_class = "btn-danger".into();
+            hidden_fields.push(("action".into(), "delete".into()));
+            hidden_fields.push(("ssh_key_id".into(), id.clone()));
+        }
         _ => {}
     }
 
