@@ -1,0 +1,140 @@
+/* Tablet and larger screens (min-width: 768px) */
+
+/* Restore Grid Layouts */
+.product-grid {
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+}
+
+.invoice-body {
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+div[data-admin-grid] {
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+}
+
+section[role="listitem"] > div[role="list"] {
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+section dl {
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+section[aria-labelledby="regions-heading"] > div[role="list"] {
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+}
+
+section[aria-labelledby="regions-heading"] > div[role="list"] > article dl {
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+}
+
+section dl > div {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.action-grid {
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: var(--space-4);
+}
+
+/* Navigation - Sidebar Layout */
+body {
+  flex-direction: row;
+  align-items: flex-start;
+}
+
+.nav-toggle-label {
+  display: none;
+}
+
+nav {
+  width: 260px;
+  height: 100vh;
+  position: sticky;
+  top: 0;
+  flex-direction: column;
+  align-items: stretch;
+  flex-wrap: nowrap;
+  gap: var(--space-4);
+  border-bottom: none;
+  border-right: 1px solid var(--border-color);
+  overflow-y: auto;
+  flex-shrink: 0;
+}
+
+nav > header {
+  flex-direction: column;
+  align-items: flex-start;
+  margin-right: 0;
+  width: 100%;
+}
+
+nav > header > div:first-of-type {
+  width: 100%;
+}
+
+div[role="navigation"] {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--space-1);
+  width: 100%;
+  padding-top: 0;
+  border-top: none;
+  animation: none;
+}
+
+div[role="navigation"] a {
+  padding: var(--space-2) var(--space-3);
+  width: 100%;
+  font-size: 0.9rem;
+  justify-content: flex-start;
+}
+
+nav footer {
+  display: block;
+  margin-top: auto;
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--border-color);
+  text-align: center;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+/* Adjust header elements for sidebar layout */
+nav > header > div:last-of-type {
+  width: 100%;
+  flex: 0 0 auto;
+  background: var(--gray-50);
+  border: 1px solid var(--border-color);
+  padding: var(--space-3);
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-3);
+}
+
+nav > header > div:last-of-type form {
+  width: 100%;
+}
+
+nav > header > div:last-of-type form button {
+    width: 100%;
+    padding: var(--space-2) var(--space-3);
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    background: var(--white);
+    cursor: pointer;
+}
+
+nav > header > div:last-of-type form button:hover {
+    background: var(--gray-50);
+}
+
+main {
+  flex: 1;
+  min-width: 0; /* Prevent overflow issues */
+  padding: var(--space-5);
+}

@@ -6,7 +6,7 @@
     <title>{% block title %}Zy{% endblock %}</title>
     <base href="{{ base_url }}/">
     <link rel="stylesheet" href="/static/styles.css">
-    <link rel="stylesheet" href="/static/responsive.css">
+    <link rel="stylesheet" href="/static/tablet.css" media="(min-width: 768px)">
 </head>
 <body>
     {% if current_user.is_some() %}
