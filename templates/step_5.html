@@ -84,12 +84,12 @@
                 </div>
             </label>
             {% for app in applications %}
-            <label class="product-card" role="listitem" {% if selected_app_id == app.id %}aria-current="true"{% endif %} {% if app.is_active == false %}style="opacity: 0.6;"{% endif %}>
+            <label class="product-card{% if app.is_active == false %} product-card--inactive{% endif %}" role="listitem" {% if selected_app_id == app.id %}aria-current="true"{% endif %}>
                 <input type="radio" name="app_id" value="{{ app.id }}" {% if selected_app_id == app.id %}checked{% endif %} {% if app.is_active == false %}disabled{% endif %}>
                 <div class="product-card-body">
-                    <div style="display: flex; justify-content: space-between; align-items: start; gap: 0.5rem;">
+                    <div class="app-header">
                         <h2>{{ app.name }}</h2>
-                        <div style="display: flex; gap: 0.25rem; flex-wrap: wrap;">
+                        <div class="badge-container">
                             {% if app.tag.is_some() %}
                             <span class="badge">{{ app.tag.as_ref().unwrap() }}</span>
                             {% endif %}
@@ -114,7 +114,7 @@
                         {% if app.price.is_some() %}
                         <div>
                             <dt>Price</dt>
-                            <dd>${{ app.price.unwrap() }}{% if app.pricing_type.is_some() %} {{ app.pricing_type.as_ref().unwrap() }}{% endif %}</dd>
+                            <dd>${{ app.price.as_ref().unwrap() }}{% if app.pricing_type.is_some() %} {{ app.pricing_type.as_ref().unwrap() }}{% endif %}</dd>
                         </div>
                         {% endif %}
                         {% if app.os_family.is_some() %}

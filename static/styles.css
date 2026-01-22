@@ -2819,6 +2819,25 @@ img {
   border-color: #084298;
 }
 
+/* Application card styles */
+.app-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: start;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.badge-container {
+  display: flex;
+  gap: 0.25rem;
+  flex-wrap: wrap;
+}
+
+.product-card--inactive {
+  opacity: 0.6;
+}
+
 /* Mobile-first Navigation Adjustments */
 @media (max-width: 767px) {
   /* Ensure nav is fixed on mobile */
