@@ -1,0 +1,20 @@
+/* 4K Display screens (min-width: 2560px) */
+
+/* Extra wide sidebar for 4K */
+body {
+  grid-template-columns: 360px 1fr;
+}
+
+nav {
+  width: 360px;
+}
+
+/* Increase font sizes for readability on large displays */
+nav div[role="navigation"] a {
+  font-size: 1rem;
+}
+
+.region-icon {
+  width: 64px;
+  height: 64px;
+}

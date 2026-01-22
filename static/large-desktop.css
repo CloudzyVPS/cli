@@ -1,0 +1,16 @@
+/* Large Desktop screens (min-width: 1536px) */
+
+/* Wider sidebar for large desktops */
+body {
+  grid-template-columns: 300px 1fr;
+}
+
+nav {
+  width: 300px;
+}
+
+/* More generous table spacing */
+th,
+td {
+  padding: var(--spacing-lg);
+}

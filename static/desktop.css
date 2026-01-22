@@ -1,0 +1,12 @@
+/* Desktop screens (min-width: 1024px) */
+
+/* Full sidebar for desktop */
+body {
+  display: grid;
+  grid-template-columns: 260px 1fr;
+}
+
+.region-icon {
+  width: 48px;
+  height: 48px;
+}

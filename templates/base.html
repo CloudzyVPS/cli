@@ -6,7 +6,12 @@
     <title>{% block title %}Zy{% endblock %}</title>
     <base href="{{ base_url }}/">
     <link rel="stylesheet" href="/static/styles.css">
-    <link rel="stylesheet" href="/static/responsive.css">
+    <link rel="stylesheet" href="/static/mobile.css" media="(max-width: 767px)">
+    <link rel="stylesheet" href="/static/tablet.css" media="(min-width: 768px)">
+    <link rel="stylesheet" href="/static/desktop.css" media="(min-width: 1024px)">
+    <link rel="stylesheet" href="/static/large-desktop.css" media="(min-width: 1536px)">
+    <link rel="stylesheet" href="/static/4k.css" media="(min-width: 2560px)">
+    <link rel="stylesheet" href="/static/ultra-wide.css" media="(min-width: 3840px)">
 </head>
 <body>
     {% if current_user.is_some() %}

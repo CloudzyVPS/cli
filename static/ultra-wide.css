@@ -1,0 +1,15 @@
+/* 5K+ and TV screens (min-width: 3840px) */
+
+/* Ultra-wide optimizations */
+body {
+  grid-template-columns: 400px 1fr;
+}
+
+nav {
+  width: 400px;
+}
+
+/* Ultra-wide container max-width */
+.container {
+  max-width: 3200px;
+}

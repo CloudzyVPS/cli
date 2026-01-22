@@ -1,0 +1,67 @@
+/* Mobile screens (max-width: 767px) */
+
+/* Fixed navigation on mobile */
+nav {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 1000;
+}
+
+main {
+  margin-top: 70px;
+}
+
+/* Larger touch targets on mobile */
+button,
+a.btn {
+  min-height: 48px;
+  font-size: var(--font-size-lg);
+}
+
+/* Responsive tables - Card layout on mobile */
+table,
+thead,
+tbody,
+th,
+td,
+tr {
+  display: block;
+}
+
+thead tr {
+  position: absolute;
+  top: -9999px;
+  left: -9999px;
+}
+
+tr {
+  margin-bottom: var(--spacing-lg);
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius);
+  padding: var(--spacing-md);
+}
+
+td {
+  border: none;
+  position: relative;
+  padding-left: 50%;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+}
+
+td:before {
+  content: attr(data-label);
+  position: absolute;
+  left: var(--spacing-md);
+  font-weight: 600;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+/* Stack form elements on mobile */
+.fields-grid {
+  grid-template-columns: 1fr !important;
+}
