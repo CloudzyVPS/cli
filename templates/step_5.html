@@ -75,7 +75,7 @@
         <legend>One-Click Application (Optional)</legend>
         <p class="help-text">Optionally select a pre-configured application to install with your OS.</p>
         {% if applications.len() > 0 %}
-        <div class="product-grid" role="list">
+        <div class="product-grid grid grid-sm-2 grid-md-3 grid-lg-4" role="list">
             <label class="product-card" role="listitem" {% if selected_app_id == "" %}aria-current="true"{% endif %}>
                 <input type="radio" name="app_id" value="" {% if selected_app_id == "" %}checked{% endif %}>
                 <div class="product-card-body">
@@ -84,21 +84,52 @@
                 </div>
             </label>
             {% for app in applications %}
-            <label class="product-card" role="listitem" {% if selected_app_id == app.id %}aria-current="true"{% endif %}>
-                <input type="radio" name="app_id" value="{{ app.id }}" {% if selected_app_id == app.id %}checked{% endif %}>
+            <label class="product-card{% if app.is_active == false %} product-card--inactive{% endif %}" role="listitem" {% if selected_app_id == app.id %}aria-current="true"{% endif %}>
+                <input type="radio" name="app_id" value="{{ app.id }}" {% if selected_app_id == app.id %}checked{% endif %} {% if app.is_active == false %}disabled{% endif %}>
                 <div class="product-card-body">
-                    <h2>{{ app.name }}</h2>
+                    <div class="app-header">
+                        <h2>{{ app.name }}</h2>
+                        <div class="badge-container">
+                            {% if app.tag.is_some() %}
+                            <span class="badge">{{ app.tag.as_ref().unwrap() }}</span>
+                            {% endif %}
+                            {% if app.is_experimental %}
+                            <span class="badge badge-warning">Experimental</span>
+                            {% endif %}
+                            {% if app.is_active == false %}
+                            <span class="badge badge-warning">Inactive</span>
+                            {% endif %}
+                        </div>
+                    </div>
                     {% if app.description.is_some() %}
                     <p class="product-plan">{{ app.description.as_ref().unwrap() }}</p>
                     {% endif %}
-                    {% if app.category.is_some() %}
                     <dl>
+                        {% if app.category.is_some() %}
                         <div>
                             <dt>Category</dt>
                             <dd>{{ app.category.as_ref().unwrap() }}</dd>
                         </div>
+                        {% endif %}
+                        {% if app.price.is_some() %}
+                        <div>
+                            <dt>Price</dt>
+                            <dd>${{ app.price.as_ref().unwrap() }}{% if app.pricing_type.is_some() %} {{ app.pricing_type.as_ref().unwrap() }}{% endif %}</dd>
+                        </div>
+                        {% endif %}
+                        {% if app.os_family.is_some() %}
+                        <div>
+                            <dt>OS Family</dt>
+                            <dd>{{ app.os_family.as_ref().unwrap() }}</dd>
+                        </div>
+                        {% endif %}
+                        {% if app.os_list.len() > 0 %}
+                        <div>
+                            <dt>Compatible OS</dt>
+                            <dd>{{ app.os_list.join(", ") }}</dd>
+                        </div>
+                        {% endif %}
                     </dl>
-                    {% endif %}
                 </div>
             </label>
             {% endfor %}

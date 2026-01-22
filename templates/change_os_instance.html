@@ -65,7 +65,7 @@
             <select id="os_id" name="os_id" disabled>
                 <option value="">Select an OS...</option>
                 {% for os in os_list %}
-                <option value="{{ os.id }}">{{ os.name }} ({{ os.family }}{% if os.arch.is_some() %} - {{ os.arch.as_ref().unwrap() }}{% endif %})</option>
+                <option value="{{ os.id }}"{% if os.is_active == false %} disabled{% endif %}>{{ os.name }} ({{ os.family }}{% if os.arch.is_some() %} - {{ os.arch.as_ref().unwrap() }}{% endif %}){% if os.is_active == false %} - Unavailable{% endif %}</option>
                 {% endfor %}
             </select>
         </fieldset>
@@ -83,12 +83,12 @@
             <select id="os_id" name="os_id" required>
                 <option value="">Select an OS...</option>
                 {% for os in os_list %}
-                <option value="{{ os.id }}"{% if instance.os.is_some() && instance.os.as_ref().unwrap().id == os.id %} selected{% endif %}>
-                    {{ os.name }} ({{ os.family }}{% if os.arch.is_some() %} - {{ os.arch.as_ref().unwrap() }}{% endif %})
+                <option value="{{ os.id }}"{% if instance.os.is_some() && instance.os.as_ref().unwrap().id == os.id %} selected{% endif %}{% if os.is_active == false %} disabled{% endif %}>
+                    {{ os.name }} ({{ os.family }}{% if os.arch.is_some() %} - {{ os.arch.as_ref().unwrap() }}{% endif %}){% if os.is_active == false %} - Unavailable{% endif %}
                 </option>
                 {% endfor %}
             </select>
-            <small>Select the operating system you want to install on this instance.</small>
+            <small>Select the operating system you want to install on this instance. Unavailable OS options are disabled.</small>
         </fieldset>
 
         <footer class="form-actions">

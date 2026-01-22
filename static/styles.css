@@ -2506,3 +2506,59 @@ code {
   border-bottom-color: var(--red-400);
   color: var(--red-700);
 }
+
+/* Badge Styles */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.25rem 0.5rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  border-radius: var(--border-radius);
+  background-color: var(--gray-100);
+  color: var(--text-secondary);
+  border: 1px solid var(--border-color);
+}
+
+.badge-premium {
+  background-color: #ffd700;
+  color: #000;
+  border-color: #ffcd00;
+}
+
+.badge-warning {
+  background-color: var(--red-100);
+  color: var(--red-700);
+  border-color: var(--red-400);
+}
+
+.badge-success {
+  background-color: #d1f4e0;
+  color: #0f5132;
+  border-color: #0f5132;
+}
+
+.badge-security {
+  background-color: #cfe2ff;
+  color: #084298;
+  border-color: #084298;
+}
+
+/* Application card styles */
+.app-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: start;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.badge-container {
+  display: flex;
+  gap: 0.25rem;
+  flex-wrap: wrap;
+}
+
+.product-card--inactive {
+  opacity: 0.6;
+}

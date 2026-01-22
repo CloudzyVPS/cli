@@ -7,6 +7,7 @@ pub struct OsItem {
     pub family: String,
     pub arch: Option<String>,
     pub min_ram: Option<String>,
+    #[serde(default)]
     pub is_default: bool,
     pub is_active: bool,
 }

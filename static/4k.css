@@ -1,0 +1,52 @@
+/* 4K displays (2560px and above) */
+
+/* Maximum columns for 4K displays */
+.product-grid {
+  grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+}
+
+div[data-admin-grid] {
+  grid-template-columns: repeat(auto-fit, minmax(450px, 1fr));
+}
+
+.grid-4k-6 {
+  grid-template-columns: repeat(6, 1fr);
+}
+
+.grid-4k-8 {
+  grid-template-columns: repeat(8, 1fr);
+}
+
+.grid-4k-12 {
+  grid-template-columns: repeat(12, 1fr);
+}
+
+/* Extra wide navigation for 4K */
+body {
+  grid-template-columns: 360px 1fr;
+}
+
+nav {
+  width: 360px;
+}
+
+nav div[role="navigation"] a {
+  font-size: 1.1rem;
+  padding: var(--space-4);
+}
+
+main {
+  padding: calc(var(--space-6) * 1.5);
+}
+
+/* Extra large region icons */
+.region-icon {
+  width: 64px;
+  height: 64px;
+}
+
+/* Even more generous table spacing */
+table.table-responsive th,
+table.table-responsive td {
+  padding: var(--space-5);
+}

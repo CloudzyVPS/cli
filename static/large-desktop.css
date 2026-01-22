@@ -1,0 +1,52 @@
+/* Large desktop (1536px - 2559px) */
+
+/* Even more columns for large screens */
+.product-grid {
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+}
+
+div[data-admin-grid] {
+  grid-template-columns: repeat(auto-fit, minmax(380px, 1fr));
+}
+
+.grid-2xl-4 {
+  grid-template-columns: repeat(4, 1fr);
+}
+
+.grid-2xl-6 {
+  grid-template-columns: repeat(6, 1fr);
+}
+
+.grid-2xl-8 {
+  grid-template-columns: repeat(8, 1fr);
+}
+
+/* Wider navigation for large screens */
+body {
+  grid-template-columns: 300px 1fr;
+}
+
+nav {
+  width: 300px;
+}
+
+nav div[role="navigation"] a {
+  font-size: 1rem;
+  padding: var(--space-3) var(--space-4);
+}
+
+main {
+  padding: calc(var(--space-6) * 1.25);
+}
+
+/* More generous table spacing */
+table.table-responsive th,
+table.table-responsive td {
+  padding: var(--space-4);
+}
+
+/* Larger region icons */
+.region-icon {
+  width: 48px;
+  height: 48px;
+}
