@@ -10,7 +10,6 @@ pub struct FloatingIpView {
     pub instance_id: Option<String>,
     pub auto_renew: bool,
     pub customer_note: Option<String>,
-    #[allow(dead_code)]
     pub created_at: Option<i64>,
 }
 

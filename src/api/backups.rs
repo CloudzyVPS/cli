@@ -9,7 +9,6 @@ pub struct BackupProfileView {
     pub schedule_frequency: Option<String>,
     pub monthly_price: Option<f64>,
     pub max_files: Option<i32>,
-    #[allow(dead_code)]
     pub created_at: Option<i64>,
 }
 
