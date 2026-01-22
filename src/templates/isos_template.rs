@@ -11,9 +11,9 @@ pub struct IsosTemplate<'a> {
     pub flash_messages: Vec<String>,
     pub has_flash_messages: bool,
     pub isos: &'a [IsoView],
-    pub current_page: usize,
-    pub total_pages: usize,
-    pub per_page: usize,
+    // pub current_page: usize,
+    // pub total_pages: usize,
+    // pub per_page: usize,
     pub total_count: usize,
 }
 

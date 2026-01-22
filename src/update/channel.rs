@@ -41,22 +41,8 @@ impl Channel {
         }
     }
     
-    /// Check if this channel should include pre-release versions
-    /// 
-    /// Reserved for future filtering enhancements where we may want to
-    /// explicitly filter GitHub releases by pre-release status.
-    /// 
-    /// # Examples
-    /// 
-    /// ```
-    /// use zy::update::Channel;
-    /// 
-    /// assert_eq!(Channel::Stable.should_include_prerelease(), false);
-    /// assert_eq!(Channel::Alpha.should_include_prerelease(), true);
-    /// assert_eq!(Channel::Beta.should_include_prerelease(), true);
-    /// assert_eq!(Channel::ReleaseCandidate.should_include_prerelease(), true);
-    /// ```
-    pub fn should_include_prerelease(&self) -> bool {
-        !matches!(self, Channel::Stable)
-    }
+    // Check if this channel should include pre-release versions - preserved for future use
+    // pub fn should_include_prerelease(&self) -> bool {
+    //     !matches!(self, Channel::Stable)
+    // }
 }

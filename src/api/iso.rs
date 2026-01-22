@@ -4,14 +4,14 @@ use serde_json::Value;
 /// ISO view structure
 #[derive(Clone, Debug)]
 pub struct IsoView {
-    pub id: String,
+    // pub id: String,
     pub name: String,
-    pub url: String,
+    // pub url: String,
     pub status: String,
     pub region_id: String,
     pub use_virtio: bool,
-    /// Created timestamp from API - preserved for future sorting/filtering
-    pub created_at: Option<i64>,
+    // Created timestamp from API - preserved for future sorting/filtering
+    // pub created_at: Option<i64>,
 }
 
 /// Paginated result structure for ISOs
@@ -19,9 +19,9 @@ pub struct IsoView {
 pub struct PaginatedIsos {
     pub isos: Vec<IsoView>,
     pub total_count: usize,
-    pub current_page: usize,
-    pub total_pages: usize,
-    pub per_page: usize,
+    // pub current_page: usize,
+    // pub total_pages: usize,
+    // pub per_page: usize,
 }
 
 /// Load ISOs from the API
@@ -50,13 +50,13 @@ pub async fn load_isos(
                 for item in arr {
                     if let Some(obj) = item.as_object() {
                         isos.push(IsoView {
-                            id: obj.get("id").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+                            // id: obj.get("id").and_then(|v| v.as_str()).unwrap_or("").to_string(),
                             name: obj.get("name").and_then(|v| v.as_str()).unwrap_or("").to_string(),
-                            url: obj.get("url").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+                            // url: obj.get("url").and_then(|v| v.as_str()).unwrap_or("").to_string(),
                             status: obj.get("status").and_then(|v| v.as_str()).unwrap_or("UNKNOWN").to_string(),
                             region_id: obj.get("regionId").and_then(|v| v.as_str()).unwrap_or("").to_string(),
                             use_virtio: obj.get("useVirtio").and_then(|v| v.as_bool()).unwrap_or(true),
-                            created_at: obj.get("createdAt").and_then(|v| v.as_i64()),
+                            // created_at: obj.get("createdAt").and_then(|v| v.as_i64()),
                         });
                     }
                 }
@@ -67,15 +67,15 @@ pub async fn load_isos(
     }
     
     let actual_total = if total_count > 0 { total_count } else { isos.len() };
-    let total_pages = if per_page > 0 { actual_total.div_ceil(per_page) } else { 1 };
-    let current_page = if page >= 1 { page } else { 1 };
+    // let total_pages = if per_page > 0 { actual_total.div_ceil(per_page) } else { 1 };
+    // let current_page = if page >= 1 { page } else { 1 };
     
     PaginatedIsos {
         isos,
         total_count: actual_total,
-        current_page,
-        total_pages,
-        per_page,
+        // current_page,
+        // total_pages,
+        // per_page,
     }
 }
 
@@ -98,24 +98,24 @@ pub async fn download_iso(
     api_call(client, api_base_url, api_token, "POST", "/v1/iso", Some(payload), None).await
 }
 
-/// Get ISO details
-pub async fn get_iso(
-    client: &reqwest::Client,
-    api_base_url: &str,
-    api_token: &str,
-    iso_id: &str,
-) -> Value {
-    let endpoint = format!("/v1/iso/{}", iso_id);
-    api_call(client, api_base_url, api_token, "GET", &endpoint, None, None).await
-}
+// Get ISO details - preserved for future use
+// pub async fn get_iso(
+//     client: &reqwest::Client,
+//     api_base_url: &str,
+//     api_token: &str,
+//     iso_id: &str,
+// ) -> Value {
+//     let endpoint = format!("/v1/iso/{}", iso_id);
+//     api_call(client, api_base_url, api_token, "GET", &endpoint, None, None).await
+// }
 
-/// Delete an ISO
-pub async fn delete_iso(
-    client: &reqwest::Client,
-    api_base_url: &str,
-    api_token: &str,
-    iso_id: &str,
-) -> Value {
-    let endpoint = format!("/v1/iso/{}", iso_id);
-    api_call(client, api_base_url, api_token, "DELETE", &endpoint, None, None).await
-}
+// Delete an ISO - preserved for future use
+// pub async fn delete_iso(
+//     client: &reqwest::Client,
+//     api_base_url: &str,
+//     api_token: &str,
+//     iso_id: &str,
+// ) -> Value {
+//     let endpoint = format!("/v1/iso/{}", iso_id);
+//     api_call(client, api_base_url, api_token, "DELETE", &endpoint, None, None).await
+// }

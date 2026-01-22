@@ -8,7 +8,7 @@ use crate::api::{
     api_call, load_ssh_keys, load_ssh_keys_paginated, load_regions, load_products, 
     load_instances_for_user, PaginatedInstances, PaginatedSshKeys
 };
-use crate::models::{AppState, CurrentUser, SshKeyView, Region, ProductView, InstanceView};
+use crate::models::{AppState, CurrentUser, SshKeyView, Region, ProductView};
 use std::collections::HashMap;
 
 #[derive(Deserialize, Debug)]
@@ -103,16 +103,13 @@ pub fn ensure_owner(state: &AppState, jar: &CookieJar) -> Option<Redirect> {
     Some(Redirect::to("/"))
 }
 
-/// Ensure user is logged in
-/// 
-/// Reserved for future route guards that require authentication but not specific roles.
-/// Currently, most routes use role-specific guards (ensure_owner, ensure_admin_or_owner).
-pub fn ensure_logged_in(state: &AppState, jar: &CookieJar) -> Option<Redirect> {
-    if current_username_from_jar(state, jar).is_none() {
-        return Some(Redirect::to("/login"));
-    }
-    None
-}
+// Ensure user is logged in - preserved for future route guards
+// pub fn ensure_logged_in(state: &AppState, jar: &CookieJar) -> Option<Redirect> {
+//     if current_username_from_jar(state, jar).is_none() {
+//         return Some(Redirect::to("/login"));
+//     }
+//     None
+// }
 
 pub fn ensure_admin_or_owner(state: &AppState, jar: &CookieJar) -> Option<Redirect> {
     let username = current_username_from_jar(state, jar)?;
@@ -245,15 +242,12 @@ pub async fn load_products_wrapper(state: &AppState, region_id: &str) -> Vec<Pro
     load_products(&state.client, &state.api_base_url, &state.api_token, region_id).await
 }
 
-/// Load all instances for a user (non-paginated)
-/// 
-/// Reserved for future use cases where we need to load all instances at once
-/// without pagination. Currently, paginated version is preferred for better performance.
-pub async fn load_instances_for_user_wrapper(state: &AppState, username: &str) -> Vec<InstanceView> {
-    let users_map = state.users.lock().unwrap().clone();
-    let result = load_instances_for_user(&state.client, &state.api_base_url, &state.api_token, &users_map, username, 0, 0).await;
-    result.instances
-}
+// Load all instances for a user (non-paginated) - preserved for future use
+// pub async fn load_instances_for_user_wrapper(state: &AppState, username: &str) -> Vec<InstanceView> {
+//     let users_map = state.users.lock().unwrap().clone();
+//     let result = load_instances_for_user(&state.client, &state.api_base_url, &state.api_token, &users_map, username, 0, 0).await;
+//     result.instances
+// }
 
 pub async fn load_instances_for_user_paginated(
     state: &AppState,

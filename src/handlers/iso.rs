@@ -67,9 +67,9 @@ pub async fn isos_list_get(
             flash_messages,
             has_flash_messages,
             isos: &paginated.isos,
-            current_page: paginated.current_page,
-            total_pages: paginated.total_pages,
-            per_page: paginated.per_page,
+            // current_page: paginated.current_page,
+            // total_pages: paginated.total_pages,
+            // per_page: paginated.per_page,
             total_count: paginated.total_count,
         },
     )

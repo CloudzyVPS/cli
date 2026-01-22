@@ -40,28 +40,24 @@ impl ConfirmationAction {
         }
     }
 
-    /// Convert action to string representation
-    /// 
-    /// Reserved for future serialization needs where we may need to convert
-    /// actions back to their string form for logging or API communication.
-    /// Currently, we use serde's automatic serialization.
-    pub fn to_str(&self) -> &'static str {
-        match self {
-            Self::DeleteUser => "delete-user",
-            Self::DeleteInstance => "delete-instance",
-            Self::PowerOnInstance => "power-on-instance",
-            Self::PowerOffInstance => "power-off-instance",
-            Self::ResetInstance => "reset-instance",
-            Self::SwitchVersion => "switch-version",
-            Self::ChangeOs => "change-os",
-            Self::ResizeInstance => "resize-instance",
-            Self::AddTraffic => "add-traffic",
-            Self::CreateSnapshot => "create-snapshot",
-            Self::DeleteSnapshot => "delete-snapshot",
-            Self::RestoreSnapshot => "restore-snapshot",
-            Self::DeleteSshKey => "delete-ssh-key",
-            Self::ReleaseFloatingIp => "release-floating-ip",
-        }
-    }
+    // Convert action to string representation - preserved for future serialization needs
+    // pub fn to_str(&self) -> &'static str {
+    //     match self {
+    //         Self::DeleteUser => "delete-user",
+    //         Self::DeleteInstance => "delete-instance",
+    //         Self::PowerOnInstance => "power-on-instance",
+    //         Self::PowerOffInstance => "power-off-instance",
+    //         Self::ResetInstance => "reset-instance",
+    //         Self::SwitchVersion => "switch-version",
+    //         Self::ChangeOs => "change-os",
+    //         Self::ResizeInstance => "resize-instance",
+    //         Self::AddTraffic => "add-traffic",
+    //         Self::CreateSnapshot => "create-snapshot",
+    //         Self::DeleteSnapshot => "delete-snapshot",
+    //         Self::RestoreSnapshot => "restore-snapshot",
+    //         Self::DeleteSshKey => "delete-ssh-key",
+    //         Self::ReleaseFloatingIp => "release-floating-ip",
+    //     }
+    // }
 }
 

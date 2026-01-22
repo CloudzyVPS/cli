@@ -66,9 +66,8 @@ pub enum UpdateError {
     #[error("Rollback failed: {0}")]
     RollbackFailed(String),
     
-    /// Permission denied during update - reserved for future permission handling
-    #[error("Permission denied: {0}")]
-    PermissionDenied(String),
+    // Permission denied during update - reserved for future permission handling
+    // PermissionDenied(String),
     
     /// I/O error during update
     #[error("I/O error: {0}")]

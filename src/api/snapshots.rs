@@ -9,13 +9,13 @@ pub struct SnapshotView {
     pub size: Option<i64>,
     pub status: String,
     pub created_at: Option<i64>,
-    /// Last restored timestamp from API - preserved for future display enhancements
-    pub last_restored_at: Option<i64>,
-    /// Flag indicating if the source instance was deleted - preserved for display logic
-    pub is_instance_deleted: bool,
+    // Last restored timestamp from API - preserved for future display enhancements
+    // pub last_restored_at: Option<i64>,
+    // Flag indicating if the source instance was deleted - preserved for display logic
+    // pub is_instance_deleted: bool,
     pub instance_id: String,
-    /// Region ID from API - preserved for region-aware operations
-    pub region_id: Option<String>,
+    // Region ID from API - preserved for region-aware operations
+    // pub region_id: Option<String>,
 }
 
 /// Paginated result structure for snapshots
@@ -65,10 +65,10 @@ pub async fn load_snapshots(
                             size: obj.get("size").and_then(|v| v.as_i64()),
                             status: obj.get("status").and_then(|v| v.as_str()).unwrap_or("").to_string(),
                             created_at: obj.get("createdAt").and_then(|v| v.as_i64()),
-                            last_restored_at: obj.get("lastRestoredAt").and_then(|v| v.as_i64()),
-                            is_instance_deleted: obj.get("isInstanceDeleted").and_then(|v| v.as_bool()).unwrap_or(false),
+                            // last_restored_at: obj.get("lastRestoredAt").and_then(|v| v.as_i64()),
+                            // is_instance_deleted: obj.get("isInstanceDeleted").and_then(|v| v.as_bool()).unwrap_or(false),
                             instance_id: obj.get("instanceId").and_then(|v| v.as_str()).unwrap_or("").to_string(),
-                            region_id: obj.get("regionId").and_then(|v| v.as_str()).map(|s| s.to_string()),
+                            // region_id: obj.get("regionId").and_then(|v| v.as_str()).map(|s| s.to_string()),
                         });
                     }
                 }

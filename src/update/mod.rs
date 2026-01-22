@@ -67,7 +67,8 @@ pub use error::UpdateError;
 pub use version::Version;
 pub use channel::Channel;
 pub use platform::Platform;
-pub use asset::{Asset, parse_asset_name, select_asset_for_platform};
+pub use asset::select_asset_for_platform;
+// pub use asset::{Asset, parse_asset_name}; // Preserved for library users
 pub use github::{GitHubClient, Release};
 
 /// Repository owner on GitHub

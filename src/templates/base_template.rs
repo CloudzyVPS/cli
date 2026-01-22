@@ -16,6 +16,7 @@ use crate::models::CurrentUser;
 /// - has_flash_messages: Boolean indicating if flash messages exist
 /// 
 /// Without this trait, each template would need to duplicate these common field definitions.
+#[allow(dead_code)] // Used by impl_base_template! macro
 pub trait BaseTemplate {
     fn current_user(&self) -> &Option<CurrentUser>;
     fn api_hostname(&self) -> &str;

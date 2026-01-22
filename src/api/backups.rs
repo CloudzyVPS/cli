@@ -9,8 +9,8 @@ pub struct BackupProfileView {
     pub schedule_frequency: Option<String>,
     pub monthly_price: Option<f64>,
     pub max_files: Option<i32>,
-    /// Created timestamp from API - preserved for future sorting/filtering
-    pub created_at: Option<i64>,
+    // Created timestamp from API - preserved for future sorting/filtering
+    // pub created_at: Option<i64>,
 }
 
 /// Load backup profiles from the API
@@ -33,7 +33,7 @@ pub async fn load_backups(
                             schedule_frequency: obj.get("scheduleFrequency").and_then(|v| v.as_str()).map(|s| s.to_string()),
                             monthly_price: obj.get("monthlyPrice").and_then(|v| v.as_f64()),
                             max_files: obj.get("maxFiles").and_then(|v| v.as_i64()).map(|i| i as i32),
-                            created_at: obj.get("createdAt").and_then(|v| v.as_i64()),
+                            // created_at: obj.get("createdAt").and_then(|v| v.as_i64()),
                         });
                     }
                 }
@@ -44,16 +44,16 @@ pub async fn load_backups(
     backups
 }
 
-/// Get backup profile for instance
-pub async fn get_backup_profile(
-    client: &reqwest::Client,
-    api_base_url: &str,
-    api_token: &str,
-    instance_id: &str,
-) -> Value {
-    let endpoint = format!("/v1/backups/{}", instance_id);
-    api_call(client, api_base_url, api_token, "GET", &endpoint, None, None).await
-}
+// Get backup profile for instance - preserved for future use
+// pub async fn get_backup_profile(
+//     client: &reqwest::Client,
+//     api_base_url: &str,
+//     api_token: &str,
+//     instance_id: &str,
+// ) -> Value {
+//     let endpoint = format!("/v1/backups/{}", instance_id);
+//     api_call(client, api_base_url, api_token, "GET", &endpoint, None, None).await
+// }
 
 /// Create backup profile
 pub async fn create_backup_profile(
@@ -78,36 +78,36 @@ pub async fn create_backup_profile(
     api_call(client, api_base_url, api_token, "POST", "/v1/backups", Some(payload), None).await
 }
 
-/// Update backup profile
-pub async fn update_backup_profile(
-    client: &reqwest::Client,
-    api_base_url: &str,
-    api_token: &str,
-    instance_id: &str,
-    schedule_frequency: &str,
-    period_id: i32,
-    schedule_week_days: Option<Vec<String>>,
-) -> Value {
-    let mut payload = serde_json::json!({
-        "instanceId": instance_id,
-        "scheduleFrequency": schedule_frequency,
-        "periodId": period_id
-    });
-    
-    if let Some(days) = schedule_week_days {
-        payload["scheduleWeekDays"] = Value::Array(days.into_iter().map(Value::String).collect());
-    }
-    
-    api_call(client, api_base_url, api_token, "PUT", "/v1/backups", Some(payload), None).await
-}
+// Update backup profile - preserved for future use
+// pub async fn update_backup_profile(
+//     client: &reqwest::Client,
+//     api_base_url: &str,
+//     api_token: &str,
+//     instance_id: &str,
+//     schedule_frequency: &str,
+//     period_id: i32,
+//     schedule_week_days: Option<Vec<String>>,
+// ) -> Value {
+//     let mut payload = serde_json::json!({
+//         "instanceId": instance_id,
+//         "scheduleFrequency": schedule_frequency,
+//         "periodId": period_id
+//     });
+//     
+//     if let Some(days) = schedule_week_days {
+//         payload["scheduleWeekDays"] = Value::Array(days.into_iter().map(Value::String).collect());
+//     }
+//     
+//     api_call(client, api_base_url, api_token, "PUT", "/v1/backups", Some(payload), None).await
+// }
 
-/// Delete backup profile
-pub async fn delete_backup_profile(
-    client: &reqwest::Client,
-    api_base_url: &str,
-    api_token: &str,
-    instance_id: &str,
-) -> Value {
-    let endpoint = format!("/v1/backups/{}", instance_id);
-    api_call(client, api_base_url, api_token, "DELETE", &endpoint, None, None).await
-}
+// Delete backup profile - preserved for future use
+// pub async fn delete_backup_profile(
+//     client: &reqwest::Client,
+//     api_base_url: &str,
+//     api_token: &str,
+//     instance_id: &str,
+// ) -> Value {
+//     let endpoint = format!("/v1/backups/{}", instance_id);
+//     api_call(client, api_base_url, api_token, "DELETE", &endpoint, None, None).await
+// }
