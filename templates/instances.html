@@ -7,7 +7,7 @@
 
 {% if instances.len() > 0 %}
 <div class="table-responsive mt-4">
-    <table class="table">
+    <table class="table table-responsive">
         <thead>
             <tr>
                 <th>Hostname</th>
@@ -20,9 +20,9 @@
         <tbody>
             {% for instance in instances %}
                 <tr>
-                    <td><strong>{{ instance.hostname }}</strong></td>
-                    <td><code>{{ instance.id }}</code></td>
-                    <td>
+                    <td data-label="Hostname"><strong>{{ instance.hostname }}</strong></td>
+                    <td data-label="ID"><code>{{ instance.id }}</code></td>
+                    <td data-label="Network">
                         {% if instance.main_ip.is_some() %}
                         <div class="small">{{ instance.main_ip.as_ref().unwrap() }}</div>
                         {% endif %}
@@ -33,12 +33,12 @@
                         <span class="text-muted small">—</span>
                         {% endif %}
                     </td>
-                    <td>
+                    <td data-label="Status">
                         <span class="status-badge status-{{ instance.status|lower }}">
                             {{ instance.status_display }}
                         </span>
                     </td>
-                    <td class="text-right">
+                    <td data-label="Actions" class="text-right">
                         <a href="{{ base_url }}/instance/{{ instance.id }}" class="btn-secondary btn-sm">Details</a>
                     </td>
                 </tr>

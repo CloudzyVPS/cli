@@ -15,10 +15,15 @@
             <label for="region" class="sr-only">Deployment region</label>
             <select id="region" name="region" required>
                 {% for region in regions %}
-                <option value="{{ region.id }}" {% if form_data.region == region.id %}selected{% endif %}>{{ region.name }}</option>
+                <option value="{{ region.id }}" {% if form_data.region == region.id %}selected{% endif %} {% if region.is_out_of_stock %}disabled{% endif %}>
+                    {{ region.name }}
+                    {% if region.abbr != "" %} ({{ region.abbr }}){% endif %}
+                    {% if region.is_premium %} ⭐{% endif %}
+                    {% if region.is_out_of_stock %} - Out of Stock{% endif %}
+                </option>
                 {% endfor %}
             </select>
-            <small>Only active regions are listed.</small>
+            <small>Only active regions are listed. Premium regions marked with ⭐</small>
         </fieldset>
         <fieldset>
             <legend>Instance class</legend>
