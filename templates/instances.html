@@ -3,6 +3,7 @@
 {% block title %}Instances{% endblock %}
 
 {% block content %}
+<div class="container">
 <h1>Instances</h1>
 
 {% if instances.len() > 0 %}
@@ -12,6 +13,7 @@
             <tr>
                 <th>Hostname</th>
                 <th>ID</th>
+                <th>Specs</th>
                 <th>Network</th>
                 <th>Status</th>
                 <th class="text-right">Actions</th>
@@ -20,9 +22,24 @@
         <tbody>
             {% for instance in instances %}
                 <tr>
-                    <td><strong>{{ instance.hostname }}</strong></td>
-                    <td><code>{{ instance.id }}</code></td>
-                    <td>
+                    <td data-label="Hostname"><strong>{{ instance.hostname }}</strong></td>
+                    <td data-label="ID"><code>{{ instance.id }}</code></td>
+                    <td data-label="Specs">
+                        <div class="small">
+                            {% if instance.vcpu_count.is_some() %}{{ instance.vcpu_count.unwrap() }} vCPU{% else %}{{ instance.vcpu_count_display }}{% endif %}
+                            · 
+                            {% if instance.ram.is_some() %}{{ instance.ram.unwrap() }} MB{% else %}{{ instance.ram_display }}{% endif %}
+                            · 
+                            {% if instance.disk.is_some() %}{{ instance.disk.unwrap() }} GB{% else %}{{ instance.disk_display }}{% endif %}
+                        </div>
+                        {% if instance.class.is_some() %}
+                        <div class="small text-muted">Class: {{ instance.class.as_ref().unwrap() }}</div>
+                        {% endif %}
+                        {% if instance.is_ddos_protected.unwrap_or(false) %}
+                        <span class="badge badge-security">DDoS</span>
+                        {% endif %}
+                    </td>
+                    <td data-label="Network">
                         {% if instance.main_ip.is_some() %}
                         <div class="small">{{ instance.main_ip.as_ref().unwrap() }}</div>
                         {% endif %}
@@ -33,12 +50,12 @@
                         <span class="text-muted small">—</span>
                         {% endif %}
                     </td>
-                    <td>
+                    <td data-label="Status">
                         <span class="status-badge status-{{ instance.status|lower }}">
                             {{ instance.status_display }}
                         </span>
                     </td>
-                    <td class="text-right">
+                    <td data-label="Actions" class="text-right">
                         <a href="{{ base_url }}/instance/{{ instance.id }}" class="btn-secondary btn-sm">Details</a>
                     </td>
                 </tr>
@@ -83,7 +100,10 @@
 
 {% else %}
 <div class="empty-state mt-6">
-    <p>No instances found.</p>
+    <h2>No instances found</h2>
+    <p>Create your first instance to get started.</p>
+    <a href="{{ base_url }}/create/step-1" class="btn btn-primary">Create Instance</a>
 </div>
 {% endif %}
+</div>
 {% endblock %}

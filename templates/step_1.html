@@ -3,6 +3,7 @@
 {% block title %}Create · Step 1{% endblock %}
 
 {% block content %}
+<div class="container">
 <header class="page-header">
     <h1>Provision New Instance</h1>
     <p>Step 1 of 7 · Select region, instance class, and plan type</p>
@@ -15,7 +16,12 @@
             <label for="region" class="sr-only">Deployment region</label>
             <select id="region" name="region" required>
                 {% for region in regions %}
-                <option value="{{ region.id }}" {% if form_data.region == region.id %}selected{% endif %}>{{ region.name }}</option>
+                <option value="{{ region.id }}" {% if form_data.region == region.id %}selected{% endif %}>
+                    {{ region.name }}
+                    {% if region.abbr.is_some() %}({{ region.abbr.as_ref().unwrap() }}){% endif %}
+                    {% if region.is_premium.unwrap_or(false) %}⭐{% endif %}
+                    {% if region.is_out_of_stock.unwrap_or(false) %}[Out of Stock]{% endif %}
+                </option>
                 {% endfor %}
             </select>
             <small>Only active regions are listed.</small>
@@ -47,8 +53,9 @@
         <small>Products provide curated CPU, RAM, and disk footprints. Custom plans let you define exact limits.</small>
     </fieldset>
 
-    <footer>
+    <footer class="button-group">
         <button type="submit">Continue</button>
     </footer>
 </form>
+</div>
 {% endblock %}
