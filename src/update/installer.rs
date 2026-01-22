@@ -45,7 +45,7 @@ pub fn create_backup(current_path: &Path) -> Result<PathBuf, UpdateError> {
     // On Unix, preserve executable permissions
     #[cfg(unix)]
     {
-        // PermissionsExt trait is used but not detected by compiler in cfg blocks
+        // PermissionsExt trait usage not detected by compiler within cfg conditional compilation blocks
         #[allow(unused_imports)]
         use std::os::unix::fs::PermissionsExt;
         
