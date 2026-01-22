@@ -542,6 +542,7 @@ pub async fn instance_change_os_get(
                     arch: os_obj.get("arch").and_then(|v| v.as_str()).map(|s| s.to_string()),
                     min_ram: os_obj.get("minRam").and_then(|v| v.as_str()).map(|s| s.to_string()),
                     is_default: os_obj.get("isDefault").and_then(|v| v.as_bool()).unwrap_or(false),
+                    is_active: os_obj.get("isActive").and_then(|v| v.as_bool()).unwrap_or(true),
                 });
             }
         }
