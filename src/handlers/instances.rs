@@ -523,8 +523,17 @@ pub async fn instance_change_os_get(
         status_display: "".into(), 
         vcpu_count_display: "—".into(), 
         ram_display: "—".into(), 
-        disk_display: "—".into(), 
-        os: None 
+        disk_display: "—".into(),
+        vcpu_count: None,
+        ram: None,
+        disk: None,
+        os: None,
+        product_id: None,
+        network_status: None,
+        extra_resource: None,
+        class: None,
+        is_ddos_protected: None,
+        inserted_at: None,
     };
     if let Some(obj) = payload.as_object() {
         if let Some(data) = obj.get("data").and_then(|d| d.as_object()) {
@@ -542,6 +551,7 @@ pub async fn instance_change_os_get(
                     arch: os_obj.get("arch").and_then(|v| v.as_str()).map(|s| s.to_string()),
                     min_ram: os_obj.get("minRam").and_then(|v| v.as_str()).map(|s| s.to_string()),
                     is_default: os_obj.get("isDefault").and_then(|v| v.as_bool()).unwrap_or(false),
+                    is_active: os_obj.get("isActive").and_then(|v| v.as_bool()),
                 });
             }
         }

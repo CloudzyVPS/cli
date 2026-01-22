@@ -28,32 +28,28 @@ pub async fn load_regions(
                         .and_then(|v| v.as_str())
                         .unwrap_or(&id)
                         .to_string();
-                    let slug = obj
-                        .get("slug")
-                        .and_then(|v| v.as_str())
-                        .unwrap_or("")
-                        .to_string();
-                    let country = obj
-                        .get("country")
-                        .and_then(|v| v.as_str())
-                        .unwrap_or("")
-                        .to_string();
-                    let city = obj
-                        .get("city")
-                        .and_then(|v| v.as_str())
-                        .unwrap_or("")
-                        .to_string();
-                    let latitude = obj.get("latitude").and_then(|v| v.as_f64());
-                    let longitude = obj.get("longitude").and_then(|v| v.as_f64());
 
                     let region = Region {
                         id: id.clone(),
                         name,
-                        slug,
-                        country,
-                        city,
-                        latitude,
-                        longitude,
+                        abbr: obj.get("abbr").and_then(|v| v.as_str()).map(|s| s.to_string()),
+                        image: obj.get("image").and_then(|v| v.as_str()).map(|s| s.to_string()),
+                        is_active: obj.get("isActive").and_then(|v| v.as_bool()),
+                        is_out_of_stock: obj.get("isOutOfStock").and_then(|v| v.as_bool()),
+                        overall_activeness: obj.get("overallActiveness").and_then(|v| v.as_bool()),
+                        ddos_activeness: obj.get("ddosActiveness").and_then(|v| v.as_bool()),
+                        is_premium: obj.get("isPremium").and_then(|v| v.as_bool()),
+                        is_hidden: obj.get("isHidden").and_then(|v| v.as_bool()),
+                        has_offset_price: obj.get("hasOffsetPrice").and_then(|v| v.as_bool()),
+                        max_discount_percent: obj.get("maxDiscountPercent").and_then(|v| v.as_f64()),
+                        position: obj.get("position").and_then(|v| v.as_i64()).map(|n| n as i32),
+                        config: obj.get("config").cloned(),
+                        // Legacy fields
+                        slug: obj.get("slug").and_then(|v| v.as_str()).map(|s| s.to_string()),
+                        country: obj.get("country").and_then(|v| v.as_str()).map(|s| s.to_string()),
+                        city: obj.get("city").and_then(|v| v.as_str()).map(|s| s.to_string()),
+                        latitude: obj.get("latitude").and_then(|v| v.as_f64()),
+                        longitude: obj.get("longitude").and_then(|v| v.as_f64()),
                     };
                     regions.push(region.clone());
                     map.insert(id, region);

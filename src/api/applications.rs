@@ -11,6 +11,14 @@ pub struct Application {
     pub category: Option<String>,
     #[allow(dead_code)]
     pub os_compatibility: Vec<String>,
+    // New OpenAPI-aligned fields
+    pub price: Option<f64>,
+    pub pricing_type: Option<String>,
+    pub is_active: Option<bool>,
+    pub tag: Option<String>,
+    pub is_experimental: Option<bool>,
+    pub os_family: Option<String>,
+    pub os_list: Vec<String>,
 }
 
 /// Load available one-click applications from the API
@@ -35,6 +43,14 @@ pub async fn load_applications(
                             Vec::new()
                         };
                         
+                        let os_list = if let Some(list) = obj.get("osList").and_then(|v| v.as_array()) {
+                            list.iter()
+                                .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                                .collect()
+                        } else {
+                            Vec::new()
+                        };
+                        
                         applications.push(Application {
                             id: obj.get("id").and_then(|v| v.as_str()).unwrap_or("").to_string(),
                             name: obj.get("name").and_then(|v| v.as_str()).unwrap_or("").to_string(),
@@ -42,6 +58,13 @@ pub async fn load_applications(
                             logo_url: obj.get("logoUrl").and_then(|v| v.as_str()).map(|s| s.to_string()),
                             category: obj.get("category").and_then(|v| v.as_str()).map(|s| s.to_string()),
                             os_compatibility: os_compat,
+                            price: obj.get("price").and_then(|v| v.as_f64()),
+                            pricing_type: obj.get("pricingType").and_then(|v| v.as_str()).map(|s| s.to_string()),
+                            is_active: obj.get("isActive").and_then(|v| v.as_bool()),
+                            tag: obj.get("tag").and_then(|v| v.as_str()).map(|s| s.to_string()),
+                            is_experimental: obj.get("isExperimental").and_then(|v| v.as_bool()),
+                            os_family: obj.get("osFamily").and_then(|v| v.as_str()).map(|s| s.to_string()),
+                            os_list,
                         });
                     }
                 }

@@ -79,9 +79,18 @@ pub async fn access_get(State(state): State<AppState>, jar: CookieJar) -> impl I
                     vcpu_count_display: "—".into(),
                     ram_display: "—".into(),
                     disk_display: "—".into(),
+                    vcpu_count: None,
+                    ram: None,
+                    disk: None,
                     main_ip,
                     main_ipv6,
                     os: None,
+                    product_id: None,
+                    network_status: None,
+                    extra_resource: None,
+                    class: None,
+                    is_ddos_protected: None,
+                    inserted_at: None,
                 });
             }
         }

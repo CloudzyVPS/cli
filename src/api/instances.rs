@@ -83,11 +83,36 @@ pub async fn load_instances_for_user(
             let region = obj.get("region").and_then(|v| v.as_str()).unwrap_or("").to_string();
             let status = obj.get("status").and_then(|v| v.as_str()).unwrap_or("").to_string();
             let status_display = crate::utils::format_status(&status);
-            let vcpu_count_display = obj.get("vcpuCount").and_then(|v| v.as_i64()).map(|n| n.to_string()).unwrap_or_else(|| "—".into());
-            let ram_display = obj.get("ram").and_then(|v| v.as_i64()).map(|n| format!("{} MB", n)).unwrap_or_else(|| "—".into());
-            let disk_display = obj.get("disk").and_then(|v| v.as_i64()).map(|n| format!("{} GB", n)).unwrap_or_else(|| "—".into());
+            
+            // Raw numeric fields
+            let vcpu_count = obj.get("vcpuCount").and_then(|v| v.as_i64()).map(|n| n as i32);
+            let ram = obj.get("ram").and_then(|v| v.as_i64()).map(|n| n as i32);
+            let disk = obj.get("disk").and_then(|v| v.as_i64()).map(|n| n as i32);
+            
+            // Display fields
+            let vcpu_count_display = vcpu_count.map(|n| n.to_string()).unwrap_or_else(|| "—".into());
+            let ram_display = ram.map(|n| format!("{} MB", n)).unwrap_or_else(|| "—".into());
+            let disk_display = disk.map(|n| format!("{} GB", n)).unwrap_or_else(|| "—".into());
+            
             let main_ip = obj.get("mainIp").and_then(|v| v.as_str()).map(|s| s.to_string());
             let main_ipv6 = obj.get("mainIpv6").and_then(|v| v.as_str()).map(|s| s.to_string());
+            
+            // New OpenAPI fields
+            let product_id = obj.get("productId").and_then(|v| v.as_str()).map(|s| s.to_string());
+            let network_status = obj.get("networkStatus").and_then(|v| v.as_str()).map(|s| s.to_string());
+            let class = obj.get("class").and_then(|v| v.as_str()).map(|s| s.to_string());
+            let is_ddos_protected = obj.get("isDdosProtected").and_then(|v| v.as_bool());
+            let inserted_at = obj.get("insertedAt").and_then(|v| v.as_str()).map(|s| s.to_string());
+            
+            // Parse extra_resource if present
+            let extra_resource = obj.get("extraResource").and_then(|v| v.as_object()).map(|er| {
+                use crate::models::instance_view::ExtraResource;
+                ExtraResource {
+                    cpu: er.get("cpu").and_then(|v| v.as_i64()).map(|n| n as i32),
+                    ram_in_gb: er.get("ramInGb").and_then(|v| v.as_i64()).map(|n| n as i32),
+                    disk_in_gb: er.get("diskInGb").and_then(|v| v.as_i64()).map(|n| n as i32),
+                }
+            });
             
             let os = if let Some(os_obj) = obj.get("os").and_then(|v| v.as_object()) {
                 Some(OsItem {
@@ -97,6 +122,7 @@ pub async fn load_instances_for_user(
                     arch: os_obj.get("arch").and_then(|v| v.as_str()).map(|s| s.to_string()),
                     min_ram: os_obj.get("minRam").and_then(|v| v.as_str()).map(|s| s.to_string()),
                     is_default: os_obj.get("isDefault").and_then(|v| v.as_bool()).unwrap_or(false),
+                    is_active: os_obj.get("isActive").and_then(|v| v.as_bool()),
                 })
             } else {
                 None
@@ -111,9 +137,18 @@ pub async fn load_instances_for_user(
                 vcpu_count_display,
                 ram_display,
                 disk_display,
+                vcpu_count,
+                ram,
+                disk,
                 main_ip,
                 main_ipv6,
                 os,
+                product_id,
+                network_status,
+                extra_resource,
+                class,
+                is_ddos_protected,
+                inserted_at,
             });
         }
     }

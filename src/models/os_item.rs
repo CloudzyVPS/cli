@@ -8,4 +8,5 @@ pub struct OsItem {
     pub arch: Option<String>,
     pub min_ram: Option<String>,
     pub is_default: bool,
+    pub is_active: Option<bool>,
 }
