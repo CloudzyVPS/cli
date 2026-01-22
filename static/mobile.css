@@ -1,27 +1,6 @@
-/* Mobile phones (300px - 479px) */
+/* Mobile screens (max-width: 767px) */
 
-/* Ensure touch-friendly elements on small screens */
-button,
-a.btn,
-input[type="submit"],
-input[type="button"] {
-  min-height: 48px;
-  font-size: 1rem;
-}
-
-/* Stacked buttons on mobile */
-.button-group {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-}
-
-.button-group button,
-.button-group a.btn {
-  width: 100%;
-}
-
-/* Mobile navigation - fixed top */
+/* Fixed navigation on mobile */
 nav {
   position: fixed;
   top: 0;
@@ -34,47 +13,55 @@ main {
   margin-top: 70px;
 }
 
-/* Mobile-friendly tables - card layout */
-table.table-responsive,
-table.table-responsive thead,
-table.table-responsive tbody,
-table.table-responsive th,
-table.table-responsive td,
-table.table-responsive tr {
+/* Larger touch targets on mobile */
+button,
+a.btn {
+  min-height: 48px;
+  font-size: var(--font-size-lg);
+}
+
+/* Responsive tables - Card layout on mobile */
+table,
+thead,
+tbody,
+th,
+td,
+tr {
   display: block;
 }
 
-table.table-responsive thead tr {
+thead tr {
   position: absolute;
   top: -9999px;
   left: -9999px;
 }
 
-table.table-responsive tr {
-  margin-bottom: var(--space-4);
+tr {
+  margin-bottom: var(--spacing-lg);
   border: 1px solid var(--border-color);
   border-radius: var(--border-radius);
-  padding: var(--space-3);
-  background: var(--canvas-bg);
+  padding: var(--spacing-md);
 }
 
-table.table-responsive td {
+td {
   border: none;
   position: relative;
   padding-left: 50%;
-  padding-top: var(--space-2);
-  padding-bottom: var(--space-2);
+  min-height: 44px;
+  display: flex;
+  align-items: center;
 }
 
-table.table-responsive td:before {
+td:before {
   content: attr(data-label);
   position: absolute;
-  left: var(--space-3);
+  left: var(--spacing-md);
   font-weight: 600;
   color: var(--text-muted);
+  white-space: nowrap;
 }
 
-/* Hide desktop-only elements */
-.hide-mobile {
-  display: none !important;
+/* Stack form elements on mobile */
+.fields-grid {
+  grid-template-columns: 1fr !important;
 }

@@ -1,40 +1,12 @@
-/* Desktop (1024px - 1535px) */
+/* Desktop screens (min-width: 1024px) */
 
-/* Increase grid columns for more screen space */
-.product-grid {
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+/* Full sidebar for desktop */
+body {
+  display: grid;
+  grid-template-columns: 260px 1fr;
 }
 
-div[data-admin-grid] {
-  grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
-}
-
-.grid-lg-2 {
-  grid-template-columns: repeat(2, 1fr);
-}
-
-.grid-lg-3 {
-  grid-template-columns: repeat(3, 1fr);
-}
-
-.grid-lg-4 {
-  grid-template-columns: repeat(4, 1fr);
-}
-
-.grid-lg-6 {
-  grid-template-columns: repeat(6, 1fr);
-}
-
-/* Wider navigation for desktop */
-nav {
-  width: 280px;
-}
-
-main {
-  padding: var(--space-6);
-}
-
-/* Show desktop-only elements */
-.hide-desktop {
-  display: none !important;
+.region-icon {
+  width: 48px;
+  height: 48px;
 }

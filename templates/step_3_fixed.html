@@ -3,6 +3,7 @@
 {% block title %}Create · Step 3{% endblock %}
 
 {% block content %}
+<div class="container">
 <header class="page-header">
     <p class="breadcrumb"><a href="{{ back_url }}">← Previous step</a></p>
     <h1>Select a product</h1>
@@ -21,7 +22,7 @@
     <input type="hidden" name="ssh_key_ids" value="{{ ssh_key_ids_csv }}">
     <fieldset>
         <legend>Plans for {{ region_name }}</legend>
-        <div class="product-grid" role="list">
+        <div class="product-grid grid-auto-fit" role="list">
             {% for product in products %}
             <label class="product-card" role="listitem" {% if selected_product_id == product.id %}aria-current="true"{% endif %}>
                 <input type="radio" name="product_id" value="{{ product.id }}" {% if selected_product_id == product.id %}checked{% endif %}>
@@ -75,8 +76,10 @@
     </footer>
 </form>
 {% else %}
-<section class="surface">
+<section class="surface empty-state">
+    <h2>No products available</h2>
     <p>No products were returned for the selected region. <a href="{{ restart_url }}">Go back</a> to pick another region.</p>
 </section>
 {% endif %}
+</div>
 {% endblock %}

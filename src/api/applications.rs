@@ -58,12 +58,24 @@ pub async fn load_applications(
                             pricing_type: obj.get("pricingType").and_then(|v| v.as_str()).unwrap_or("").to_string(),
                             is_active: obj.get("isActive").and_then(|v| v.as_bool()).unwrap_or(false),
                             logo_url: obj.get("logoUrl").and_then(|v| v.as_str()).map(|s| s.to_string()),
+<<<<<<< copilot/update-ui-templates-responsive-design-again
+                            category: obj.get("category").and_then(|v| v.as_str()).map(|s| s.to_string()),
+                            os_compatibility: os_compat,
+                            price: obj.get("price").and_then(|v| v.as_f64()),
+                            pricing_type: obj.get("pricingType").and_then(|v| v.as_str()).map(|s| s.to_string()),
+                            is_active: obj.get("isActive").and_then(|v| v.as_bool()),
+                            tag: obj.get("tag").and_then(|v| v.as_str()).map(|s| s.to_string()),
+                            is_experimental: obj.get("isExperimental").and_then(|v| v.as_bool()),
+                            os_family: obj.get("osFamily").and_then(|v| v.as_str()).map(|s| s.to_string()),
+                            os_list,
+=======
                             tag,
                             is_experimental: obj.get("isExperimental").and_then(|v| v.as_bool()).unwrap_or(false),
                             description: obj.get("description").and_then(|v| v.as_str()).map(|s| s.to_string()),
                             os_family: obj.get("osFamily").and_then(|v| v.as_str()).unwrap_or("").to_string(),
                             os_list,
                             category,
+>>>>>>> main
                         });
                     }
                 }

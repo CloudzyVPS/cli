@@ -165,6 +165,21 @@ pub async fn load_instances_for_user(
                 vcpu_count_display,
                 ram_display,
                 disk_display,
+<<<<<<< copilot/update-ui-templates-responsive-design-again
+                vcpu_count,
+                ram,
+                disk,
+                main_ip,
+                main_ipv6,
+                os,
+                product_id,
+                network_status,
+                extra_resource,
+                class,
+                is_ddos_protected,
+                inserted_at,
+=======
+>>>>>>> main
             });
         }
     }
