@@ -1,39 +1,34 @@
 use serde::{Deserialize, Serialize};
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct RegionConfig {
+    pub support_ipv6: bool,
+    pub support_regular_cpu: bool,
+    pub support_high_frequency_cpu: bool,
+    pub support_monitoring: bool,
+    pub support_gpu: bool,
+    pub support_custom_plan: bool,
+    pub ram_threshold_in_gb: i32,
+    pub ip_threshold: i32,
+    pub disk_threshold_in_gb: i32,
+    pub support_ddos_ipv4: Option<bool>,
+    pub ddos_ipv4_threshold: Option<i32>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Region {
     pub id: String,
     pub name: String,
-    // Old fields - kept for backward compatibility
-    #[serde(default)]
-    pub slug: String,
-    #[serde(default)]
-    pub country: String,
-    #[serde(default)]
-    pub city: String,
-    pub latitude: Option<f64>,
-    pub longitude: Option<f64>,
-    // New OpenAPI-aligned fields
-    #[serde(default)]
     pub abbr: String,
-    pub image: Option<String>,
-    #[serde(default = "default_true")]
+    pub image: String,
     pub is_active: bool,
-    #[serde(default)]
     pub is_out_of_stock: bool,
-    pub overall_activeness: Option<bool>,
+    pub overall_activeness: bool,
     pub ddos_activeness: Option<bool>,
-    #[serde(default)]
     pub is_premium: bool,
-    #[serde(default)]
     pub is_hidden: bool,
-    #[serde(default)]
     pub has_offset_price: bool,
-    pub max_discount_percent: Option<f64>,
-    pub position: Option<i32>,
-    pub config: Option<serde_json::Value>,
-}
-
-fn default_true() -> bool {
-    true
+    pub max_discount_percent: Option<i32>,
+    pub position: serde_json::Value, // HashMap<String, i32> in practice
+    pub config: RegionConfig,
 }

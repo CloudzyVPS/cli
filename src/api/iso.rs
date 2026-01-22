@@ -10,7 +10,6 @@ pub struct IsoView {
     pub status: String,
     pub region_id: String,
     pub use_virtio: bool,
-    #[allow(dead_code)]
     pub created_at: Option<i64>,
 }
 
