@@ -513,22 +513,13 @@ pub async fn instance_change_os_get(
     }
     let endpoint = format!("/v1/instances/{}", instance_id);
     let payload = api_call_wrapper(&state, "GET", &endpoint, None, None).await;
-    let mut instance = InstanceView { 
-        id: instance_id.clone(), 
-        hostname: "(no hostname)".into(), 
-        region: "".into(), 
-        main_ip: None, 
-        main_ipv6: None, 
-        status: "".into(), 
-        status_display: "".into(), 
-        vcpu_count_display: "—".into(), 
-        ram_display: "—".into(), 
-        disk_display: "—".into(), 
-        os: None 
-    };
+    let mut instance = InstanceView::new_with_defaults(instance_id.clone());
     if let Some(obj) = payload.as_object() {
         if let Some(data) = obj.get("data").and_then(|d| d.as_object()) {
             instance.hostname = data.get("hostname").and_then(|v| v.as_str()).unwrap_or(&instance.hostname).to_string();
+            instance.vcpu_count = data.get("vcpuCount").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
+            instance.ram = data.get("ram").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
+            instance.disk = data.get("disk").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
             instance.region = data.get("region").and_then(|v| v.as_str()).unwrap_or("").to_string();
             instance.main_ip = data.get("mainIp").and_then(|v| v.as_str()).map(|s| s.to_string());
             instance.main_ipv6 = data.get("mainIpv6").and_then(|v| v.as_str()).map(|s| s.to_string());
