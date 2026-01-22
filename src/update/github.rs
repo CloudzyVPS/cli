@@ -30,10 +30,8 @@ pub struct Release {
     /// Parsed semantic version
     pub version: Version,
     /// Whether this is a pre-release
-    #[allow(dead_code)]
     pub prerelease: bool,
     /// Release assets (binaries, checksums, etc.)
-    #[allow(dead_code)]
     pub assets: Vec<Asset>,
     /// Direct download URL for the release page
     pub download_url: String,

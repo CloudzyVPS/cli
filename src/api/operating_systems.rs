@@ -24,6 +24,7 @@ pub async fn load_os_list(
                             arch: obj.get("arch").and_then(|v| v.as_str()).map(|s| s.to_string()),
                             min_ram: obj.get("minRam").and_then(|v| v.as_str()).map(|s| s.to_string()),
                             is_default: obj.get("isDefault").and_then(|v| v.as_bool()).unwrap_or(false),
+                            is_active: obj.get("isActive").and_then(|v| v.as_bool()).unwrap_or(true),
                         });
                     }
                 }
