@@ -9,12 +9,12 @@ pub struct SnapshotView {
     pub size: Option<i64>,
     pub status: String,
     pub created_at: Option<i64>,
-    #[allow(dead_code)]
+    /// Last restored timestamp from API - preserved for future display enhancements
     pub last_restored_at: Option<i64>,
-    #[allow(dead_code)]
+    /// Flag indicating if the source instance was deleted - preserved for display logic
     pub is_instance_deleted: bool,
     pub instance_id: String,
-    #[allow(dead_code)]
+    /// Region ID from API - preserved for region-aware operations
     pub region_id: Option<String>,
 }
 

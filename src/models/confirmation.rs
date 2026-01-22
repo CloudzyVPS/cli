@@ -40,7 +40,11 @@ impl ConfirmationAction {
         }
     }
 
-    #[allow(dead_code)]
+    /// Convert action to string representation
+    /// 
+    /// Reserved for future serialization needs where we may need to convert
+    /// actions back to their string form for logging or API communication.
+    /// Currently, we use serde's automatic serialization.
     pub fn to_str(&self) -> &'static str {
         match self {
             Self::DeleteUser => "delete-user",

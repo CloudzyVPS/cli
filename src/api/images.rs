@@ -10,9 +10,9 @@ pub struct ImageView {
     pub status: String,
     pub region_id: String,
     pub format: Option<String>,
-    #[allow(dead_code)]
+    /// Decompress option from API - used when downloading images
     pub decompress: Option<String>,
-    #[allow(dead_code)]
+    /// Created timestamp from API - preserved for future sorting/filtering
     pub created_at: Option<i64>,
 }
 

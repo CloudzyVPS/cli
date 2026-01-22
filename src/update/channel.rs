@@ -43,6 +43,9 @@ impl Channel {
     
     /// Check if this channel should include pre-release versions
     /// 
+    /// Reserved for future filtering enhancements where we may want to
+    /// explicitly filter GitHub releases by pre-release status.
+    /// 
     /// # Examples
     /// 
     /// ```
@@ -53,7 +56,6 @@ impl Channel {
     /// assert_eq!(Channel::Beta.should_include_prerelease(), true);
     /// assert_eq!(Channel::ReleaseCandidate.should_include_prerelease(), true);
     /// ```
-    #[allow(dead_code)]
     pub fn should_include_prerelease(&self) -> bool {
         !matches!(self, Channel::Stable)
     }

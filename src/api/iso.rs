@@ -10,7 +10,7 @@ pub struct IsoView {
     pub status: String,
     pub region_id: String,
     pub use_virtio: bool,
-    #[allow(dead_code)]
+    /// Created timestamp from API - preserved for future sorting/filtering
     pub created_at: Option<i64>,
 }
 

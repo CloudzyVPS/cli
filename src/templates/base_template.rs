@@ -3,9 +3,19 @@ use crate::models::CurrentUser;
 /// Base template trait providing common properties for all templates.
 /// This eliminates redundant field definitions across templates.
 /// 
-/// Note: This trait is implemented by the `impl_base_template!` macro for all template structs.
-/// The macro provides automatic implementations for standard template fields.
-#[allow(dead_code)] // Used by impl_base_template! macro, but compiler doesn't detect it
+/// # Macro Usage
+/// 
+/// This trait is implemented automatically by the `impl_base_template!` macro for all template structs.
+/// The compiler does not detect this macro-based usage, which is why this trait definition exists.
+/// 
+/// The macro provides automatic implementations for standard template fields:
+/// - current_user: Current authenticated user information
+/// - api_hostname: Hostname extracted from API base URL
+/// - base_url: Public base URL for the application
+/// - flash_messages: List of flash messages to display
+/// - has_flash_messages: Boolean indicating if flash messages exist
+/// 
+/// Without this trait, each template would need to duplicate these common field definitions.
 pub trait BaseTemplate {
     fn current_user(&self) -> &Option<CurrentUser>;
     fn api_hostname(&self) -> &str;

@@ -22,7 +22,6 @@ pub enum UpdateError {
     NoReleaseFound(Channel),
     
     /// No asset found for the current platform
-    #[allow(dead_code)]
     #[error("No asset found for platform: {0}")]
     NoAssetFound(String),
     
@@ -31,7 +30,6 @@ pub enum UpdateError {
     InvalidVersion(String),
     
     /// Platform is not supported for updates
-    #[allow(dead_code)]
     #[error("Platform not supported: {0}")]
     UnsupportedPlatform(String),
     
@@ -68,9 +66,8 @@ pub enum UpdateError {
     #[error("Rollback failed: {0}")]
     RollbackFailed(String),
     
-    /// Permission denied during update
+    /// Permission denied during update - reserved for future permission handling
     #[error("Permission denied: {0}")]
-    #[allow(dead_code)]
     PermissionDenied(String),
     
     /// I/O error during update

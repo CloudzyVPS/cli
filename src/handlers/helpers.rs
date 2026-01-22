@@ -103,7 +103,10 @@ pub fn ensure_owner(state: &AppState, jar: &CookieJar) -> Option<Redirect> {
     Some(Redirect::to("/"))
 }
 
-#[allow(dead_code)]
+/// Ensure user is logged in
+/// 
+/// Reserved for future route guards that require authentication but not specific roles.
+/// Currently, most routes use role-specific guards (ensure_owner, ensure_admin_or_owner).
 pub fn ensure_logged_in(state: &AppState, jar: &CookieJar) -> Option<Redirect> {
     if current_username_from_jar(state, jar).is_none() {
         return Some(Redirect::to("/login"));
@@ -242,7 +245,10 @@ pub async fn load_products_wrapper(state: &AppState, region_id: &str) -> Vec<Pro
     load_products(&state.client, &state.api_base_url, &state.api_token, region_id).await
 }
 
-#[allow(dead_code)]
+/// Load all instances for a user (non-paginated)
+/// 
+/// Reserved for future use cases where we need to load all instances at once
+/// without pagination. Currently, paginated version is preferred for better performance.
 pub async fn load_instances_for_user_wrapper(state: &AppState, username: &str) -> Vec<InstanceView> {
     let users_map = state.users.lock().unwrap().clone();
     let result = load_instances_for_user(&state.client, &state.api_base_url, &state.api_token, &users_map, username, 0, 0).await;

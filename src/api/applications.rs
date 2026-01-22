@@ -6,10 +6,10 @@ pub struct Application {
     pub id: String,
     pub name: String,
     pub description: Option<String>,
-    #[allow(dead_code)]
+    /// Logo URL from API - preserved for future UI enhancements
     pub logo_url: Option<String>,
     pub category: Option<String>,
-    #[allow(dead_code)]
+    /// OS compatibility list from API - preserved for filtering features
     pub os_compatibility: Vec<String>,
 }
 

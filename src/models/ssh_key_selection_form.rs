@@ -1,6 +1,10 @@
 use serde::Deserialize;
 
-#[allow(dead_code)]
+/// Form data for Step 7 (SSH key selection) in the instance creation wizard
+/// 
+/// This struct is used to deserialize form data when users navigate through
+/// the multi-step instance creation process. All fields are preserved to
+/// maintain state between wizard steps.
 #[derive(Deserialize)]
 pub struct SshKeySelectionFormStep7 {
     pub product_id: Option<String>,
