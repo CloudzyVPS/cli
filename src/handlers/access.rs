@@ -69,28 +69,44 @@ pub async fn access_get(State(state): State<AppState>, jar: CookieJar) -> impl I
                     .to_string();
                 let main_ip = obj.get("mainIp").and_then(|v| v.as_str()).map(|s| s.to_string());
                 let main_ipv6 = obj.get("mainIpv6").and_then(|v| v.as_str()).map(|s| s.to_string());
+                let vcpu_count = obj.get("vcpuCount").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
+                let ram = obj.get("ram").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
+                let disk = obj.get("disk").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
+                let vcpu_count_display = if vcpu_count > 0 { vcpu_count.to_string() } else { "—".into() };
+                let ram_display = if ram > 0 { format!("{} MB", ram) } else { "—".into() };
+                let disk_display = if disk > 0 { format!("{} GB", disk) } else { "—".into() };
                 
                 list.push(InstanceView { 
                     id, 
                     hostname, 
+                    vcpu_count,
+                    ram,
+                    disk,
+                    inserted_at: None,
+                    os_id: None,
+                    iso_id: None,
+                    from_image: None,
+                    os: None,
                     region,
+                    user_id: None,
+                    app_id: None,
                     status,
-                    status_display,
-                    vcpu_count_display: "—".into(),
-                    ram_display: "—".into(),
-                    disk_display: "—".into(),
-                    vcpu_count: None,
-                    ram: None,
-                    disk: None,
                     main_ip,
                     main_ipv6,
-                    os: None,
                     product_id: None,
                     network_status: None,
+                    discount_percent: None,
+                    attach_iso: None,
                     extra_resource: None,
-                    class: None,
+                    class: "".into(),
+                    oca_data: None,
                     is_ddos_protected: None,
-                    inserted_at: None,
+                    customer_note: None,
+                    admin_note: None,
+                    status_display,
+                    vcpu_count_display,
+                    ram_display,
+                    disk_display,
                 });
             }
         }

@@ -1,33 +1,34 @@
 use serde::{Deserialize, Serialize};
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct RegionConfig {
+    pub support_ipv6: bool,
+    pub support_regular_cpu: bool,
+    pub support_high_frequency_cpu: bool,
+    pub support_monitoring: bool,
+    pub support_gpu: bool,
+    pub support_custom_plan: bool,
+    pub ram_threshold_in_gb: i32,
+    pub ip_threshold: i32,
+    pub disk_threshold_in_gb: i32,
+    pub support_ddos_ipv4: Option<bool>,
+    pub ddos_ipv4_threshold: Option<i32>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Region {
     pub id: String,
     pub name: String,
-    // New OpenAPI-aligned fields
-    pub abbr: Option<String>,
-    pub image: Option<String>,
-    pub is_active: Option<bool>,
-    pub is_out_of_stock: Option<bool>,
-    pub overall_activeness: Option<bool>,
+    pub abbr: String,
+    pub image: String,
+    pub is_active: bool,
+    pub is_out_of_stock: bool,
+    pub overall_activeness: bool,
     pub ddos_activeness: Option<bool>,
-    pub is_premium: Option<bool>,
-    pub is_hidden: Option<bool>,
-    pub has_offset_price: Option<bool>,
-    pub max_discount_percent: Option<f64>,
-    pub position: Option<i32>,
-    // config could be a generic JSON value
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub config: Option<serde_json::Value>,
-    // Legacy fields (kept for backward compatibility)
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub slug: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub country: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub city: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub latitude: Option<f64>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub longitude: Option<f64>,
+    pub is_premium: bool,
+    pub is_hidden: bool,
+    pub has_offset_price: bool,
+    pub max_discount_percent: Option<i32>,
+    pub position: serde_json::Value, // HashMap<String, i32> in practice
+    pub config: RegionConfig,
 }

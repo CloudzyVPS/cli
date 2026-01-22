@@ -69,7 +69,11 @@ pub async fn create_step_1(
         return r.into_response();
     }
     let base = parse_wizard_base(&q);
-    let (regions, _lookup) = load_regions_wrapper(&state).await;
+    let (all_regions, _lookup) = load_regions_wrapper(&state).await;
+    // Filter to only show active, non-hidden regions
+    let regions: Vec<Region> = all_regions.into_iter()
+        .filter(|r| r.is_active && !r.is_hidden)
+        .collect();
     let mut region_sel = base.region.clone();
     if region_sel.is_empty() && !regions.is_empty() {
         region_sel = regions[0].id.clone();
