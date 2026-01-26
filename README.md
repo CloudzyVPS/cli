@@ -169,6 +169,16 @@ cargo build --release
 cargo run -- serve --host 127.0.0.1 --port 5000
 ```
 
+### Testing
+
+Run the full suite of tests (unit, integration, and doctests) with:
+
+```bash
+cargo test
+```
+
+Currently the doctest `update::checksum::parse_checksums` asserts that a sample checksum string is present and still fails (left `None`, expected `Some("abc123def456")`). Until that docstring example is aligned with the expectation, `cargo test` will exit with an error even though all other tests pass.
+
 ## 📋 Requirements
 
 - **Linux**: glibc 2.31+ (Ubuntu 20.04+, Debian 11+, or equivalent)

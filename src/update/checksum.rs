@@ -23,9 +23,9 @@ use std::path::Path;
 /// ```
 /// use zy::update::checksum::parse_checksums;
 ///
-/// let content = "abc123def456  zy-1.0.0-x86_64-unknown-linux-gnu\n";
+/// let content = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  zy-1.0.0-x86_64-unknown-linux-gnu\n";
 /// let checksums = parse_checksums(content).unwrap();
-/// assert_eq!(checksums.get("zy-1.0.0-x86_64-unknown-linux-gnu"), Some(&"abc123def456".to_string()));
+/// assert_eq!(checksums.get("zy-1.0.0-x86_64-unknown-linux-gnu"), Some(&"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855".to_string()));
 /// ```
 pub fn parse_checksums(content: &str) -> Result<HashMap<String, String>, UpdateError> {
     let mut checksums = HashMap::new();
