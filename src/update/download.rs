@@ -143,21 +143,25 @@ pub async fn download_checksums(checksums_url: &str) -> Result<String, UpdateErr
 mod tests {
     use super::*;
     
+    use tokio::time::{timeout, Duration};
+
     #[tokio::test]
     async fn test_download_checksums_file() {
         // This test requires network access and a real release
         // In production, you might want to mock this
         let url = "https://github.com/CloudzyVPS/cli/releases/download/v1.0.2/SHA256SUMS.txt";
         
-        match download_checksums(url).await {
-            Ok(content) => {
+        match timeout(Duration::from_secs(10), download_checksums(url)).await {
+            Ok(Ok(content)) => {
                 assert!(!content.is_empty());
-                // Should contain SHA256 hashes (64 hex chars)
                 assert!(content.contains("zy-"));
             }
-            Err(e) => {
+            Ok(Err(e)) => {
                 // Network errors are acceptable in tests
                 eprintln!("Test download failed (network issue?): {}", e);
+            }
+            Err(_) => {
+                eprintln!("Test timed out after 10 seconds. Consider rerunning once network is available.");
             }
         }
     }
