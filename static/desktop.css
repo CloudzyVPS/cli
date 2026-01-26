@@ -1,7 +1,7 @@
 /* Desktop screens (min-width: 1024px) */
 
 /* Full sidebar for desktop */
-body {
+body.app-shell {
   display: grid;
   grid-template-columns: 260px 1fr;
 }
@@ -9,4 +9,8 @@ body {
 .region-icon {
   width: 48px;
   height: 48px;
+}
+
+main.auth-page .auth-card {
+  width: min(480px, 100%);
 }

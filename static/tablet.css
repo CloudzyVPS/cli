@@ -138,3 +138,7 @@ main {
   min-width: 0; /* Prevent overflow issues */
   padding: var(--space-5);
 }
+
+main.auth-page {
+  padding: var(--space-8) var(--space-6);
+}

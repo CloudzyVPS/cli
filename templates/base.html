@@ -13,10 +13,10 @@
     <link rel="stylesheet" href="/static/4k.css" media="(min-width: 2560px)">
     <link rel="stylesheet" href="/static/ultra-wide.css" media="(min-width: 3840px)">
 </head>
-<body>
+<body class="{% if current_user.is_some() %}app-shell{% endif %}">
+    <input type="checkbox" id="nav-toggle" class="nav-toggle">
     {% if current_user.is_some() %}
     <nav>
-        <input type="checkbox" id="nav-toggle" class="nav-toggle">
         <header>
             <div>
                 <label for="nav-toggle" class="nav-toggle-label">

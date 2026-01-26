@@ -65,3 +65,8 @@ td:before {
 .fields-grid {
   grid-template-columns: 1fr !important;
 }
+
+#nav-toggle:checked ~ main {
+  overflow: hidden;
+  height: 100vh;
+}

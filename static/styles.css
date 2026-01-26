@@ -2824,3 +2824,35 @@ select {
     max-width: 3200px;
   }
 }
+
+main.auth-page {
+  flex: 1;
+  min-height: 100vh;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-6) var(--space-4);
+}
+
+main.auth-page .auth-card {
+  width: min(420px, 100%);
+  background: var(--white);
+  padding: var(--space-5);
+  border-radius: var(--border-radius);
+  box-shadow: var(--shadow-card);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  margin: 0 auto;
+}
+
+main.auth-page .auth-card h1 {
+  margin: 0;
+}
+
+main.auth-page .auth-card form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
