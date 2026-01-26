@@ -18,9 +18,9 @@
                 {% for region in regions %}
                 <option value="{{ region.id }}" {% if form_data.region == region.id %}selected{% endif %}>
                     {{ region.name }}
-                    {% if region.abbr.is_some() %}({{ region.abbr.as_ref().unwrap() }}){% endif %}
-                    {% if region.is_premium.unwrap_or(false) %} - Premium{% endif %}
-                    {% if region.is_out_of_stock.unwrap_or(false) %} - Out of Stock{% endif %}
+                    {% if region.abbr != "" %}({{ region.abbr }}){% endif %}
+                    {% if region.is_premium %} - Premium{% endif %}
+                    {% if region.is_out_of_stock %} - Out of Stock{% endif %}
                 </option>
                 {% endfor %}
             </select>

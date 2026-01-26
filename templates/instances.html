@@ -26,14 +26,10 @@
                     <td data-label="ID"><code>{{ instance.id }}</code></td>
                     <td data-label="Specs">
                         <div class="small">
-                            {% if instance.vcpu_count.is_some() %}{{ instance.vcpu_count.unwrap() }} vCPU{% else %}{{ instance.vcpu_count_display }}{% endif %}
-                            · 
-                            {% if instance.ram.is_some() %}{{ instance.ram.unwrap() }} MB{% else %}{{ instance.ram_display }}{% endif %}
-                            · 
-                            {% if instance.disk.is_some() %}{{ instance.disk.unwrap() }} GB{% else %}{{ instance.disk_display }}{% endif %}
+                            {{ instance.vcpu_count_display }} vCPU · {{ instance.ram_display }} · {{ instance.disk_display }}
                         </div>
-                        {% if instance.class.is_some() %}
-                        <div class="small text-muted">Class: {{ instance.class.as_ref().unwrap() }}</div>
+                        {% if !instance.class.is_empty() %}
+                        <div class="small text-muted">Class: {{ instance.class }}</div>
                         {% endif %}
                         {% if instance.is_ddos_protected.unwrap_or(false) %}
                         <span class="badge badge-security">DDoS</span>

@@ -34,7 +34,7 @@
         {% if os_list.len() > 0 %}
         <div class="product-grid grid-auto-fit" role="list">
             {% for os_item in os_list %}
-            {% if os_item.is_active.unwrap_or(true) %}
+            {% if os_item.is_active %}
             <label class="product-card" role="listitem" {% if selected_os_id == os_item.id %}aria-current="true"{% endif %}>
                 <input type="radio" name="os_id" value="{{ os_item.id }}" {% if selected_os_id == os_item.id %}checked{% endif %} required>
                 <div class="product-card-body">
@@ -87,15 +87,15 @@
                 </div>
             </label>
             {% for app in applications %}
-            {% if app.is_active.unwrap_or(true) %}
+            {% if app.is_active %}
             <label class="product-card" role="listitem" {% if selected_app_id == app.id %}aria-current="true"{% endif %}>
                 <input type="radio" name="app_id" value="{{ app.id }}" {% if selected_app_id == app.id %}checked{% endif %}>
                 <div class="product-card-body">
                     <h2>{{ app.name }}</h2>
-                    {% if app.tag.is_some() %}
-                    <span class="badge">{{ app.tag.as_ref().unwrap() }}</span>
+                    {% if !app.tag.is_empty() %}
+                    <span class="badge">{{ app.tag }}</span>
                     {% endif %}
-                    {% if app.is_experimental.unwrap_or(false) %}
+                    {% if app.is_experimental %}
                     <span class="badge badge-warning">Experimental</span>
                     {% endif %}
                     {% if app.description.is_some() %}
@@ -108,16 +108,14 @@
                             <dd>{{ app.category.as_ref().unwrap() }}</dd>
                         </div>
                         {% endif %}
-                        {% if app.price.is_some() %}
                         <div>
                             <dt>Price</dt>
-                            <dd>${{ app.price.unwrap() }}{% if app.pricing_type.is_some() %} {{ app.pricing_type.as_ref().unwrap() }}{% endif %}</dd>
+                            <dd>${{ app.price }}{% if app.pricing_type != "" %} {{ app.pricing_type }}{% endif %}</dd>
                         </div>
-                        {% endif %}
-                        {% if app.os_family.is_some() %}
+                        {% if !app.os_family.is_empty() %}
                         <div>
                             <dt>OS Family</dt>
-                            <dd>{{ app.os_family.as_ref().unwrap() }}</dd>
+                            <dd>{{ app.os_family }}</dd>
                         </div>
                         {% endif %}
                     </dl>
