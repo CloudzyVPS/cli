@@ -104,36 +104,26 @@ pub async fn load_products(
                     }
 
                     // Build display fields for templates
-                    let name = id.clone();
-                    let display_name = name.clone();
                     let description = "".to_string(); // Not in OpenAPI schema
                     let tags = "".to_string(); // Not in OpenAPI schema
-
+                    
                     let mut spec_entries = Vec::new();
-                    let mut cpu = None;
-                    let mut ram = None;
-                    let mut storage = None;
-                    let mut bandwidth = None;
 
                     let spec = &plan.specification;
                     if spec.cpu > 0.0 {
                         let val = spec.cpu.to_string();
-                        cpu = Some(format!("{} vCPU", val));
                         spec_entries.push(ProductEntry { term: "CPU".into(), value: format!("{} vCPU", val) });
                     }
                     if spec.ram > 0.0 {
                         let val = spec.ram.to_string();
-                        ram = Some(format!("{} GB", val));
                         spec_entries.push(ProductEntry { term: "RAM".into(), value: format!("{} GB", val) });
                     }
                     if spec.storage > 0.0 {
                         let val = spec.storage.to_string();
-                        storage = Some(format!("{} GB", val));
                         spec_entries.push(ProductEntry { term: "Storage".into(), value: format!("{} GB", val) });
                     }
                     if spec.bandwidth_in_tb > 0.0 {
                         let val = spec.bandwidth_in_tb.to_string();
-                        bandwidth = Some(format!("{} TB", val));
                         spec_entries.push(ProductEntry { term: "Bandwidth".into(), value: format!("{} TB", val) });
                     }
 
@@ -161,16 +151,10 @@ pub async fn load_products(
                         overall_activeness,
                         ddos_activeness,
                         price_items,
-                        name,
-                        display_name,
                         description,
                         tags,
                         spec_entries,
                         price_entries,
-                        cpu,
-                        ram,
-                        storage,
-                        bandwidth,
                     });
                 }
             }

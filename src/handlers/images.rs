@@ -67,9 +67,6 @@ pub async fn images_list_get(
             flash_messages,
             has_flash_messages,
             images: &paginated.images,
-            current_page: paginated.current_page,
-            total_pages: paginated.total_pages,
-            per_page: paginated.per_page,
             total_count: paginated.total_count,
         },
     )

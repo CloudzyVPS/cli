@@ -10,7 +10,6 @@ pub struct FloatingIpView {
     pub instance_id: Option<String>,
     pub auto_renew: bool,
     pub customer_note: Option<String>,
-    pub created_at: Option<i64>,
 }
 
 /// Paginated result structure for floating IPs
@@ -55,7 +54,6 @@ pub async fn load_floating_ips(
                             instance_id: obj.get("instanceId").and_then(|v| v.as_str()).map(|s| s.to_string()),
                             auto_renew: obj.get("autoRenew").and_then(|v| v.as_bool()).unwrap_or(false),
                             customer_note: obj.get("customerNote").and_then(|v| v.as_str()).map(|s| s.to_string()),
-                            created_at: obj.get("createdAt").and_then(|v| v.as_i64()),
                         });
                     }
                 }

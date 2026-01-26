@@ -66,10 +66,6 @@ pub enum UpdateError {
     #[error("Rollback failed: {0}")]
     RollbackFailed(String),
     
-    /// Permission denied during update
-    #[error("Permission denied: {0}")]
-    PermissionDenied(String),
-    
     /// I/O error during update
     #[error("I/O error: {0}")]
     IoError(#[from] std::io::Error),

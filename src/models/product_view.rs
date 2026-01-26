@@ -51,10 +51,6 @@ pub struct ProductView {
     
     // Display/helper fields (not from API, used by templates)
     #[serde(skip)]
-    pub name: String,
-    #[serde(skip)]
-    pub display_name: String,
-    #[serde(skip)]
     pub description: String,
     #[serde(skip)]
     pub tags: String,
@@ -62,12 +58,4 @@ pub struct ProductView {
     pub spec_entries: Vec<ProductEntry>,
     #[serde(skip)]
     pub price_entries: Vec<ProductEntry>,
-    #[serde(skip)]
-    pub cpu: Option<String>,
-    #[serde(skip)]
-    pub ram: Option<String>,
-    #[serde(skip)]
-    pub storage: Option<String>,
-    #[serde(skip)]
-    pub bandwidth: Option<String>,
 }

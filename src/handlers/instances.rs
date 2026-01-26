@@ -113,7 +113,7 @@ pub async fn instance_detail(
                     products
                         .into_iter()
                         .find(|p| p.id == pid)
-                        .map(|p| p.name)
+                        .map(|p| p.id.clone())
                         .unwrap_or(pid.clone())
                 } else {
                     pid.clone()

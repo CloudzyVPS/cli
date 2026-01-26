@@ -28,6 +28,6 @@ pub use floating_ips::{
     load_floating_ips, create_floating_ips, update_floating_ip, release_floating_ip,
     FloatingIpView,
 };
-pub use iso::{load_isos, download_iso, get_iso, delete_iso, IsoView};
-pub use images::{load_images, download_image, get_image, delete_image, ImageView};
-pub use backups::{load_backups, get_backup_profile, create_backup_profile, update_backup_profile, delete_backup_profile, BackupProfileView};
+pub use iso::{load_isos, download_iso, IsoView};
+pub use images::{load_images, download_image, ImageView};
+pub use backups::{load_backups, create_backup_profile, BackupProfileView};

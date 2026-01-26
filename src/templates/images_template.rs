@@ -11,9 +11,6 @@ pub struct ImagesTemplate<'a> {
     pub flash_messages: Vec<String>,
     pub has_flash_messages: bool,
     pub images: &'a [ImageView],
-    pub current_page: usize,
-    pub total_pages: usize,
-    pub per_page: usize,
     pub total_count: usize,
 }
 
