@@ -127,6 +127,13 @@ jobs:
 
       # Build the binary using cargo or cross
       - name: Build release binary
+        run: |
+          if [ "${{ matrix.use_cross }}" = "true" ]; then
+            cross build --release --target ${{ matrix.target }}
+          else
+            cargo build --release --target ${{ matrix.target }}
+          fi
+        shell: bash
 
       # Prepare binary for upload (handle Windows .exe extension)
       - name: Prepare binary
