@@ -7,7 +7,7 @@ use serde::Deserialize;
 
 use crate::models::AppState;
 use crate::handlers::helpers::{
-    build_template_globals, render_template, TemplateGlobals, ensure_owner,
+    build_template_globals, render_template, TemplateGlobals, ensure_owner, load_active_regions,
 };
 use crate::api::{load_floating_ips, create_floating_ips, update_floating_ip, release_floating_ip};
 
@@ -56,6 +56,7 @@ pub async fn floating_ips_list_get(
         q.per_page,
     )
     .await;
+    let regions = load_active_regions(&state).await;
     
     let TemplateGlobals { current_user, api_hostname, base_url, flash_messages, has_flash_messages } = 
         build_template_globals(&state, &jar);
@@ -74,6 +75,7 @@ pub async fn floating_ips_list_get(
             total_pages: paginated.total_pages,
             per_page: paginated.per_page,
             total_count: paginated.total_count,
+            regions: &regions,
         },
     )
 }

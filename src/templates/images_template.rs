@@ -1,5 +1,5 @@
 use askama::Template;
-use crate::models::CurrentUser;
+use crate::models::{CurrentUser, Region};
 use crate::api::ImageView;
 
 #[derive(Template)]
@@ -11,6 +11,7 @@ pub struct ImagesTemplate<'a> {
     pub flash_messages: Vec<String>,
     pub has_flash_messages: bool,
     pub images: &'a [ImageView],
+    pub regions: &'a [Region],
     pub total_count: usize,
 }
 

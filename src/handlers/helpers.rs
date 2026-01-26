@@ -103,6 +103,14 @@ pub fn ensure_owner(state: &AppState, jar: &CookieJar) -> Option<Redirect> {
     Some(Redirect::to("/"))
 }
 
+pub async fn load_active_regions(state: &AppState) -> Vec<Region> {
+    let (regions, _) = load_regions(&state.client, &state.api_base_url, &state.api_token).await;
+    regions
+        .into_iter()
+        .filter(|region| region.is_active && !region.is_hidden)
+        .collect()
+}
+
 #[allow(dead_code)]
 pub fn ensure_logged_in(state: &AppState, jar: &CookieJar) -> Option<Redirect> {
     if current_username_from_jar(state, jar).is_none() {

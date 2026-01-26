@@ -1,5 +1,5 @@
 use askama::Template;
-use crate::models::CurrentUser;
+use crate::models::{CurrentUser, Region};
 use crate::api::IsoView;
 
 #[derive(Template)]
@@ -11,6 +11,7 @@ pub struct IsosTemplate<'a> {
     pub flash_messages: Vec<String>,
     pub has_flash_messages: bool,
     pub isos: &'a [IsoView],
+    pub regions: &'a [Region],
     pub total_count: usize,
 }
 

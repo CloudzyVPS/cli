@@ -49,8 +49,13 @@
                 <input type="url" id="url" name="url" required>
             </div>
             <div>
-                <label for="region_id">Region ID *</label>
-                <input type="text" id="region_id" name="region_id" required>
+                <label for="region_id">Region *</label>
+                <select id="region_id" name="region_id" required>
+                    <option value="" disabled selected>Select a region</option>
+                    {% for region in regions %}
+                    <option value="{{ region.id }}">{{ region.name }}{% if region.abbr != "" %} ({{ region.abbr }}){% endif %}</option>
+                    {% endfor %}
+                </select>
             </div>
             <div>
                 <label for="format">Format</label>

@@ -7,7 +7,7 @@ use serde::Deserialize;
 
 use crate::models::AppState;
 use crate::handlers::helpers::{
-    build_template_globals, render_template, TemplateGlobals, ensure_owner,
+    build_template_globals, render_template, TemplateGlobals, ensure_owner, load_active_regions,
 };
 use crate::api::{load_images, download_image};
 
@@ -53,6 +53,7 @@ pub async fn images_list_get(
         q.per_page,
     )
     .await;
+    let regions = load_active_regions(&state).await;
     
     let TemplateGlobals { current_user, api_hostname, base_url, flash_messages, has_flash_messages } = 
         build_template_globals(&state, &jar);
@@ -67,6 +68,7 @@ pub async fn images_list_get(
             flash_messages,
             has_flash_messages,
             images: &paginated.images,
+            regions: &regions,
             total_count: paginated.total_count,
         },
     )

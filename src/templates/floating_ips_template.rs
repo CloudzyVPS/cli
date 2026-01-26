@@ -1,5 +1,5 @@
 use askama::Template;
-use crate::models::CurrentUser;
+use crate::models::{CurrentUser, Region};
 use crate::api::FloatingIpView;
 
 #[derive(Template)]
@@ -15,6 +15,7 @@ pub struct FloatingIpsTemplate<'a> {
     pub total_pages: usize,
     pub per_page: usize,
     pub total_count: usize,
+    pub regions: &'a [Region],
 }
 
 crate::impl_base_template!(FloatingIpsTemplate<'_>);
