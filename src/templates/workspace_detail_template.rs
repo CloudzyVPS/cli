@@ -1,5 +1,5 @@
 use askama::Template;
-use crate::models::{CurrentUser, WorkspaceRecord};
+use crate::models::{CurrentUser, WorkspaceRecord, InstanceView};
 
 #[derive(Template)]
 #[template(path = "workspace_detail.html")]
@@ -11,6 +11,8 @@ pub struct WorkspaceDetailTemplate<'a> {
     pub has_flash_messages: bool,
     pub workspace: &'a WorkspaceRecord,
     pub all_users: &'a [String],
+    /// All instances available to the owner (for the assignment checkbox list).
+    pub all_instances: &'a [InstanceView],
 }
 
 crate::impl_base_template!(WorkspaceDetailTemplate<'_>);

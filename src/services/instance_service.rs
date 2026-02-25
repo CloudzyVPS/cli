@@ -44,11 +44,21 @@ pub async fn check_instance_block(state: &AppState, instance_id: &str, hostname:
 pub async fn enforce_instance_access(state: &AppState, username: Option<&str>, instance_id: &str) -> bool {
     if let Some(username) = username {
         let users = state.users.lock().unwrap();
+        let workspaces = state.workspaces.lock().unwrap();
         if let Some(rec) = users.get(username) {
             if rec.role == "owner" {
                 return true;
             }
-            return rec.assigned_instances.iter().any(|id| id == instance_id);
+            // Check direct assignment
+            if rec.assigned_instances.iter().any(|id| id == instance_id) {
+                return true;
+            }
+            // Check workspace membership — if any workspace the user belongs to
+            // has this instance assigned, allow access.
+            return workspaces.values().any(|ws| {
+                ws.assigned_instances.iter().any(|id| id == instance_id)
+                    && ws.members.iter().any(|m| m.username == username)
+            });
         }
     }
     false

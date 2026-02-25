@@ -1,5 +1,5 @@
 use axum::{
-    extract::{Form, Path, State},
+    extract::{Form, Path, State, Query},
     response::{IntoResponse, Redirect},
 };
 use axum_extra::extract::cookie::CookieJar;
@@ -7,26 +7,36 @@ use serde::Deserialize;
 
 use crate::models::{AppState, WorkspaceMember, WorkspaceRecord, WorkspaceRole};
 use crate::services::{persist_workspaces_file, slugify, now_iso8601};
-use crate::templates::{WorkspacesTemplate, WorkspaceDetailTemplate};
+use crate::templates::{WorkspacesTemplate, WorkspaceDetailTemplate, WorkspaceInstancesTemplate};
 
 use super::helpers::{
-    build_template_globals, ensure_admin_or_owner, ensure_owner, plain_html,
+    build_template_globals, ensure_owner, plain_html,
     render_template, TemplateGlobals, current_username_from_jar,
+    load_instances_for_user_paginated,
 };
 
 // ── List ─────────────────────────────────────────────────────────────────────
 
-/// GET /workspaces — list all workspaces (admin + owner).
+/// GET /workspaces — list all workspaces the current user belongs to (or all if owner).
 pub async fn workspaces_list(
     State(state): State<AppState>,
     jar: CookieJar,
 ) -> impl IntoResponse {
-    if let Some(r) = ensure_admin_or_owner(&state, &jar) {
-        return r.into_response();
-    }
+    let username = match current_username_from_jar(&state, &jar) {
+        Some(u) => u,
+        None => return Redirect::to("/login").into_response(),
+    };
+    let is_owner = {
+        let users = state.users.lock().unwrap();
+        users.get(&username).map(|r| r.role == "owner").unwrap_or(false)
+    };
     let workspaces = {
         let ws = state.workspaces.lock().unwrap();
-        let mut list: Vec<WorkspaceRecord> = ws.values().cloned().collect();
+        let mut list: Vec<WorkspaceRecord> = ws
+            .values()
+            .filter(|w| is_owner || w.members.iter().any(|m| m.username == username))
+            .cloned()
+            .collect();
         list.sort_by(|a, b| a.name.cmp(&b.name));
         list
     };
@@ -90,6 +100,7 @@ pub async fn workspace_create(
                 slug: slug.clone(),
                 created_at: now_iso8601(),
                 members: vec![],
+                assigned_instances: vec![],
             },
         );
     }
@@ -108,9 +119,10 @@ pub async fn workspace_detail(
     jar: CookieJar,
     Path(slug): Path<String>,
 ) -> impl IntoResponse {
-    if let Some(r) = ensure_admin_or_owner(&state, &jar) {
-        return r.into_response();
-    }
+    let username = match current_username_from_jar(&state, &jar) {
+        Some(u) => u,
+        None => return Redirect::to("/login").into_response(),
+    };
     let workspace = {
         let ws = state.workspaces.lock().unwrap();
         ws.get(&slug).cloned()
@@ -120,6 +132,16 @@ pub async fn workspace_detail(
         None => return plain_html("Workspace not found"),
     };
 
+    // Allow owners and workspace members to view the detail page.
+    {
+        let users = state.users.lock().unwrap();
+        let is_owner = users.get(&username).map(|r| r.role == "owner").unwrap_or(false);
+        let is_member = workspace.members.iter().any(|m| m.username == username);
+        if !is_owner && !is_member {
+            return Redirect::to("/workspaces").into_response();
+        }
+    }
+
     // Collect all usernames for the member-add dropdown.
     let all_users: Vec<String> = {
         let users = state.users.lock().unwrap();
@@ -127,6 +149,9 @@ pub async fn workspace_detail(
         names.sort();
         names
     };
+
+    // For owners: load all instances to power the instance assignment checkbox list.
+    let all_instances = load_instances_for_user_paginated(&state, "", 0, 0).await;
 
     let TemplateGlobals {
         current_user,
@@ -146,6 +171,7 @@ pub async fn workspace_detail(
             has_flash_messages,
             workspace: &workspace,
             all_users: &all_users,
+            all_instances: &all_instances.instances,
         },
     )
 }
@@ -296,4 +322,139 @@ pub async fn workspace_delete(
         return plain_html("Failed to save workspace");
     }
     Redirect::to("/workspaces").into_response()
+}
+
+// ── Assign instances to workspace ─────────────────────────────────────────────
+
+#[derive(Deserialize)]
+pub struct AssignInstancesForm {
+    #[serde(default)]
+    pub instances: Vec<String>,
+}
+
+/// POST /workspaces/:slug/instances/assign — set which instances belong to this workspace (owner only).
+pub async fn workspace_assign_instances(
+    State(state): State<AppState>,
+    jar: CookieJar,
+    Path(slug): Path<String>,
+    Form(form): Form<AssignInstancesForm>,
+) -> impl IntoResponse {
+    if let Some(r) = ensure_owner(&state, &jar) {
+        return r.into_response();
+    }
+    {
+        let mut ws = state.workspaces.lock().unwrap();
+        if let Some(rec) = ws.get_mut(&slug) {
+            let mut ids: Vec<String> = form
+                .instances
+                .iter()
+                .map(|s| s.trim().to_string())
+                .filter(|s| !s.is_empty())
+                .collect();
+            ids.sort();
+            ids.dedup();
+            rec.assigned_instances = ids;
+        } else {
+            return plain_html("Workspace not found");
+        }
+    }
+    if let Err(e) = persist_workspaces_file(&state.workspaces).await {
+        tracing::error!(%e, "Failed to persist workspaces");
+        return plain_html("Failed to save workspace");
+    }
+    Redirect::to(&format!("/workspaces/{}", slug)).into_response()
+}
+
+// ── Workspace instances view ──────────────────────────────────────────────────
+
+#[derive(Deserialize)]
+pub struct WsPaginationParams {
+    #[serde(default = "default_page")]
+    page: usize,
+    #[serde(default = "default_per_page")]
+    per_page: usize,
+}
+
+fn default_page() -> usize { 1 }
+fn default_per_page() -> usize { 10 }
+
+/// GET /workspaces/:slug/instances — instances belonging to this workspace.
+/// Members can view; access is restricted to workspace members + owners.
+pub async fn workspace_instances(
+    State(state): State<AppState>,
+    jar: CookieJar,
+    Path(slug): Path<String>,
+    Query(params): Query<WsPaginationParams>,
+) -> impl IntoResponse {
+    let username = match current_username_from_jar(&state, &jar) {
+        Some(u) => u,
+        None => return Redirect::to("/login").into_response(),
+    };
+
+    let workspace = {
+        let ws = state.workspaces.lock().unwrap();
+        ws.get(&slug).cloned()
+    };
+    let workspace = match workspace {
+        Some(w) => w,
+        None => return plain_html("Workspace not found"),
+    };
+
+    // Only workspace members (or owners) can view workspace instances.
+    {
+        let users = state.users.lock().unwrap();
+        let is_owner = users
+            .get(&username)
+            .map(|r| r.role == "owner")
+            .unwrap_or(false);
+        let is_member = workspace.members.iter().any(|m| m.username == username);
+        if !is_owner && !is_member {
+            return Redirect::to("/workspaces").into_response();
+        }
+    }
+
+    // Load all instances the current user can access, then filter to only those
+    // that are assigned to this workspace.
+    let all_user_instances =
+        load_instances_for_user_paginated(&state, &username, 0, 0).await;
+    let ws_instance_ids: std::collections::HashSet<&str> =
+        workspace.assigned_instances.iter().map(|s| s.as_str()).collect();
+    let ws_instances: Vec<_> = all_user_instances
+        .instances
+        .into_iter()
+        .filter(|inst| ws_instance_ids.contains(inst.id.as_str()))
+        .collect();
+
+    let total_count = ws_instances.len();
+    let per_page = params.per_page.max(1);
+    let total_pages = (total_count + per_page - 1).max(1) / per_page;
+    let current_page = params.page.max(1).min(total_pages.max(1));
+    let start = (current_page - 1) * per_page;
+    let end = (start + per_page).min(total_count);
+    let page_instances = ws_instances[start..end].to_vec();
+
+    let TemplateGlobals {
+        current_user,
+        api_hostname,
+        base_url,
+        flash_messages,
+        has_flash_messages,
+    } = build_template_globals(&state, &jar);
+    render_template(
+        &state,
+        &jar,
+        WorkspaceInstancesTemplate {
+            current_user,
+            api_hostname,
+            base_url,
+            flash_messages,
+            has_flash_messages,
+            workspace: &workspace,
+            instances: &page_instances,
+            current_page,
+            total_pages,
+            per_page,
+            total_count,
+        },
+    )
 }

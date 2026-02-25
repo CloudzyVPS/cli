@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use crate::models::{InstanceView, OsItem, UserRecord};
+use crate::models::workspace_record::WorkspaceRecord;
 use super::client::api_call;
 
 /// Paginated result structure for instances
@@ -13,7 +14,8 @@ pub struct PaginatedInstances {
 }
 
 /// Load instances for a specific user from the API with pagination support.
-/// Filters instances based on user role and assigned instances.
+/// Filters instances based on the user's role, direct assignments, and any
+/// workspace memberships (workspace-centric access control).
 /// 
 /// # Parameters
 /// - `page`: Page number (1-indexed). Use 0 to disable pagination and return all instances.
@@ -23,6 +25,7 @@ pub async fn load_instances_for_user(
     api_base_url: &str,
     api_token: &str,
     users_map: &HashMap<String, UserRecord>,
+    workspaces_map: &HashMap<String, WorkspaceRecord>,
     username: &str,
     page: usize,
     per_page: usize,
@@ -169,19 +172,23 @@ pub async fn load_instances_for_user(
         }
     }
     
-    // Filter instances based on user permissions
+    // Filter instances based on workspace-centric access control.
+    // Owners see all instances; everyone else is limited to the union of
+    // their direct assignments and instances from their workspaces.
     let filtered_instances = if username.is_empty() {
         all_instances
     } else {
-        let uname = username.to_lowercase();
-        if let Some(user_rec) = users_map.get(&uname) {
-            if user_rec.role == "owner" {
+        use crate::services::get_accessible_instance_ids;
+        match get_accessible_instance_ids(username, users_map, workspaces_map) {
+            None => all_instances, // owner — unrestricted
+            Some(ids) => {
+                let id_set: std::collections::HashSet<&str> =
+                    ids.iter().map(|s| s.as_str()).collect();
                 all_instances
-            } else {
-                all_instances.into_iter().filter(|inst| user_rec.assigned_instances.contains(&inst.id)).collect()
+                    .into_iter()
+                    .filter(|inst| id_set.contains(inst.id.as_str()))
+                    .collect()
             }
-        } else {
-            vec![]
         }
     };
     

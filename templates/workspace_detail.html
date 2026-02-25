@@ -7,6 +7,9 @@
     <h1>{{ workspace.name }}</h1>
     <div class="header-actions">
         <a href="{{ base_url }}/workspaces" class="btn-secondary">Back to Workspaces</a>
+        <a href="{{ base_url }}/workspaces/{{ workspace.slug }}/instances" class="btn-primary">
+            View Instances ({{ workspace.assigned_instances.len() }})
+        </a>
     </div>
 </header>
 
@@ -24,6 +27,16 @@
             <dd>{% if workspace.description.len() > 0 %}{{ workspace.description }}{% else %}<span class="text-muted">&mdash;</span>{% endif %}</dd>
             <dt>Created</dt>
             <dd>{{ workspace.created_at }}</dd>
+            <dt>Instances</dt>
+            <dd>
+                {% if workspace.assigned_instances.len() > 0 %}
+                <a href="{{ base_url }}/workspaces/{{ workspace.slug }}/instances">
+                    {{ workspace.assigned_instances.len() }} instance(s) assigned
+                </a>
+                {% else %}
+                <span class="text-muted">No instances assigned yet</span>
+                {% endif %}
+            </dd>
         </dl>
     </div>
 </div>
@@ -104,6 +117,39 @@
 
 <div class="card">
     <div class="card-header">
+        <h2 class="card-title">Assign Instances</h2>
+        <p class="card-subtitle text-muted">Select which instances belong to this workspace. Members will be able to view and act on these instances according to their workspace role.</p>
+    </div>
+    <div class="card-body">
+        <form method="post" action="{{ base_url }}/workspaces/{{ workspace.slug }}/instances/assign">
+            <fieldset>
+                <legend class="form-label">Available Instances</legend>
+                {% if all_instances.len() > 0 %}
+                <div role="list">
+                    {% for inst in all_instances %}
+                    <label role="listitem" {% if workspace.has_instance(inst.id) %}aria-current="true"{% endif %}>
+                        <input type="checkbox" name="instances" value="{{ inst.id }}"
+                               {% if workspace.has_instance(inst.id) %}checked{% endif %}>
+                        <span><strong>{{ inst.hostname }}</strong></span>
+                        <span class="text-muted small">{{ inst.id }}</span>
+                        <span class="text-muted small">{{ inst.region }}</span>
+                        <span class="status-badge status-{{ inst.status|lower }}">{{ inst.status_display }}</span>
+                    </label>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <p class="text-muted">No instances available from the API.</p>
+                {% endif %}
+            </fieldset>
+            <div class="form-actions">
+                <button type="submit" class="btn-secondary">Save Instance Assignments</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">
         <h2 class="card-title">Edit Workspace</h2>
     </div>
     <div class="card-body">
@@ -130,7 +176,7 @@
     </div>
     <div class="card-body">
         <div class="danger-zone">
-            <p class="text-muted">Deleting a workspace is permanent and cannot be undone. All member assignments will be removed.</p>
+            <p class="text-muted">Deleting a workspace is permanent and cannot be undone. All member assignments and instance assignments will be removed.</p>
             <form method="post" action="{{ base_url }}/workspaces/{{ workspace.slug }}/delete">
                 <button type="submit" class="btn-danger"
                         onclick="return confirm('Are you sure you want to delete workspace \'{{ workspace.name }}\'? This cannot be undone.')">

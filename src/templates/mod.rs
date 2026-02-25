@@ -25,6 +25,7 @@ pub mod images_template;
 pub mod backups_template;
 pub mod workspaces_template;
 pub mod workspace_detail_template;
+pub mod workspace_instances_template;
 pub mod permissions_template;
 
 // Wizard templates (now in templates/)
@@ -61,6 +62,7 @@ pub use images_template::ImagesTemplate;
 pub use backups_template::BackupsTemplate;
 pub use workspaces_template::WorkspacesTemplate;
 pub use workspace_detail_template::WorkspaceDetailTemplate;
+pub use workspace_instances_template::WorkspaceInstancesTemplate;
 pub use permissions_template::PermissionsTemplate;
 
 // Wizard templates

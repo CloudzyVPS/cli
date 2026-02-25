@@ -86,6 +86,16 @@ pub struct WorkspaceRecord {
     /// Members of this workspace and their workspace-level roles.
     #[serde(default)]
     pub members: Vec<WorkspaceMember>,
+    /// Instance IDs that belong to this workspace.
+    #[serde(default)]
+    pub assigned_instances: Vec<String>,
+}
+
+impl WorkspaceRecord {
+    /// Returns true if the given instance ID is assigned to this workspace.
+    pub fn has_instance(&self, id: &str) -> bool {
+        self.assigned_instances.iter().any(|i| i == id)
+    }
 }
 
 #[cfg(test)]

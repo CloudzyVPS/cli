@@ -136,6 +136,8 @@ fn build_app(state: AppState) -> Router {
         .route("/workspaces", get(handlers::workspaces::workspaces_list).post(handlers::workspaces::workspace_create))
         .route("/workspaces/:slug", get(handlers::workspaces::workspace_detail))
         .route("/workspaces/:slug/edit", post(handlers::workspaces::workspace_edit))
+        .route("/workspaces/:slug/instances", get(handlers::workspaces::workspace_instances))
+        .route("/workspaces/:slug/instances/assign", post(handlers::workspaces::workspace_assign_instances))
         .route("/workspaces/:slug/members/add", post(handlers::workspaces::workspace_add_member))
         .route("/workspaces/:slug/members/:username/remove", post(handlers::workspaces::workspace_remove_member))
         .route("/workspaces/:slug/delete", post(handlers::workspaces::workspace_delete))
