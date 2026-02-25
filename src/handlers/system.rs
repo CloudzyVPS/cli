@@ -5,8 +5,32 @@ use axum::{
 use axum_extra::extract::cookie::CookieJar;
 
 use crate::models::{AppState, ConfirmationAction};
-use crate::templates::{AboutTemplate, ConfirmationTemplate, ComingSoonTemplate};
+use crate::templates::{AboutTemplate, ConfirmationTemplate, ComingSoonTemplate, PermissionsTemplate};
 use super::helpers::{build_template_globals, render_template, TemplateGlobals};
+
+pub async fn permissions_get(
+    State(state): State<AppState>,
+    jar: CookieJar,
+) -> impl IntoResponse {
+    let TemplateGlobals {
+        current_user,
+        api_hostname,
+        base_url,
+        flash_messages,
+        has_flash_messages,
+    } = build_template_globals(&state, &jar);
+    render_template(
+        &state,
+        &jar,
+        PermissionsTemplate::build(
+            current_user,
+            api_hostname,
+            base_url,
+            flash_messages,
+            has_flash_messages,
+        ),
+    )
+}
 
 pub async fn coming_soon(
     State(state): State<AppState>,

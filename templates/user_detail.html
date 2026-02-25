@@ -24,10 +24,10 @@
             <dd>{{ user.about }}</dd>
             <dt>Assigned Instances</dt>
             <dd>
-                {% if user.role == "admin" %}
-                    {{ user.assigned }}
+                {% if user.role == "admin" || user.role == "viewer" %}
+                    {% if user.assigned.len() > 0 %}{{ user.assigned }}{% else %}<span class="text-muted">None assigned</span>{% endif %}
                 {% else %}
-                    <span class="text-muted">N/A (Owner)</span>
+                    <span class="text-muted">N/A (Owner — access to all instances)</span>
                 {% endif %}
             </dd>
         </dl>
@@ -44,8 +44,9 @@
                 <label class="form-label">Update Role</label>
                 <div class="d-flex gap-sm">
                     <select name="role" class="form-control form-select">
-                        <option value="owner" {% if user.role == "owner" %}selected{% endif %}>Owner</option>
-                        <option value="admin" {% if user.role == "admin" %}selected{% endif %}>Admin</option>
+                        <option value="owner" {% if user.role == "owner" %}selected{% endif %}>Owner — Full system access</option>
+                        <option value="admin" {% if user.role == "admin" %}selected{% endif %}>Admin — Manage assigned resources</option>
+                        <option value="viewer" {% if user.role == "viewer" %}selected{% endif %}>Viewer — Read-only access</option>
                     </select>
                     <button type="submit" class="btn-secondary">Update</button>
                 </div>

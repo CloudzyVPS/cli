@@ -1,6 +1,8 @@
 pub mod user_record;
 pub mod current_user;
 pub mod app_state;
+pub mod workspace_record;
+pub mod permission;
 pub mod add_traffic_form;
 pub mod resize_form;
 pub mod base_state;
@@ -25,6 +27,8 @@ pub mod confirmation;
 pub use user_record::UserRecord;
 pub use current_user::CurrentUser;
 pub use app_state::AppState;
+pub use workspace_record::{WorkspaceRecord, WorkspaceMember, WorkspaceRole};
+pub use permission::Permission;
 pub use add_traffic_form::AddTrafficForm;
 pub use resize_form::ResizeForm;
 pub use base_state::BaseState;

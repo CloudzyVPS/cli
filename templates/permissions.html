@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+
+{% block title %}Permissions Reference{% endblock %}
+
+{% block content %}
+<header class="page-header">
+    <h1>Permissions Reference</h1>
+    <p class="text-muted">
+        This table shows which global system roles grant each permission.
+        Workspace roles (<em>Manager</em>, <em>Editor</em>, <em>Viewer</em>) provide
+        finer-grained control within a specific workspace.
+    </p>
+</header>
+
+<div class="card">
+    <div class="card-header">
+        <h2 class="card-title">Global Role Permissions</h2>
+    </div>
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Permission</th>
+                        <th>Description</th>
+                        <th class="text-center">Owner</th>
+                        <th class="text-center">Admin</th>
+                        <th class="text-center">Viewer</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in rows %}
+                    <tr>
+                        <td><strong>{{ row.label }}</strong></td>
+                        <td><small class="text-muted">{{ row.description }}</small></td>
+                        <td class="text-center">{% if row.owner %}✅{% else %}—{% endif %}</td>
+                        <td class="text-center">{% if row.admin %}✅{% else %}—{% endif %}</td>
+                        <td class="text-center">{% if row.viewer %}✅{% else %}—{% endif %}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <h2 class="card-title">Workspace Role Descriptions</h2>
+    </div>
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Workspace Role</th>
+                        <th>Description</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong>Manager</strong></td>
+                        <td>Full access: manage members, create/delete resources and change workspace settings.</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Editor</strong></td>
+                        <td>Can create, modify and delete resources within the workspace but cannot manage members.</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Viewer</strong></td>
+                        <td>Read-only access. Can view resources but cannot make any changes.</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

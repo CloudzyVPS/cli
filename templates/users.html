@@ -29,7 +29,7 @@
                         <td><a href="{{ base_url }}/users/{{ row.username }}">{{ row.username }}</a></td>
                         <td>{{ row.role }}</td>
                         <td>
-                            {% if row.role == "admin" %}
+                            {% if row.role == "admin" || row.role == "viewer" %}
                             {{ row.assigned }}
                             {% else %}
                             &mdash;
@@ -64,8 +64,9 @@
             <div class="form-group">
                 <label class="form-label" for="role">Role</label>
                 <select class="form-control form-select" id="role" name="role" required>
-                    <option value="owner">Owner</option>
-                    <option value="admin">Admin</option>
+                    <option value="owner">Owner — Full system access, can manage users and workspaces</option>
+                    <option value="admin">Admin — Manage assigned resources and workspaces</option>
+                    <option value="viewer">Viewer — Read-only access to assigned resources</option>
                 </select>
             </div>
             <div class="form-group">

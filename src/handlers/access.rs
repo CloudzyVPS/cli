@@ -111,11 +111,11 @@ pub async fn access_get(State(state): State<AppState>, jar: CookieJar) -> impl I
             }
         }
     }
-    // Collect admins
+    // Collect admins and viewers (users whose instance access can be restricted)
     let users = state.users.lock().unwrap();
     let mut admins: Vec<AdminView> = users
         .iter()
-        .filter(|(_, rec)| rec.role == "admin")
+        .filter(|(_, rec)| rec.role == "admin" || rec.role == "viewer")
         .map(|(u, rec)| {
             let assigned: HashSet<&str> =
                 rec.assigned_instances.iter().map(|s| s.as_str()).collect();
@@ -160,8 +160,8 @@ pub async fn update_access(
     {
         let mut users = state.users.lock().unwrap();
         if let Some(rec) = users.get_mut(&uname) {
-            if rec.role != "admin" {
-                return plain_html("Target user not admin");
+            if rec.role != "admin" && rec.role != "viewer" {
+                return plain_html("Target user is not an admin or viewer");
             }
             // Normalize and dedupe
             let mut normalized: Vec<String> = form

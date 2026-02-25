@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+
+{% block title %}Workspaces{% endblock %}
+
+{% block content %}
+<header class="page-header">
+    <h1>Workspaces</h1>
+    <p class="text-muted">Workspaces group resources and team members under a shared context. Each workspace member is assigned a role that controls what they can do inside that workspace.</p>
+</header>
+
+<div class="card">
+    <div class="card-header">
+        <h2 class="card-title">All Workspaces</h2>
+    </div>
+    <div class="card-body">
+        {% if workspaces.len() > 0 %}
+        <div class="table-responsive">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Slug</th>
+                        <th>Description</th>
+                        <th>Members</th>
+                        <th>Created</th>
+                        <th class="text-right">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for ws in workspaces %}
+                    <tr>
+                        <td><a href="{{ base_url }}/workspaces/{{ ws.slug }}">{{ ws.name }}</a></td>
+                        <td><code>{{ ws.slug }}</code></td>
+                        <td>{{ ws.description }}</td>
+                        <td>{{ ws.members.len() }}</td>
+                        <td>{{ ws.created_at }}</td>
+                        <td class="text-right">
+                            <a href="{{ base_url }}/workspaces/{{ ws.slug }}" class="btn-secondary btn-sm">Manage</a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <p class="text-muted">No workspaces yet. Create your first workspace below.</p>
+        {% endif %}
+    </div>
+</div>
+
+{% if current_user.is_some() && current_user.as_ref().unwrap().role == "owner" %}
+<div class="card">
+    <div class="card-header">
+        <h2 class="card-title">Create Workspace</h2>
+    </div>
+    <div class="card-body">
+        <form method="post" action="{{ base_url }}/workspaces" class="form-grid">
+            <div class="form-group">
+                <label class="form-label" for="ws-name">Name <span class="text-danger">*</span></label>
+                <input class="form-control" type="text" id="ws-name" name="name" required
+                       placeholder="e.g. Production Team">
+                <small class="form-text text-muted">A unique display name. A URL-safe slug will be generated automatically.</small>
+            </div>
+            <div class="form-group">
+                <label class="form-label" for="ws-description">Description</label>
+                <textarea class="form-control" id="ws-description" name="description" rows="2"
+                          placeholder="Optional description of this workspace's purpose."></textarea>
+            </div>
+            <div class="form-actions">
+                <button type="submit" class="btn-primary">Create Workspace</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endif %}
+{% endblock %}

@@ -23,6 +23,9 @@ pub mod floating_ips_template;
 pub mod isos_template;
 pub mod images_template;
 pub mod backups_template;
+pub mod workspaces_template;
+pub mod workspace_detail_template;
+pub mod permissions_template;
 
 // Wizard templates (now in templates/)
 pub mod step1_template;
@@ -56,6 +59,9 @@ pub use floating_ips_template::FloatingIpsTemplate;
 pub use isos_template::IsosTemplate;
 pub use images_template::ImagesTemplate;
 pub use backups_template::BackupsTemplate;
+pub use workspaces_template::WorkspacesTemplate;
+pub use workspace_detail_template::WorkspaceDetailTemplate;
+pub use permissions_template::PermissionsTemplate;
 
 // Wizard templates
 pub use step1_template::Step1Template;

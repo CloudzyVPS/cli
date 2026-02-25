@@ -1,11 +1,11 @@
 {% extends "base.html" %}
 
-{% block title %}Admin Access{% endblock %}
+{% block title %}Access Assignments{% endblock %}
 
 {% block content %}
 <header>
-    <h1>Admin Access Control</h1>
-    <p>Review current assignments and adjust which instances each admin can manage.</p>
+    <h1>Access Assignments</h1>
+    <p>Review current assignments and adjust which instances each admin or viewer can access.</p>
 </header>
 
 {% if admins.len() > 0 %}
@@ -39,7 +39,7 @@
 </div>
 {% else %}
 <section>
-    <p>No admin users found. Create an admin account first.</p>
+    <p>No admin or viewer users found. Create an admin or viewer account first.</p>
 </section>
 {% endif %}
 {% endblock %}

@@ -118,8 +118,8 @@ pub async fn users_create(
     if uname.is_empty() || form.password.is_empty() {
         return plain_html("Missing username/password");
     }
-    if form.role != "owner" && form.role != "admin" {
-        return plain_html("Invalid role");
+    if !UserRecord::is_valid_role(&form.role) {
+        return plain_html("Invalid role. Must be one of: owner, admin, viewer");
     }
     {
         let mut users = state.users.lock().unwrap();
@@ -198,8 +198,8 @@ pub async fn update_role(
         return r.into_response();
     }
     let uname = username.to_lowercase();
-    if form.role != "owner" && form.role != "admin" {
-        return plain_html("Invalid role");
+    if !UserRecord::is_valid_role(&form.role) {
+        return plain_html("Invalid role. Must be one of: owner, admin, viewer");
     }
     {
         let mut users = state.users.lock().unwrap();
