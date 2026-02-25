@@ -136,3 +136,28 @@ pub async fn persist_users_file(users_arc: &Arc<Mutex<HashMap<String, UserRecord
     };
     tokio::fs::write("users.json", content).await
 }
+
+pub async fn load_clocked_instances_from_file() -> Option<std::collections::HashSet<String>> {
+    let path = std::path::Path::new("clocked_instances.json");
+    if !path.exists() {
+        return None;
+    }
+    if let Ok(text) = tokio::fs::read_to_string(path).await {
+        if let Ok(serde_json::Value::Array(arr)) = serde_json::from_str::<serde_json::Value>(&text) {
+            let set: std::collections::HashSet<String> = arr
+                .into_iter()
+                .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                .collect();
+            return Some(set);
+        }
+    }
+    None
+}
+
+pub async fn persist_clocked_instances_file(ids: &std::collections::HashSet<String>) -> Result<(), std::io::Error> {
+    let mut sorted: Vec<&String> = ids.iter().collect();
+    sorted.sort();
+    let content = serde_json::to_string_pretty(&sorted)
+        .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
+    tokio::fs::write("clocked_instances.json", content).await
+}

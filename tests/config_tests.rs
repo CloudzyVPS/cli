@@ -107,3 +107,37 @@ fn test_get_api_base_url_uses_default() {
 
     assert_eq!(result, "http://localhost:5000");
 }
+
+#[test]
+fn test_get_disabled_instance_ids_empty() {
+    let _lock = ENV_MUTEX.lock().unwrap();
+    env::remove_var("DISABLED_INSTANCE_IDS");
+
+    let result = config::get_disabled_instance_ids();
+
+    assert!(result.is_empty());
+}
+
+#[test]
+fn test_get_disabled_instance_ids_single() {
+    let _lock = ENV_MUTEX.lock().unwrap();
+    let _guard = EnvGuard::set("DISABLED_INSTANCE_IDS", "abc-123");
+
+    let result = config::get_disabled_instance_ids();
+
+    assert_eq!(result.len(), 1);
+    assert!(result.contains("abc-123"));
+}
+
+#[test]
+fn test_get_disabled_instance_ids_multiple() {
+    let _lock = ENV_MUTEX.lock().unwrap();
+    let _guard = EnvGuard::set("DISABLED_INSTANCE_IDS", "id-1,id-2, id-3 ");
+
+    let result = config::get_disabled_instance_ids();
+
+    assert_eq!(result.len(), 3);
+    assert!(result.contains("id-1"));
+    assert!(result.contains("id-2"));
+    assert!(result.contains("id-3"));
+}
