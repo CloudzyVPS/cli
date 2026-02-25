@@ -30,7 +30,7 @@ use terminal_size::{Width, terminal_size};
 
 use config::{DEFAULT_HOST, DEFAULT_PORT};
 use models::{UserRecord, AppState};
-use services::{generate_password_hash, load_users_from_file, persist_users_file, load_clocked_instances_from_file, simple_instance_action};
+use services::{generate_password_hash, load_users_from_file, persist_users_file, load_workspaces_from_file, load_workspaces_from_file, simple_instance_action};
 use handlers::helpers::api_call_wrapper;
 
 // Embed the default stylesheet in the binary
@@ -39,6 +39,8 @@ const DEFAULT_STYLESHEET: &str = include_str!("../static/styles.css");
 async fn build_state_from_env(env_file: Option<&str>) -> AppState {
     config::load_env_file(env_file);
     let users = load_users_from_file().await;
+    let workspaces = load_workspaces_from_file().await;
+    let disabled_instances = std::sync::Arc::new(config::get_disabled_instance_ids());
     // Load clocked instances: file-based overrides take precedence over env var
     let env_ids = config::get_disabled_instance_ids();
     let initial_ids = load_clocked_instances_from_file().await.unwrap_or(env_ids);
@@ -66,6 +68,7 @@ async fn build_state_from_env(env_file: Option<&str>) -> AppState {
         disabled_instances,
         current_hostname,
         custom_css: None,
+        workspaces,
     }
 }
 
@@ -137,6 +140,17 @@ fn build_app(state: AppState) -> Router {
             "/instance/:instance_id/add-traffic",
             post(handlers::instances::instance_add_traffic),
         )
+        // ── Workspace routes ────────────────────────────────────────────
+        .route("/workspaces", get(handlers::workspaces::workspaces_list).post(handlers::workspaces::workspace_create))
+        .route("/workspaces/:slug", get(handlers::workspaces::workspace_detail))
+        .route("/workspaces/:slug/edit", post(handlers::workspaces::workspace_edit))
+        .route("/workspaces/:slug/instances", get(handlers::workspaces::workspace_instances))
+        .route("/workspaces/:slug/instances/assign", post(handlers::workspaces::workspace_assign_instances))
+        .route("/workspaces/:slug/members/add", post(handlers::workspaces::workspace_add_member))
+        .route("/workspaces/:slug/members/:username/remove", post(handlers::workspaces::workspace_remove_member))
+        .route("/workspaces/:slug/delete", post(handlers::workspaces::workspace_delete))
+        // ── Permissions reference page ───────────────────────────────────
+        .route("/permissions", get(handlers::system::permissions_get))
         .route_layer(axum::middleware::from_fn_with_state(state.clone(), handlers::middleware::auth_middleware));
 
     // Always serve styles.css - use custom if provided, otherwise use embedded default

@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
 use crate::models::user_record::UserRecord;
+use crate::models::workspace_record::WorkspaceRecord;
 
 #[derive(Clone)]
 pub struct AppState {
@@ -16,6 +17,8 @@ pub struct AppState {
     pub disabled_instances: Arc<Mutex<std::collections::HashSet<String>>>,
     pub current_hostname: String,
     pub custom_css: Option<String>,
+    /// All workspaces keyed by slug.
+    pub workspaces: Arc<Mutex<HashMap<String, WorkspaceRecord>>>,
 }
 
 impl AppState {

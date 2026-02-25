@@ -1,0 +1,115 @@
+{% extends "base.html" %}
+
+{% block title %}{{ workspace.name }} — Instances{% endblock %}
+
+{% block content %}
+<header class="page-header">
+    <div>
+        <nav aria-label="breadcrumb">
+            <a href="{{ base_url }}/workspaces">Workspaces</a>
+            &rsaquo;
+            <a href="{{ base_url }}/workspaces/{{ workspace.slug }}">{{ workspace.name }}</a>
+            &rsaquo;
+            <span>Instances</span>
+        </nav>
+        <h1>{{ workspace.name }} — Instances</h1>
+        {% if workspace.description.len() > 0 %}
+        <p class="text-muted">{{ workspace.description }}</p>
+        {% endif %}
+    </div>
+    <div class="header-actions">
+        <a href="{{ base_url }}/workspaces/{{ workspace.slug }}" class="btn-secondary">Back to Workspace</a>
+        {% if current_user.is_some() && current_user.as_ref().unwrap().role == "owner" %}
+        <a href="{{ base_url }}/create/step-1" class="btn-primary">Create Instance</a>
+        {% endif %}
+    </div>
+</header>
+
+{% if instances.len() > 0 %}
+<div class="table-responsive">
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Hostname</th>
+                <th>ID</th>
+                <th>Specs</th>
+                <th>Network</th>
+                <th>Status</th>
+                <th class="text-right">Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for instance in instances %}
+            <tr>
+                <td data-label="Hostname"><strong>{{ instance.hostname }}</strong></td>
+                <td data-label="ID"><code>{{ instance.id }}</code></td>
+                <td data-label="Specs">
+                    <div class="small">
+                        {{ instance.vcpu_count_display }} vCPU · {{ instance.ram_display }} · {{ instance.disk_display }}
+                    </div>
+                    {% if instance.is_ddos_protected.unwrap_or(false) %}
+                    <span class="badge badge-security">DDoS</span>
+                    {% endif %}
+                </td>
+                <td data-label="Network">
+                    {% if instance.main_ip.is_some() %}
+                    <div class="small">{{ instance.main_ip.as_ref().unwrap() }}</div>
+                    {% endif %}
+                    {% if instance.main_ipv6.is_some() %}
+                    <div class="small text-muted">{{ instance.main_ipv6.as_ref().unwrap() }}</div>
+                    {% endif %}
+                    {% if instance.main_ip.is_none() && instance.main_ipv6.is_none() %}
+                    <span class="text-muted small">—</span>
+                    {% endif %}
+                </td>
+                <td data-label="Status">
+                    <span class="status-badge status-{{ instance.status|lower }}">
+                        {{ instance.status_display }}
+                    </span>
+                </td>
+                <td data-label="Actions" class="text-right">
+                    <a href="{{ base_url }}/instance/{{ instance.id }}" class="btn-secondary btn-sm">Details</a>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<div class="pagination-container">
+    <div class="pagination-info">
+        Showing <strong>{{ instances.len() }}</strong> of <strong>{{ total_count }}</strong> instances
+    </div>
+    <div class="pagination-controls" role="navigation">
+        {% if total_pages > 1 %}
+        <div class="pagination-numbers">
+            {% for p in 1..total_pages + 1 %}
+                {% if p == 1 || p == total_pages || (p >= current_page - 1 && p <= current_page + 1) %}
+                    {% if p == current_page %}
+                    <span class="pagination-number pagination-number-active">{{ p }}</span>
+                    {% else %}
+                    <a href="{{ base_url }}/workspaces/{{ workspace.slug }}/instances?page={{ p }}&per_page={{ per_page }}" class="pagination-number">{{ p }}</a>
+                    {% endif %}
+                {% else if (p == 2 && current_page > 3) || (p == total_pages - 1 && current_page < total_pages - 2) %}
+                    <span class="pagination-ellipsis">...</span>
+                {% endif %}
+            {% endfor %}
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+{% else %}
+<div class="empty-state">
+    <h2>No instances assigned to this workspace</h2>
+    <p class="text-muted">
+        {% if current_user.is_some() && current_user.as_ref().unwrap().role == "owner" %}
+        Use the <a href="{{ base_url }}/workspaces/{{ workspace.slug }}">workspace settings</a> to assign instances, or
+        <a href="{{ base_url }}/create/step-1">create a new instance</a>.
+        {% else %}
+        Contact an owner to assign instances to this workspace.
+        {% endif %}
+    </p>
+</div>
+{% endif %}
+{% endblock %}

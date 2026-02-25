@@ -1,0 +1,190 @@
+{% extends "base.html" %}
+
+{% block title %}Workspace: {{ workspace.name }}{% endblock %}
+
+{% block content %}
+<header class="page-header">
+    <h1>{{ workspace.name }}</h1>
+    <div class="header-actions">
+        <a href="{{ base_url }}/workspaces" class="btn-secondary">Back to Workspaces</a>
+        <a href="{{ base_url }}/workspaces/{{ workspace.slug }}/instances" class="btn-primary">
+            View Instances ({{ workspace.assigned_instances.len() }})
+        </a>
+    </div>
+</header>
+
+<div class="card">
+    <div class="card-header">
+        <h2 class="card-title">Workspace Details</h2>
+    </div>
+    <div class="card-body">
+        <dl class="detail-list">
+            <dt>Name</dt>
+            <dd>{{ workspace.name }}</dd>
+            <dt>Slug</dt>
+            <dd><code>{{ workspace.slug }}</code></dd>
+            <dt>Description</dt>
+            <dd>{% if workspace.description.len() > 0 %}{{ workspace.description }}{% else %}<span class="text-muted">&mdash;</span>{% endif %}</dd>
+            <dt>Created</dt>
+            <dd>{{ workspace.created_at }}</dd>
+            <dt>Instances</dt>
+            <dd>
+                {% if workspace.assigned_instances.len() > 0 %}
+                <a href="{{ base_url }}/workspaces/{{ workspace.slug }}/instances">
+                    {{ workspace.assigned_instances.len() }} instance(s) assigned
+                </a>
+                {% else %}
+                <span class="text-muted">No instances assigned yet</span>
+                {% endif %}
+            </dd>
+        </dl>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <h2 class="card-title">Members</h2>
+    </div>
+    <div class="card-body">
+        {% if workspace.members.len() > 0 %}
+        <div class="table-responsive">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Username</th>
+                        <th>Workspace Role</th>
+                        <th>Role Description</th>
+                        {% if current_user.is_some() && current_user.as_ref().unwrap().role == "owner" %}
+                        <th class="text-right">Actions</th>
+                        {% endif %}
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for member in workspace.members %}
+                    <tr>
+                        <td>{{ member.username }}</td>
+                        <td><span class="badge">{{ member.role.label() }}</span></td>
+                        <td><small class="text-muted">{{ member.role.description() }}</small></td>
+                        {% if current_user.is_some() && current_user.as_ref().unwrap().role == "owner" %}
+                        <td class="text-right">
+                            <form method="post" action="{{ base_url }}/workspaces/{{ workspace.slug }}/members/{{ member.username }}/remove"
+                                  style="display:inline">
+                                <button type="submit" class="btn-danger btn-sm">Remove</button>
+                            </form>
+                        </td>
+                        {% endif %}
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <p class="text-muted">No members yet. Add members below.</p>
+        {% endif %}
+    </div>
+</div>
+
+{% if current_user.is_some() && current_user.as_ref().unwrap().role == "owner" %}
+<div class="card">
+    <div class="card-header">
+        <h2 class="card-title">Add Member</h2>
+    </div>
+    <div class="card-body">
+        <form method="post" action="{{ base_url }}/workspaces/{{ workspace.slug }}/members/add" class="form-grid">
+            <div class="form-group">
+                <label class="form-label" for="member-username">User <span class="text-danger">*</span></label>
+                <select class="form-control form-select" id="member-username" name="username" required>
+                    <option value="">-- Select a user --</option>
+                    {% for user in all_users %}
+                    <option value="{{ user }}">{{ user }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="form-group">
+                <label class="form-label" for="member-role">Workspace Role <span class="text-danger">*</span></label>
+                <select class="form-control form-select" id="member-role" name="role" required>
+                    <option value="manager">Manager &mdash; Full access: manage members, create/delete resources.</option>
+                    <option value="editor" selected>Editor &mdash; Create and modify resources, but cannot manage members.</option>
+                    <option value="viewer">Viewer &mdash; Read-only access.</option>
+                </select>
+            </div>
+            <div class="form-actions">
+                <button type="submit" class="btn-primary">Add Member</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <h2 class="card-title">Assign Instances</h2>
+        <p class="card-subtitle text-muted">Select which instances belong to this workspace. Members will be able to view and act on these instances according to their workspace role.</p>
+    </div>
+    <div class="card-body">
+        <form method="post" action="{{ base_url }}/workspaces/{{ workspace.slug }}/instances/assign">
+            <fieldset>
+                <legend class="form-label">Available Instances</legend>
+                {% if all_instances.len() > 0 %}
+                <div role="list">
+                    {% for inst in all_instances %}
+                    <label role="listitem" {% if workspace.has_instance(inst.id) %}aria-current="true"{% endif %}>
+                        <input type="checkbox" name="instances" value="{{ inst.id }}"
+                               {% if workspace.has_instance(inst.id) %}checked{% endif %}>
+                        <span><strong>{{ inst.hostname }}</strong></span>
+                        <span class="text-muted small">{{ inst.id }}</span>
+                        <span class="text-muted small">{{ inst.region }}</span>
+                        <span class="status-badge status-{{ inst.status|lower }}">{{ inst.status_display }}</span>
+                    </label>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <p class="text-muted">No instances available from the API.</p>
+                {% endif %}
+            </fieldset>
+            <div class="form-actions">
+                <button type="submit" class="btn-secondary">Save Instance Assignments</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <h2 class="card-title">Edit Workspace</h2>
+    </div>
+    <div class="card-body">
+        <form method="post" action="{{ base_url }}/workspaces/{{ workspace.slug }}/edit" class="form-grid">
+            <div class="form-group">
+                <label class="form-label" for="edit-name">Name <span class="text-danger">*</span></label>
+                <input class="form-control" type="text" id="edit-name" name="name"
+                       value="{{ workspace.name }}" required>
+            </div>
+            <div class="form-group">
+                <label class="form-label" for="edit-description">Description</label>
+                <textarea class="form-control" id="edit-description" name="description" rows="2">{{ workspace.description }}</textarea>
+            </div>
+            <div class="form-actions">
+                <button type="submit" class="btn-secondary">Save Changes</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <h2 class="card-title">Danger Zone</h2>
+    </div>
+    <div class="card-body">
+        <div class="danger-zone">
+            <p class="text-muted">Deleting a workspace is permanent and cannot be undone. All member assignments and instance assignments will be removed.</p>
+            <form method="post" action="{{ base_url }}/workspaces/{{ workspace.slug }}/delete">
+                <button type="submit" class="btn-danger"
+                        onclick="return confirm('Are you sure you want to delete workspace \'{{ workspace.name }}\'? This cannot be undone.')">
+                    Delete Workspace
+                </button>
+            </form>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endblock %}

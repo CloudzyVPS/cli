@@ -46,14 +46,8 @@ pub fn take_flash_messages(state: &AppState, jar: &CookieJar) -> Vec<String> {
     fs.remove(&sid).unwrap_or_else(Vec::new)
 }
 
-pub fn resolve_default_endpoint(state: &AppState, username: &str) -> String {
-    let users = state.users.lock().unwrap();
-    if let Some(rec) = users.get(username) {
-        if rec.role == "owner" {
-            return "/instances".into();
-        }
-    }
-    "/instances".into()
+pub fn resolve_default_endpoint(_state: &AppState, _username: &str) -> String {
+    "/workspaces".into()
 }
 
 pub fn build_current_user(state: &AppState, jar: &CookieJar) -> Option<CurrentUser> {
@@ -253,7 +247,8 @@ pub async fn load_products_wrapper(state: &AppState, region_id: &str) -> Vec<Pro
 #[allow(dead_code)]
 pub async fn load_instances_for_user_wrapper(state: &AppState, username: &str) -> Vec<InstanceView> {
     let users_map = state.users.lock().unwrap().clone();
-    let result = load_instances_for_user(&state.client, &state.api_base_url, &state.api_token, &users_map, username, 0, 0).await;
+    let workspaces_map = state.workspaces.lock().unwrap().clone();
+    let result = load_instances_for_user(&state.client, &state.api_base_url, &state.api_token, &users_map, &workspaces_map, username, 0, 0).await;
     result.instances
 }
 
@@ -264,5 +259,6 @@ pub async fn load_instances_for_user_paginated(
     per_page: usize,
 ) -> PaginatedInstances {
     let users_map = state.users.lock().unwrap().clone();
-    load_instances_for_user(&state.client, &state.api_base_url, &state.api_token, &users_map, username, page, per_page).await
+    let workspaces_map = state.workspaces.lock().unwrap().clone();
+    load_instances_for_user(&state.client, &state.api_base_url, &state.api_token, &users_map, &workspaces_map, username, page, per_page).await
 }
