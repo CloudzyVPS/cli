@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+
+{% block title %}Clocked Instances{% endblock %}
+
+{% block content %}
+<header>
+    <h1>Clocked Instance IDs</h1>
+    <p>Instance IDs listed here will have all UI actions disabled. This overrides the <code>DISABLED_INSTANCE_IDS</code> environment variable and is persisted to disk.</p>
+</header>
+
+<section>
+    <form action="{{ base_url }}/clocked-instances" method="post">
+        <fieldset>
+            <legend>Instance IDs</legend>
+            <label for="instance_ids">
+                Enter one instance ID per line, or separate with commas.
+            </label>
+            <textarea id="instance_ids" name="instance_ids" rows="10" placeholder="e.g. uuid-1234&#10;uuid-5678">{% for id in clocked_ids %}{{ id }}
+{% endfor %}</textarea>
+        </fieldset>
+        <footer>
+            <button type="submit">Save</button>
+        </footer>
+    </form>
+</section>
+
+{% if clocked_ids.len() > 0 %}
+<section>
+    <h2>Currently clocked</h2>
+    <ul>
+        {% for id in clocked_ids %}
+        <li>{{ id }}</li>
+        {% endfor %}
+    </ul>
+</section>
+{% else %}
+<section>
+    <p>No instance IDs are currently clocked.</p>
+</section>
+{% endif %}
+{% endblock %}

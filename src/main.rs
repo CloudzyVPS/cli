@@ -30,7 +30,7 @@ use terminal_size::{Width, terminal_size};
 
 use config::{DEFAULT_HOST, DEFAULT_PORT};
 use models::{UserRecord, AppState};
-use services::{generate_password_hash, load_users_from_file, persist_users_file, load_workspaces_from_file, simple_instance_action};
+use services::{generate_password_hash, load_users_from_file, persist_users_file, load_workspaces_from_file, load_workspaces_from_file, simple_instance_action};
 use handlers::helpers::api_call_wrapper;
 
 // Embed the default stylesheet in the binary
@@ -41,6 +41,10 @@ async fn build_state_from_env(env_file: Option<&str>) -> AppState {
     let users = load_users_from_file().await;
     let workspaces = load_workspaces_from_file().await;
     let disabled_instances = std::sync::Arc::new(config::get_disabled_instance_ids());
+    // Load clocked instances: file-based overrides take precedence over env var
+    let env_ids = config::get_disabled_instance_ids();
+    let initial_ids = load_clocked_instances_from_file().await.unwrap_or(env_ids);
+    let disabled_instances = Arc::new(Mutex::new(initial_ids));
     
     let current_hostname = std::process::Command::new("hostname")
         .output()
@@ -80,6 +84,10 @@ fn build_app(state: AppState) -> Router {
         .route("/users/:username/delete", post(handlers::users::delete_user))
         .route("/access", get(handlers::access::access_get))
         .route("/access/:username", post(handlers::access::update_access))
+        .route(
+            "/clocked-instances",
+            get(handlers::clocked_instances::clocked_instances_get).post(handlers::clocked_instances::clocked_instances_post),
+        )
         .route("/ssh-keys", get(handlers::ssh_keys::ssh_keys_get).post(handlers::ssh_keys::ssh_keys_post))
         .route("/ssh-keys/:key_id", get(handlers::ssh_keys::ssh_key_detail_get))
         .route("/snapshots", get(handlers::snapshots::snapshots_list_get))

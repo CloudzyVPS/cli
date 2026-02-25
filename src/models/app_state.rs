@@ -14,7 +14,7 @@ pub struct AppState {
     pub api_token: String,
     pub public_base_url: String,
     pub client: reqwest::Client,
-    pub disabled_instances: Arc<std::collections::HashSet<String>>,
+    pub disabled_instances: Arc<Mutex<std::collections::HashSet<String>>>,
     pub current_hostname: String,
     pub custom_css: Option<String>,
     /// All workspaces keyed by slug.
@@ -23,7 +23,7 @@ pub struct AppState {
 
 impl AppState {
     pub fn is_instance_disabled(&self, id: &str) -> bool {
-        self.disabled_instances.contains(id)
+        self.disabled_instances.lock().unwrap().contains(id)
     }
 
     pub fn is_hostname_blocked(&self, instance_hostname: &str) -> bool {

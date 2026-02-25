@@ -7,6 +7,7 @@ pub mod ssh_keys;
 pub mod middleware;
 pub mod system;
 pub mod workspaces;
+pub mod clocked_instances;
 
 // Temporary - these will be fully implemented
 pub mod instances;

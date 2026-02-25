@@ -27,6 +27,7 @@ pub mod workspaces_template;
 pub mod workspace_detail_template;
 pub mod workspace_instances_template;
 pub mod permissions_template;
+pub mod clocked_instances_template;
 
 // Wizard templates (now in templates/)
 pub mod step1_template;
@@ -64,6 +65,7 @@ pub use workspaces_template::WorkspacesTemplate;
 pub use workspace_detail_template::WorkspaceDetailTemplate;
 pub use workspace_instances_template::WorkspaceInstancesTemplate;
 pub use permissions_template::PermissionsTemplate;
+pub use clocked_instances_template::ClockedInstancesTemplate;
 
 // Wizard templates
 pub use step1_template::Step1Template;
