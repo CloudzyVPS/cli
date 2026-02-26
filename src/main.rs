@@ -5,6 +5,7 @@ mod api;
 mod templates;
 mod handlers;
 mod update;
+mod mcp;
 
 use zy::config;
 
@@ -30,7 +31,7 @@ use terminal_size::{Width, terminal_size};
 
 use config::{DEFAULT_HOST, DEFAULT_PORT};
 use models::{UserRecord, AppState};
-use services::{generate_password_hash, load_users_from_file, persist_users_file, load_workspaces_from_file, load_workspaces_from_file, simple_instance_action};
+use services::{generate_password_hash, load_users_from_file, persist_users_file, load_workspaces_from_file, load_clocked_instances_from_file, simple_instance_action};
 use handlers::helpers::api_call_wrapper;
 
 // Embed the default stylesheet in the binary
@@ -380,6 +381,13 @@ enum Commands {
         /// Skip confirmation prompt and update immediately
         #[arg(long)]
         force: bool,
+    },
+    /// Start the Model Context Protocol (MCP) server over stdio
+    #[command(about = "Start an MCP server (JSON-RPC over stdio) for AI assistant integration", long_about = "Launch a Model Context Protocol server that communicates via JSON-RPC 2.0 over stdin/stdout. This allows AI assistants such as Claude Desktop or VS Code Copilot to manage Cloudzy instances through the standard MCP interface.\n\nThe server reads newline-delimited JSON-RPC messages from stdin and writes responses to stdout. Configure API credentials via environment variables or --env-file.")]
+    Mcp {
+        /// Path to .env file
+        #[arg(long)]
+        env_file: Option<String>,
     },
 }
 
@@ -810,6 +818,13 @@ async fn main() {
                     process::exit(1);
                 }
             }
+            return;
+        }
+        Commands::Mcp { env_file } => {
+            let state = build_state_from_env(env_file.as_deref()).await;
+            // Silence API client logging so it does not pollute the stdio protocol stream
+            crate::api::client::set_silent(true);
+            mcp::server::run(state.client, state.api_base_url, state.api_token).await;
             return;
         }
     }
