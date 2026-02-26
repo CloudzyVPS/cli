@@ -40,7 +40,7 @@ pub async fn mcp_log_detail_json(
     Path(id): Path<u64>,
 ) -> impl IntoResponse {
     match state.mcp_log_store.get(id) {
-        Some(entry) => Json(serde_json::to_value(entry).unwrap()).into_response(),
+        Some(entry) => Json(serde_json::to_value(entry).expect("McpLogEntry serialization")).into_response(),
         None => (axum::http::StatusCode::NOT_FOUND, Json(serde_json::json!({"error":"not found"}))).into_response(),
     }
 }

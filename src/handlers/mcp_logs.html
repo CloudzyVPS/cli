@@ -276,7 +276,7 @@ a:hover { text-decoration: underline; }
       statCard('Errors on Page', errorCount);
 
     if (data.total === 0) {
-      contentEl.innerHTML = '<div class="empty-state">No MCP calls recorded yet.<br>Start the MCP server with <code>zy mcp</code> and send some requests.</div>';
+      contentEl.innerHTML = '<div class="empty-state">No MCP calls recorded yet.<br>Run <code>zy mcp</code> in a separate terminal and send JSON-RPC requests to it.<br>Logs from both the MCP stdio server and this web server share the same store.</div>';
       paginationEl.style.display = 'none';
       return;
     }

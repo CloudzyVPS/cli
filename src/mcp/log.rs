@@ -83,7 +83,12 @@ impl McpLogStore {
         let inner = self.inner.lock().unwrap();
         let total = inner.entries.len();
         let per_page = if per_page == 0 { 20 } else { per_page };
-        let total_pages = if total == 0 { 1 } else { (total + per_page - 1) / per_page };
+
+        if total == 0 {
+            return PaginatedLogs { logs: vec![], total: 0, page: 1, per_page, total_pages: 1 };
+        }
+
+        let total_pages = (total + per_page - 1) / per_page;
         let page = page.max(1).min(total_pages);
 
         // Reverse to show newest first.
