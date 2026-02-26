@@ -6,6 +6,29 @@ Zy is a command-line tool and web server that allows you to manage Cloudzy VPS i
 
 ## 🚀 Quick Start
 
+### Docker (one-liner)
+
+Run the web interface instantly using the pre-built image from the GitHub Container Registry — no installation required:
+
+```bash
+docker run -e API_TOKEN=your_api_token -p 5000:5000 ghcr.io/cloudzvps/cli:latest
+```
+
+Then open `http://localhost:5000` in your browser.
+
+**Pass additional configuration via environment variables:**
+
+```bash
+docker run \
+  -e API_TOKEN=your_api_token \
+  -e API_BASE_URL=https://api.cloudzy.com/developers \
+  -e PUBLIC_BASE_URL=http://localhost:5000 \
+  -p 5000:5000 \
+  ghcr.io/cloudzvps/cli:latest
+```
+
+> **Note:** On first run, a default owner account is created with username `owner` and password `owner123`. Change this password immediately after your first login.
+
 ### Download
 
 Get the latest pre-built binary for your platform from the [Releases page](https://github.com/CloudzyVPS/cli/releases).
