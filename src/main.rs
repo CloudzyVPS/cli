@@ -161,6 +161,8 @@ fn build_app(state: AppState) -> Router {
         .route("/", get(handlers::auth::root_get))
         .route("/login", get(handlers::auth::login_get).post(handlers::auth::login_post))
         .route("/logout", post(handlers::auth::logout_post))
+        .route("/mcp", get(handlers::mcp_docs::mcp_docs_page))
+        .route("/mcp/tools", get(handlers::mcp_docs::mcp_tools_json))
         .route("/static/styles.css", get(move || {
             let css = stylesheet_content.clone();
             async move {
