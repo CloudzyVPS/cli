@@ -70,6 +70,7 @@ async fn build_state_from_env(env_file: Option<&str>) -> AppState {
         current_hostname,
         custom_css: None,
         workspaces,
+        mcp_log_store: mcp::log::McpLogStore::new(),
     }
 }
 
@@ -163,6 +164,9 @@ fn build_app(state: AppState) -> Router {
         .route("/logout", post(handlers::auth::logout_post))
         .route("/mcp", get(handlers::mcp_docs::mcp_docs_page))
         .route("/mcp/tools", get(handlers::mcp_docs::mcp_tools_json))
+        .route("/mcp/logs", get(handlers::mcp_docs::mcp_logs_json))
+        .route("/mcp/logs/:id", get(handlers::mcp_docs::mcp_log_detail_json))
+        .route("/mcp/logs-page", get(handlers::mcp_docs::mcp_logs_page))
         .route("/static/styles.css", get(move || {
             let css = stylesheet_content.clone();
             async move {
@@ -826,7 +830,7 @@ async fn main() {
             let state = build_state_from_env(env_file.as_deref()).await;
             // Silence API client logging so it does not pollute the stdio protocol stream
             crate::api::client::set_silent(true);
-            mcp::server::run(state.client, state.api_base_url, state.api_token).await;
+            mcp::server::run(state.client, state.api_base_url, state.api_token, state.mcp_log_store).await;
             return;
         }
     }

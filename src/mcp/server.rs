@@ -2,13 +2,14 @@ use serde_json::{json, Value};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 
 use super::tools;
+use super::log::McpLogStore;
 
 const PROTOCOL_VERSION: &str = "2024-11-05";
 
 /// Run the MCP server, reading JSON-RPC messages from stdin and writing
 /// responses to stdout. Logging goes to stderr so it never contaminates the
 /// protocol stream.
-pub async fn run(client: reqwest::Client, api_base_url: String, api_token: String) {
+pub async fn run(client: reqwest::Client, api_base_url: String, api_token: String, log_store: McpLogStore) {
     let stdin = tokio::io::stdin();
     let mut stdout = tokio::io::stdout();
     let reader = BufReader::new(stdin);
@@ -38,7 +39,7 @@ pub async fn run(client: reqwest::Client, api_base_url: String, api_token: Strin
 
         // Notifications (no "id" field) are acknowledged silently
         let id = msg.get("id").cloned();
-        let method = msg.get("method").and_then(|m| m.as_str()).unwrap_or("");
+        let method = msg.get("method").and_then(|m| m.as_str()).unwrap_or("").to_string();
         let params = msg.get("params").cloned().unwrap_or(json!({}));
 
         if id.is_none() {
@@ -46,7 +47,9 @@ pub async fn run(client: reqwest::Client, api_base_url: String, api_token: Strin
             continue;
         }
 
-        let response = match method {
+        let start = std::time::Instant::now();
+
+        let response = match method.as_str() {
             "initialize" => handle_initialize(&id, &params),
             "tools/list" => handle_tools_list(&id),
             "tools/call" => handle_tools_call(&id, &params, &client, &api_base_url, &api_token).await,
@@ -64,6 +67,11 @@ pub async fn run(client: reqwest::Client, api_base_url: String, api_token: Strin
                 }
             }),
         };
+
+        let duration_ms = start.elapsed().as_millis() as u64;
+        let is_error = response.get("error").is_some()
+            || response.get("result").and_then(|r| r.get("isError")).and_then(|v| v.as_bool()).unwrap_or(false);
+        log_store.push(method, msg.clone(), response.clone(), duration_ms, is_error);
 
         if write_message(&mut stdout, &response).await.is_err() {
             break;

@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Zy MCP — Call Logs</title>
+<style>
+:root {
+  --bg: #1a1a2e;
+  --surface: #16213e;
+  --border: #1a3a6a;
+  --accent: #e94560;
+  --accent-light: #ff6b81;
+  --text: #eee;
+  --text-muted: #94a3b8;
+  --green: #22c55e;
+  --yellow: #eab308;
+  --blue: #3b82f6;
+  --radius: 8px;
+  --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --mono: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: var(--font); background: var(--bg); color: var(--text); line-height: 1.6; }
+a { color: var(--accent-light); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+.header {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  padding: 1.2rem 2rem;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+.header h1 { font-size: 1.5rem; font-weight: 700; }
+.header h1 span { color: var(--accent); }
+.header .badge {
+  background: var(--accent);
+  color: #fff;
+  padding: .15rem .6rem;
+  border-radius: 999px;
+  font-size: .7rem;
+  font-weight: 600;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+.header .spacer { flex: 1; }
+.header .nav-link { color: var(--text-muted); font-size: .85rem; }
+
+.container { max-width: 1100px; margin: 0 auto; padding: 2rem 1.5rem; }
+
+/* Stats row */
+.stats { display: flex; gap: 1.5rem; margin-bottom: 2rem; flex-wrap: wrap; }
+.stat-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: .8rem 1.2rem;
+  min-width: 120px;
+  flex: 1;
+}
+.stat-card .label { font-size: .7rem; text-transform: uppercase; letter-spacing: .06em; color: var(--text-muted); }
+.stat-card .value { font-size: 1.6rem; font-weight: 700; color: var(--accent-light); }
+
+/* Table */
+.log-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: .85rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+.log-table th {
+  text-align: left;
+  font-size: .7rem;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  color: var(--text-muted);
+  padding: .7rem .8rem;
+  background: rgba(0,0,0,.15);
+  border-bottom: 1px solid var(--border);
+}
+.log-table td {
+  padding: .6rem .8rem;
+  border-bottom: 1px solid rgba(255,255,255,.04);
+  vertical-align: middle;
+}
+.log-table tr { cursor: pointer; transition: background .15s; }
+.log-table tbody tr:hover { background: rgba(233,69,96,.06); }
+.status-ok { color: var(--green); font-weight: 600; }
+.status-err { color: var(--accent); font-weight: 600; }
+.method-badge {
+  font-family: var(--mono);
+  font-size: .78rem;
+  font-weight: 600;
+  background: rgba(59,130,246,.12);
+  color: var(--blue);
+  padding: .15rem .5rem;
+  border-radius: 4px;
+}
+.time-col { font-family: var(--mono); font-size: .78rem; color: var(--text-muted); }
+.duration-col { font-family: var(--mono); font-size: .78rem; color: var(--text-muted); }
+
+/* Pagination */
+.pagination {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: .5rem;
+  margin-top: 1.5rem;
+}
+.pagination button {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: .4rem .9rem;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: .8rem;
+}
+.pagination button:hover:not(:disabled) { border-color: var(--accent); color: var(--accent-light); }
+.pagination button:disabled { opacity: .4; cursor: default; }
+.pagination .page-info { color: var(--text-muted); font-size: .8rem; }
+
+/* Detail overlay */
+.overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,.7);
+  z-index: 100;
+  justify-content: center;
+  align-items: flex-start;
+  padding: 3rem 1rem;
+  overflow-y: auto;
+}
+.overlay.open { display: flex; }
+.detail-panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  max-width: 800px;
+  width: 100%;
+  padding: 1.5rem;
+  position: relative;
+}
+.detail-panel .close-btn {
+  position: absolute;
+  top: .8rem;
+  right: 1rem;
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 1.3rem;
+  cursor: pointer;
+}
+.detail-panel .close-btn:hover { color: var(--accent); }
+.detail-panel h2 { font-size: 1.1rem; margin-bottom: .4rem; }
+.detail-panel .detail-meta { color: var(--text-muted); font-size: .8rem; margin-bottom: 1rem; }
+.detail-panel h3 {
+  font-size: .75rem;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  color: var(--text-muted);
+  margin-top: 1.2rem;
+  margin-bottom: .4rem;
+}
+.raw-block {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1rem;
+  font-family: var(--mono);
+  font-size: .78rem;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--text-muted);
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+/* Loading / empty */
+.loading { text-align: center; padding: 4rem 0; color: var(--text-muted); }
+.loading .spinner { display: inline-block; width: 28px; height: 28px; border: 3px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin .7s linear infinite; margin-bottom: .8rem; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.empty-state { text-align: center; padding: 3rem 0; color: var(--text-muted); }
+.error-box { background: rgba(233,69,96,.1); border: 1px solid var(--accent); border-radius: var(--radius); padding: 1.2rem; color: var(--accent-light); margin: 2rem 0; }
+.footer { text-align: center; color: var(--text-muted); font-size: .75rem; padding: 2rem 0 3rem; }
+
+@media (max-width: 640px) {
+  .header { padding: 1rem; }
+  .container { padding: 1rem; }
+  .duration-col { display: none; }
+}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>📋 <span>Zy</span> MCP</h1>
+  <div class="badge">Call Logs</div>
+  <div class="spacer"></div>
+  <a class="nav-link" href="/mcp">← Tool Reference</a>
+</div>
+
+<div class="container">
+  <div id="stats" class="stats" style="display:none"></div>
+  <div id="content">
+    <div class="loading">
+      <div class="spinner"></div>
+      <div>Loading call logs…</div>
+    </div>
+  </div>
+  <div id="pagination" class="pagination" style="display:none"></div>
+  <div class="footer">MCP call logs are stored in memory and reset when the server restarts.</div>
+</div>
+
+<div class="overlay" id="overlay">
+  <div class="detail-panel" id="detailPanel">
+    <button class="close-btn" id="closeBtn">&times;</button>
+    <div id="detailContent"></div>
+  </div>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  var contentEl = document.getElementById('content');
+  var statsEl = document.getElementById('stats');
+  var paginationEl = document.getElementById('pagination');
+  var overlayEl = document.getElementById('overlay');
+  var detailContentEl = document.getElementById('detailContent');
+  var currentPage = 1;
+  var perPage = 20;
+
+  document.getElementById('closeBtn').addEventListener('click', closeDetail);
+  overlayEl.addEventListener('click', function (e) {
+    if (e.target === overlayEl) closeDetail();
+  });
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') closeDetail();
+  });
+
+  loadLogs(currentPage);
+
+  function loadLogs(page) {
+    contentEl.innerHTML = '<div class="loading"><div class="spinner"></div><div>Loading call logs…</div></div>';
+    paginationEl.style.display = 'none';
+
+    fetch('/mcp/logs?page=' + page + '&per_page=' + perPage)
+      .then(function (r) {
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        return r.json();
+      })
+      .then(function (data) { renderLogs(data); })
+      .catch(function (err) {
+        contentEl.innerHTML = '<div class="error-box">Failed to load logs: ' + escapeHtml(err.message) + '</div>';
+      });
+  }
+
+  function renderLogs(data) {
+    currentPage = data.page;
+    var errorCount = 0;
+    data.logs.forEach(function (l) { if (l.is_error) errorCount++; });
+
+    statsEl.style.display = 'flex';
+    statsEl.innerHTML =
+      statCard('Total Calls', data.total) +
+      statCard('Page', data.page + ' / ' + data.total_pages) +
+      statCard('Errors on Page', errorCount);
+
+    if (data.total === 0) {
+      contentEl.innerHTML = '<div class="empty-state">No MCP calls recorded yet.<br>Start the MCP server with <code>zy mcp</code> and send some requests.</div>';
+      paginationEl.style.display = 'none';
+      return;
+    }
+
+    var html = '<table class="log-table"><thead><tr>' +
+      '<th>#</th><th>Time</th><th>Method</th><th>Status</th><th>Duration</th>' +
+      '</tr></thead><tbody>';
+
+    data.logs.forEach(function (log) {
+      var statusHtml = log.is_error
+        ? '<span class="status-err">ERROR</span>'
+        : '<span class="status-ok">OK</span>';
+      html +=
+        '<tr data-id="' + log.id + '">' +
+        '<td>' + log.id + '</td>' +
+        '<td class="time-col">' + escapeHtml(formatTime(log.timestamp)) + '</td>' +
+        '<td><span class="method-badge">' + escapeHtml(log.method) + '</span></td>' +
+        '<td>' + statusHtml + '</td>' +
+        '<td class="duration-col">' + log.duration_ms + ' ms</td>' +
+        '</tr>';
+    });
+
+    html += '</tbody></table>';
+    contentEl.innerHTML = html;
+
+    // Wire row click → detail
+    contentEl.querySelectorAll('tr[data-id]').forEach(function (row) {
+      row.addEventListener('click', function () {
+        openDetail(row.getAttribute('data-id'));
+      });
+    });
+
+    // Pagination
+    paginationEl.style.display = 'flex';
+    var prevDisabled = currentPage <= 1 ? ' disabled' : '';
+    var nextDisabled = currentPage >= data.total_pages ? ' disabled' : '';
+    paginationEl.innerHTML =
+      '<button id="prevBtn"' + prevDisabled + '>← Previous</button>' +
+      '<span class="page-info">Page ' + data.page + ' of ' + data.total_pages + '</span>' +
+      '<button id="nextBtn"' + nextDisabled + '>Next →</button>';
+
+    document.getElementById('prevBtn').addEventListener('click', function () {
+      if (currentPage > 1) loadLogs(currentPage - 1);
+    });
+    document.getElementById('nextBtn').addEventListener('click', function () {
+      if (currentPage < data.total_pages) loadLogs(currentPage + 1);
+    });
+  }
+
+  function openDetail(id) {
+    detailContentEl.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+    overlayEl.classList.add('open');
+
+    fetch('/mcp/logs/' + id)
+      .then(function (r) {
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        return r.json();
+      })
+      .then(function (entry) {
+        var statusHtml = entry.is_error
+          ? '<span class="status-err">ERROR</span>'
+          : '<span class="status-ok">OK</span>';
+        detailContentEl.innerHTML =
+          '<h2>Call #' + entry.id + ' — <span class="method-badge">' + escapeHtml(entry.method) + '</span> ' + statusHtml + '</h2>' +
+          '<div class="detail-meta">' + escapeHtml(entry.timestamp) + ' · ' + entry.duration_ms + ' ms</div>' +
+          '<h3>Request (raw JSON-RPC)</h3>' +
+          '<div class="raw-block">' + escapeHtml(JSON.stringify(entry.request, null, 2)) + '</div>' +
+          '<h3>Response (raw JSON-RPC)</h3>' +
+          '<div class="raw-block">' + escapeHtml(JSON.stringify(entry.response, null, 2)) + '</div>';
+      })
+      .catch(function (err) {
+        detailContentEl.innerHTML = '<div class="error-box">Failed to load detail: ' + escapeHtml(err.message) + '</div>';
+      });
+  }
+
+  function closeDetail() {
+    overlayEl.classList.remove('open');
+  }
+
+  function statCard(label, value) {
+    return '<div class="stat-card"><div class="label">' + escapeHtml(label) + '</div><div class="value">' + escapeHtml(String(value)) + '</div></div>';
+  }
+
+  function formatTime(ts) {
+    try {
+      var d = new Date(ts);
+      return d.toLocaleString();
+    } catch (e) {
+      return ts;
+    }
+  }
+
+  function escapeHtml(str) {
+    var div = document.createElement('div');
+    div.appendChild(document.createTextNode(str));
+    return div.innerHTML;
+  }
+})();
+</script>
+</body>
+</html>
