@@ -5,15 +5,10 @@ pub fn tool_definitions() -> Vec<Value> {
     vec![
         json!({
             "name": "list_instances",
-            "description": "List compute instances. Optionally filter by username.",
+            "description": "List compute instances.",
             "inputSchema": {
                 "type": "object",
-                "properties": {
-                    "username": {
-                        "type": "string",
-                        "description": "Optional username to filter instances by assigned user"
-                    }
-                }
+                "properties": {}
             }
         }),
         json!({
@@ -220,5 +215,21 @@ mod tests {
                 assert!(required_names.contains(&"instance_id"), "{} should require instance_id", name);
             }
         }
+    }
+
+    #[tokio::test]
+    async fn test_call_tool_unknown_returns_error() {
+        let client = reqwest::Client::new();
+        let result = call_tool(&client, "http://localhost:0", "", "no_such_tool", &json!({})).await;
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("unknown tool"));
+    }
+
+    #[tokio::test]
+    async fn test_call_tool_missing_instance_id() {
+        let client = reqwest::Client::new();
+        let result = call_tool(&client, "http://localhost:0", "", "get_instance", &json!({})).await;
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("instance_id"));
     }
 }
