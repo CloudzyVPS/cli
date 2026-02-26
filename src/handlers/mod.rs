@@ -8,6 +8,7 @@ pub mod middleware;
 pub mod system;
 pub mod workspaces;
 pub mod clocked_instances;
+pub mod mcp_docs;
 
 // Temporary - these will be fully implemented
 pub mod instances;

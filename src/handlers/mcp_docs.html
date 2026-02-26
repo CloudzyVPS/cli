@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Zy MCP — Tool Reference</title>
+<style>
+:root {
+  --bg: #1a1a2e;
+  --surface: #16213e;
+  --card: #0f3460;
+  --border: #1a3a6a;
+  --accent: #e94560;
+  --accent-light: #ff6b81;
+  --text: #eee;
+  --text-muted: #94a3b8;
+  --green: #22c55e;
+  --yellow: #eab308;
+  --blue: #3b82f6;
+  --tag-bg: #1e293b;
+  --radius: 8px;
+  --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --mono: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: var(--font); background: var(--bg); color: var(--text); line-height: 1.6; }
+a { color: var(--accent-light); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+/* Header */
+.header {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  padding: 1.2rem 2rem;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+.header h1 { font-size: 1.5rem; font-weight: 700; }
+.header h1 span { color: var(--accent); }
+.header .subtitle { color: var(--text-muted); font-size: .85rem; }
+.header .badge {
+  background: var(--accent);
+  color: #fff;
+  padding: .15rem .6rem;
+  border-radius: 999px;
+  font-size: .7rem;
+  font-weight: 600;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+.header .spacer { flex: 1; }
+.header .meta { color: var(--text-muted); font-size: .8rem; font-family: var(--mono); }
+
+/* Layout */
+.container { max-width: 960px; margin: 0 auto; padding: 2rem 1.5rem; }
+
+/* Stats bar */
+.stats {
+  display: flex;
+  gap: 1.5rem;
+  margin-bottom: 2rem;
+  flex-wrap: wrap;
+}
+.stat-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: .8rem 1.2rem;
+  min-width: 140px;
+  flex: 1;
+}
+.stat-card .label { font-size: .7rem; text-transform: uppercase; letter-spacing: .06em; color: var(--text-muted); }
+.stat-card .value { font-size: 1.6rem; font-weight: 700; color: var(--accent-light); }
+
+/* Tool cards */
+.tool-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  margin-bottom: 1rem;
+  overflow: hidden;
+  transition: border-color .2s;
+}
+.tool-card:hover { border-color: var(--accent); }
+.tool-header {
+  display: flex;
+  align-items: center;
+  gap: .75rem;
+  padding: 1rem 1.25rem;
+  cursor: pointer;
+  user-select: none;
+}
+.tool-header:hover { background: rgba(233,69,96,.04); }
+.tool-method {
+  background: var(--green);
+  color: #fff;
+  font-size: .65rem;
+  font-weight: 700;
+  padding: .2rem .55rem;
+  border-radius: 4px;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  min-width: 50px;
+  text-align: center;
+}
+.tool-method.write { background: var(--yellow); color: #000; }
+.tool-method.danger { background: var(--accent); }
+.tool-name { font-family: var(--mono); font-weight: 600; font-size: .95rem; }
+.tool-desc { color: var(--text-muted); font-size: .85rem; margin-left: auto; padding-left: 1rem; text-align: right; }
+.tool-toggle { color: var(--text-muted); font-size: .8rem; transition: transform .2s; }
+.tool-toggle.open { transform: rotate(180deg); }
+
+/* Expanded detail */
+.tool-body { display: none; border-top: 1px solid var(--border); padding: 1.25rem; }
+.tool-body.open { display: block; }
+.tool-body h3 { font-size: .8rem; text-transform: uppercase; letter-spacing: .06em; color: var(--text-muted); margin-bottom: .6rem; }
+
+/* Parameters table */
+.params-table { width: 100%; border-collapse: collapse; font-size: .85rem; }
+.params-table th {
+  text-align: left;
+  font-size: .7rem;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  color: var(--text-muted);
+  padding: .4rem .6rem;
+  border-bottom: 1px solid var(--border);
+}
+.params-table td { padding: .5rem .6rem; border-bottom: 1px solid rgba(255,255,255,.04); vertical-align: top; }
+.params-table .param-name { font-family: var(--mono); font-weight: 600; color: var(--blue); }
+.params-table .param-type { font-family: var(--mono); font-size: .8rem; color: var(--text-muted); }
+.required-badge {
+  display: inline-block;
+  background: rgba(233,69,96,.15);
+  color: var(--accent-light);
+  font-size: .65rem;
+  padding: .1rem .4rem;
+  border-radius: 3px;
+  font-weight: 600;
+  margin-left: .5rem;
+}
+.no-params { color: var(--text-muted); font-style: italic; font-size: .85rem; }
+
+/* JSON Schema preview */
+.schema-block {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1rem;
+  font-family: var(--mono);
+  font-size: .8rem;
+  overflow-x: auto;
+  margin-top: 1rem;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--text-muted);
+}
+
+/* Loading / error */
+.loading { text-align: center; padding: 4rem 0; color: var(--text-muted); }
+.loading .spinner { display: inline-block; width: 28px; height: 28px; border: 3px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin .7s linear infinite; margin-bottom: .8rem; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.error-box { background: rgba(233,69,96,.1); border: 1px solid var(--accent); border-radius: var(--radius); padding: 1.2rem; color: var(--accent-light); margin: 2rem 0; }
+
+/* Footer */
+.footer { text-align: center; color: var(--text-muted); font-size: .75rem; padding: 2rem 0 3rem; }
+
+/* Responsive */
+@media (max-width: 640px) {
+  .header { padding: 1rem; }
+  .container { padding: 1rem; }
+  .tool-desc { display: none; }
+  .stats { gap: .75rem; }
+}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>🔧 <span>Zy</span> MCP</h1>
+  <div class="badge">Tool Reference</div>
+  <div class="subtitle">Model Context Protocol — self-describing API for AI assistants</div>
+  <div class="spacer"></div>
+  <a class="meta" href="/mcp/logs-page" style="color:#94a3b8;font-size:.85rem;">📋 Call Logs</a>
+</div>
+
+<div class="container">
+  <div id="stats" class="stats" style="display:none"></div>
+  <div id="content">
+    <div class="loading">
+      <div class="spinner"></div>
+      <div>Fetching tool definitions…</div>
+    </div>
+  </div>
+  <div class="footer">
+    Powered by the <a href="https://modelcontextprotocol.io" target="_blank" rel="noopener">Model Context Protocol</a>.
+    Data sourced from the server's <code>tools/list</code> self-description.
+  </div>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  var contentEl = document.getElementById('content');
+  var statsEl = document.getElementById('stats');
+
+  fetch('/mcp/tools')
+    .then(function (r) {
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      return r.json();
+    })
+    .then(function (tools) { render(tools); })
+    .catch(function (err) {
+      contentEl.innerHTML = '<div class="error-box">Failed to load tool definitions: ' + escapeHtml(err.message) + '</div>';
+    });
+
+  function render(tools) {
+    // Stats
+    var readCount = 0, writeCount = 0, dangerCount = 0;
+    tools.forEach(function (t) {
+      var cat = categorize(t.name);
+      if (cat === 'danger') dangerCount++;
+      else if (cat === 'write') writeCount++;
+      else readCount++;
+    });
+    statsEl.style.display = 'flex';
+    statsEl.innerHTML =
+      statCard('Total Tools', tools.length) +
+      statCard('Read', readCount) +
+      statCard('Write', writeCount) +
+      statCard('Destructive', dangerCount);
+
+    // Tool cards
+    var html = '';
+    tools.forEach(function (tool, idx) {
+      html += buildToolCard(tool, idx);
+    });
+    contentEl.innerHTML = html;
+
+    // Wire up toggles
+    document.querySelectorAll('.tool-header').forEach(function (hdr) {
+      hdr.addEventListener('click', function () {
+        var idx = hdr.getAttribute('data-idx');
+        var body = document.getElementById('body-' + idx);
+        var toggle = hdr.querySelector('.tool-toggle');
+        body.classList.toggle('open');
+        toggle.classList.toggle('open');
+      });
+    });
+  }
+
+  function statCard(label, value) {
+    return '<div class="stat-card"><div class="label">' + escapeHtml(label) + '</div><div class="value">' + value + '</div></div>';
+  }
+
+  function categorize(name) {
+    if (/delete/.test(name)) return 'danger';
+    if (/power|reset|change|resize|add/.test(name)) return 'write';
+    return 'read';
+  }
+
+  function methodLabel(name) {
+    var cat = categorize(name);
+    if (cat === 'danger') return '<span class="tool-method danger">DELETE</span>';
+    if (cat === 'write') return '<span class="tool-method write">ACTION</span>';
+    return '<span class="tool-method">READ</span>';
+  }
+
+  function buildToolCard(tool, idx) {
+    var schema = tool.inputSchema || {};
+    var props = schema.properties || {};
+    var required = schema.required || [];
+    var keys = Object.keys(props);
+
+    var paramsHtml = '';
+    if (keys.length === 0) {
+      paramsHtml = '<div class="no-params">No parameters required.</div>';
+    } else {
+      paramsHtml = '<table class="params-table"><thead><tr><th>Name</th><th>Type</th><th>Description</th></tr></thead><tbody>';
+      keys.forEach(function (key) {
+        var p = props[key];
+        var isReq = required.indexOf(key) !== -1;
+        paramsHtml +=
+          '<tr>' +
+          '<td><span class="param-name">' + escapeHtml(key) + '</span>' + (isReq ? '<span class="required-badge">required</span>' : '') + '</td>' +
+          '<td><span class="param-type">' + escapeHtml(p.type || 'any') + '</span></td>' +
+          '<td>' + escapeHtml(p.description || '—') + '</td>' +
+          '</tr>';
+      });
+      paramsHtml += '</tbody></table>';
+    }
+
+    return '' +
+      '<div class="tool-card">' +
+      '  <div class="tool-header" data-idx="' + idx + '">' +
+           methodLabel(tool.name) +
+      '    <span class="tool-name">' + escapeHtml(tool.name) + '</span>' +
+      '    <span class="tool-desc">' + escapeHtml(tool.description || '') + '</span>' +
+      '    <span class="tool-toggle">▼</span>' +
+      '  </div>' +
+      '  <div class="tool-body" id="body-' + idx + '">' +
+      '    <h3>Parameters</h3>' +
+           paramsHtml +
+      '    <h3 style="margin-top:1rem">Input Schema</h3>' +
+      '    <div class="schema-block">' + escapeHtml(JSON.stringify(schema, null, 2)) + '</div>' +
+      '  </div>' +
+      '</div>';
+  }
+
+  function escapeHtml(str) {
+    var div = document.createElement('div');
+    div.appendChild(document.createTextNode(str));
+    return div.innerHTML;
+  }
+})();
+</script>
+</body>
+</html>

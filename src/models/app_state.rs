@@ -3,6 +3,7 @@ use std::sync::{Arc, Mutex};
 
 use crate::models::user_record::UserRecord;
 use crate::models::workspace_record::WorkspaceRecord;
+use crate::mcp::log::McpLogStore;
 
 #[derive(Clone)]
 pub struct AppState {
@@ -19,6 +20,8 @@ pub struct AppState {
     pub custom_css: Option<String>,
     /// All workspaces keyed by slug.
     pub workspaces: Arc<Mutex<HashMap<String, WorkspaceRecord>>>,
+    /// Shared MCP call log store (populated by the stdio MCP server, read by the web UI).
+    pub mcp_log_store: McpLogStore,
 }
 
 impl AppState {
