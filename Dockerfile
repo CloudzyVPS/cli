@@ -22,10 +22,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 COPY --from=builder /build/target/release/zy /usr/local/bin/zy
 
-EXPOSE 5000
-
-ENV API_BASE_URL=https://api.cloudzy.com/developers \
-    PUBLIC_BASE_URL=http://localhost:5000
+# Sign-ins persist in /config; mount a volume there, or pass CLOUDZY_TOKEN.
+ENV CLOUDZY_URL=https://dash.cloudzy.com \
+    CLOUDZY_CONFIG_DIR=/config
+VOLUME ["/config"]
 
 ENTRYPOINT ["zy"]
-CMD ["serve", "--host", "0.0.0.0", "--port", "5000"]
+CMD ["--help"]

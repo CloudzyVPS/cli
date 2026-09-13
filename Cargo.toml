@@ -1,7 +1,10 @@
 [package]
 name = "zy"
-version = "1.0.2"
+version = "2.0.0"
 edition = "2021"
+description = "Command-line tool and MCP server for the Cloudzy cloud"
+authors = ["Cloudzy AI Information Technology L.L.C."]
+repository = "https://github.com/CloudzyVPS/cli"
 
 [lib]
 name = "zy"
