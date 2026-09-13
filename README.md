@@ -1,298 +1,203 @@
-# Zy — AI-Native Cloud Infrastructure CLI
+# Zy — the Cloudzy CLI and MCP server
 
-**Zy** is an AI-native command-line tool that gives AI assistants the ability to create, manage, and control cloud infrastructure on [Cloudzy](https://cloudzy.com). It implements the **Model Context Protocol (MCP)** so that any MCP-compatible AI — Claude, GPT, Copilot, or your own agent — can deploy servers, launch WordPress sites, manage VPS instances, and operate cloud resources through natural conversation.
+**Zy** manages your [Cloudzy](https://cloudzy.com) cloud from the terminal, from scripts, and from AI assistants. It is a command-line tool and a [Model Context Protocol](https://modelcontextprotocol.io) server over the same API client, so everything you can do with `zy servers …` an assistant can do with a tool call.
 
-> _"Create a WordPress website on the internet."_
+> _"Create a WordPress site in Frankfurt with my laptop's SSH key."_
 >
-> That's all a user needs to say. The AI assistant uses Zy's MCP tools to pick a region, choose a plan, select the WordPress one-click app, and spin up a live server — no manual steps required.
+> The assistant lists plans and regions, picks the WordPress one-click app, calls `create_server`, and waits for it to come up.
 
 ---
 
-### Docker (one-liner)
+## Install
 
-Run the web interface instantly using the pre-built image from the GitHub Container Registry — no installation required:
-
-```bash
-docker run -e API_TOKEN=your_api_token -p 5000:5000 ghcr.io/cloudzvps/cli:latest
-```
-
-Then open `http://localhost:5000` in your browser.
-
-**Pass additional configuration via environment variables:**
+Download the binary for your platform from [Releases](https://github.com/CloudzyVPS/cli/releases) — Linux (x86_64, ARM64), macOS (Intel, Apple Silicon), Windows (x86_64).
 
 ```bash
-docker run \
-  -e API_TOKEN=your_api_token \
-  -e API_BASE_URL=https://api.cloudzy.com/developers \
-  -e PUBLIC_BASE_URL=http://localhost:5000 \
-  -p 5000:5000 \
-  ghcr.io/cloudzvps/cli:latest
+chmod +x zy-*
+sudo mv zy-* /usr/local/bin/zy
+zy --version
 ```
 
-> **Note:** On first run, a default owner account is created with username `owner` and password `owner123`. Change this password immediately after your first login.
+On Windows, rename the `.exe` to `zy.exe` and put it on your `PATH`. `zy update` keeps it current.
 
-### Download
-## 🤖 AI Integration (MCP)
+Or run it from the container image:
 
-Zy exposes cloud infrastructure operations as **MCP tools** over a standard JSON-RPC 2.0 stdio transport. Any AI assistant that supports the [Model Context Protocol](https://modelcontextprotocol.io) can use Zy to manage real servers on the internet.
+```bash
+docker run --rm -it -v cloudzy:/config ghcr.io/cloudzyvps/cli login --device
+docker run --rm -v cloudzy:/config ghcr.io/cloudzyvps/cli servers list
+```
 
-### Quick Start — Connect Your AI
+## Sign in
 
-1. **Install Zy** ([download a binary](#installation) or build from source)
-2. **Configure your API token:**
-   ```bash
-   export API_BASE_URL=https://api.cloudzy.com/developers
-   export API_TOKEN=your_cloudzy_api_token
-   ```
-3. **Register Zy as an MCP server** in your AI client. For Claude Desktop, add to your `claude_desktop_config.json`:
-   ```json
-   {
-     "mcpServers": {
-       "cloudzy": {
-         "command": "zy",
-         "args": ["mcp"]
-       }
-     }
-   }
-   ```
-4. **Ask your AI anything about cloud infrastructure.** It will call Zy's tools automatically.
+```bash
+zy login            # opens your browser
+zy login --device   # SSH session, container, no browser: approve a short code on any device
+zy whoami
+```
 
-### Available MCP Tools
+`zy login` signs you in with your Cloudzy account through the browser (OAuth 2.0 with PKCE). The first time, Cloudzy asks you to allow the **Cloudzy CLI** to manage servers, networking, backups and to read billing; after that, sign-ins go straight through. Over SSH or wherever no browser is available, zy switches to device sign-in automatically: it prints a link and a code, and you approve on your phone or laptop.
 
-| Tool | Description |
-|------|-------------|
-| `list_instances` | List all compute instances on your account |
-| `get_instance` | Get full details of a specific instance by ID |
-| `power_on_instance` | Power on a stopped instance |
-| `power_off_instance` | Power off a running instance |
-| `reset_instance` | Reboot an instance |
-| `delete_instance` | Permanently delete an instance |
-| `list_regions` | List available cloud data center regions |
-| `list_ssh_keys` | List SSH keys on the account |
+Access tokens are short-lived and refresh automatically. The sign-in is stored in `credentials.json` (owner-only permissions) under your config directory — `~/.config/cloudzy` on Linux, `~/Library/Application Support/cloudzy` on macOS, `%APPDATA%\cloudzy` on Windows — or `$CLOUDZY_CONFIG_DIR`.
 
-The MCP server is **self-describing** — AI clients discover these tools automatically via the `tools/list` method. Visit `/mcp` on the web server for interactive, Swagger-like documentation.
+```bash
+zy auth status      # which credential, which account, when it refreshes
+zy logout           # revokes the sign-in on Cloudzy and forgets it locally
+```
 
-### What Can an AI Do With Zy?
+You can withdraw access at any time in the Cloudzy dashboard under **Settings → Security → Connected applications**, which signs out every copy of the CLI at once.
 
-When connected to an AI assistant, users can make requests like:
+### CI and automation
 
-- _"Deploy a WordPress site in the US"_
-- _"Show me all my running servers"_
-- _"Reboot my production instance"_
-- _"Turn off the staging server to save costs"_
-- _"List available data center regions"_
-- _"Delete the test instance I created yesterday"_
+For unattended use, create a **developer API token** in the dashboard (**Developer API**), give it only the scopes the job needs, and pass it in the environment:
 
-The AI translates these natural-language requests into the right MCP tool calls.
+```bash
+export CLOUDZY_TOKEN=hpt_…
+zy servers list -o json
+```
 
----
+`CLOUDZY_TOKEN` takes precedence over a stored sign-in and is never refreshed or written to disk.
 
-## 🔖 AI System Prompt
+## Use
 
-Copy the prompt below into your AI assistant's system instructions (or place it in an `AGENTS.md` / tool-description file) so that it knows **when and how** to use Zy for cloud and infrastructure tasks.
+```bash
+zy regions list
+zy plans list --region fra
+zy os list
+zy ssh-keys add laptop --file ~/.ssh/id_ed25519.pub
+
+zy servers create --hostname web-1 --plan std-4gb --region fra \
+    --os ubuntu-24.04 --ssh-key laptop --wait
+zy servers list
+zy servers power web-1-id reboot
+zy servers resize web-1-id --ram-mb 8192
+zy snapshots create web-1-id --name before-upgrade
+zy servers delete web-1-id
+```
+
+| Group | Commands |
+|---|---|
+| `servers` | `list` `get` `create` `delete` `power` `status` `rename` `resize` `rebuild` `reset-password` `usage` `activity` `wait` |
+| `snapshots` | `list` `create` `delete` `restore` `spawn` |
+| `ssh-keys` | `list` `add` `delete` |
+| `reserved-ips` | `list` `create` `attach` `detach` `auto-renew` `release` |
+| `ips` | `list` `add` `remove` |
+| `firewall` | `list` `add` `delete` |
+| `regions` `plans` `os` `apps` | `list` (and `apps get`) |
+| `billing` | `balance` `ledger` `invoices` |
+| account | `login` `logout` `auth status` `auth token` `whoami` |
+| other | `mcp` `update` |
+
+Run `zy <command> --help` for every flag.
+
+- **Output.** Tables by default; `-o json` prints the API's JSON unchanged, for `jq` and scripts. Status notes go to stderr, so stdout stays clean.
+- **Confirmation.** `delete`, `rebuild`, `reset-password`, snapshot `restore`/`delete`, and IP `release`/`remove` ask you to type the resource name. In scripts, pass `--yes`; without a terminal and without `--yes` they refuse.
+- **Profiles.** `--profile staging` (or `CLOUDZY_PROFILE`) keeps separate sign-ins side by side.
+- **Debugging.** `--debug` logs each request and response line to stderr. Credentials are never printed.
+
+## AI assistants (MCP)
+
+`zy mcp` serves the Model Context Protocol over stdio, using the same credential as the CLI. Sign in first with `zy login` (or set `CLOUDZY_TOKEN`), then register it:
+
+**Claude Code**
+
+```bash
+claude mcp add cloudzy -- zy mcp
+```
+
+**Claude Desktop, Cursor, VS Code and other clients**
+
+```json
+{
+  "mcpServers": {
+    "cloudzy": {
+      "command": "zy",
+      "args": ["mcp"]
+    }
+  }
+}
+```
+
+For a container, or to use a scoped developer token instead of your sign-in:
+
+```json
+{
+  "mcpServers": {
+    "cloudzy": {
+      "command": "docker",
+      "args": ["run", "--rm", "-i", "-e", "CLOUDZY_TOKEN", "ghcr.io/cloudzyvps/cli", "mcp"],
+      "env": { "CLOUDZY_TOKEN": "hpt_…" }
+    }
+  }
+}
+```
+
+### Tools
+
+| Area | Tools |
+|---|---|
+| Servers | `list_servers` `get_server` `create_server` `delete_server` `power_server` `rename_server` `resize_server` `rebuild_server` `reset_server_password` `server_status` `server_usage` `server_activity` |
+| Snapshots | `list_snapshots` `create_snapshot` `delete_snapshot` `restore_snapshot` `spawn_server_from_snapshot` |
+| SSH keys | `list_ssh_keys` `add_ssh_key` `delete_ssh_key` |
+| Networking | `list_reserved_ips` `reserve_ips` `attach_reserved_ip` `detach_reserved_ip` `set_reserved_ip_auto_renew` `release_reserved_ip` `list_server_ips` `attach_server_ip` `detach_server_ip` `list_firewall_rules` `add_firewall_rule` `delete_firewall_rule` |
+| Catalog | `list_regions` `list_plans` `list_os_templates` `list_apps` `get_app` |
+| Account | `whoami` `get_balance` `list_ledger` `list_invoices` |
+
+Every tool carries MCP annotations. Deletes, rebuilds, password resets, snapshot restores and IP releases are marked **destructive**, so a well-behaved client asks you before running them. Creating servers, snapshots and IPs charges your Cloudzy balance.
 
 <details>
-<summary><strong>Click to expand — Cloudzy AI System Prompt</strong></summary>
+<summary><strong>Suggested system prompt</strong></summary>
 
 ```markdown
-# Cloudzy Cloud Infrastructure Tool
+You can manage the user's Cloudzy cloud through the `cloudzy` MCP tools.
 
-You have access to the Cloudzy MCP server ("zy") which lets you create,
-manage, and control cloud computing infrastructure on the internet.
-
-## When to use this tool
-
-Use the Cloudzy tools whenever the user asks about:
-- Creating, deploying, or launching a **website**, **server**, **VPS**,
-  or **virtual machine** on the internet / in the cloud
-- Managing **cloud infrastructure** — starting, stopping, rebooting,
-  or deleting servers
-- Checking the status of their **online servers** or **instances**
-- Deploying a specific application (e.g. **WordPress**, **Node.js**,
-  **Docker**) to a live server on the internet
-- Anything involving **hosting**, **cloud compute**, **data centers**,
-  or **regions**
-
-## Available tools
-
-- **list_instances** — List all running and stopped compute instances.
-- **get_instance(instance_id)** — Get detailed information about one instance
-  (IP address, status, OS, region, specs).
-- **power_on_instance(instance_id)** — Start a stopped instance.
-- **power_off_instance(instance_id)** — Stop a running instance.
-- **reset_instance(instance_id)** — Reboot an instance.
-- **delete_instance(instance_id)** — Permanently destroy an instance.
-- **list_regions** — List all available data center locations worldwide
-  (use this to help the user pick where to host).
-- **list_ssh_keys** — List SSH keys on the account
-  (useful before creating an instance).
-
-## How instance creation works
-
-To deploy a new server (e.g. a WordPress site), guide the user through:
-
-1. **Pick a region** — use `list_regions` to show options, then let the
-   user choose based on proximity or preference.
-2. **Pick a plan** — Cloudzy offers fixed plans (pre-set CPU/RAM/disk)
-   and custom plans. Recommend a suitable size for the workload.
-3. **Pick an OS and application** — For WordPress, select a Linux OS and
-   the WordPress one-click application (OCA). For a plain server, just
-   pick an OS.
-4. **Create the instance** — The instance is provisioned via the Cloudzy
-   API with the chosen region, plan, OS, and optional application.
-5. **Report back** — Tell the user their server's IP address, status, and
-   any next steps (like visiting their new WordPress site).
-
-After creation, use `list_instances` or `get_instance` to retrieve the
-server IP and confirm it is running.
-
-## Tips
-
-- Always confirm destructive actions (delete, power off) with the user.
-- When the user says "my server" or "my website", use `list_instances`
-  to find the relevant instance.
-- Instance IDs are UUIDs — the user usually refers to instances by
-  hostname or IP, so map between them using `list_instances`.
-- Regions have human-friendly names (e.g. "Los Angeles", "Frankfurt") —
-  present these to the user, not raw IDs.
+- Discover before acting: list_regions, list_plans (with a region for prices),
+  list_os_templates and list_apps before create_server; list_servers for ids.
+- Creating servers, snapshots and IPs costs money. State the plan, region and
+  monthly price, and get a yes, before calling create_server, reserve_ips or
+  spawn_server_from_snapshot.
+- Never call a destructive tool (delete_server, rebuild_server,
+  reset_server_password, restore_snapshot, delete_snapshot,
+  release_reserved_ip, detach_server_ip, delete_ssh_key, delete_firewall_rule)
+  without explicit confirmation naming the resource.
+- After create_server, poll get_server until state is "active" and report the
+  IP address. Passwords returned by rebuild or reset are shown once — hand
+  them to the user and do not repeat them later.
+- If a tool returns an error with a hint, follow the hint (for example, the
+  balance is too low, or the credential lacks a scope) instead of retrying.
 ```
 
 </details>
 
----
+## Configuration
 
-## 📖 MCP Documentation & Logs
+| Setting | Flag | Environment | Default |
+|---|---|---|---|
+| Platform URL | `--url` | `CLOUDZY_URL` | `https://dash.cloudzy.com` |
+| Profile | `--profile` | `CLOUDZY_PROFILE` | `default` |
+| Developer token | — | `CLOUDZY_TOKEN` | — |
+| Config directory | — | `CLOUDZY_CONFIG_DIR` | platform config dir + `cloudzy` |
+| Output | `-o, --output` | — | `table` |
 
-When running the web server (`zy serve`), Zy provides built-in MCP documentation:
+A stored sign-in is only sent to the URL that issued it; pointing zy at another URL requires signing in there.
 
-| URL | Description |
-|-----|-------------|
-| `/mcp` | Interactive Swagger-like tool reference (auto-generated from MCP self-description) |
-| `/mcp/tools` | Raw JSON tool definitions |
-| `/mcp/logs-page` | Paginated MCP call log viewer with click-to-expand raw request/response dumps |
-| `/mcp/logs` | Call logs as JSON (supports `?page=1&per_page=20`) |
-| `/mcp/logs/:id` | Single log entry detail as JSON |
-
----
-
-## 🚀 Installation
-
-Download the latest binary for your platform from the [Releases page](https://github.com/CloudzyVPS/cli/releases).
-
-**Platforms:** Linux (x86_64, ARM64) · macOS (Intel, Apple Silicon) · Windows (x86_64)
-
-**Linux / macOS:**
-```bash
-chmod +x zy-*
-sudo mv zy-* /usr/local/bin/zy
-zy --help
-```
-
-**Windows:**
-1. Download `zy-…-x86_64-pc-windows-msvc.exe` from Releases
-2. Rename to `zy.exe` and place in your PATH
-3. Verify: `zy --help`
-
-### Configuration
-
-```bash
-# Required
-export API_BASE_URL=https://api.cloudzy.com/developers
-export API_TOKEN=your_api_token_here
-
-# Or use a .env file
-zy serve --env-file .env
-zy mcp --env-file .env
-```
-
-See [.env.example](.env.example) for all options.
-
----
-
-## 💻 CLI Usage
-
-### Web Server
-
-```bash
-zy serve                              # Start on 0.0.0.0:5000
-zy serve --host 127.0.0.1 --port 8080 # Custom bind
-```
-
-**⚠️** On first run a default owner account (`owner` / `owner123`) is created. Change it immediately:
-```bash
-zy users reset-password owner YOUR_NEW_SECURE_PASSWORD
-```
-
-### MCP Server (for AI assistants)
-
-```bash
-zy mcp                  # Start MCP stdio server
-zy mcp --env-file .env  # With explicit config
-```
-
-### Instance Management
-
-```bash
-zy instances list
-zy instances show <id>
-zy instances power-on <id>
-zy instances power-off <id>
-zy instances reset <id>
-zy instances delete <id>
-```
-
-### User Management
-
-```bash
-zy users list
-zy users add <username> <password> <role>
-zy users reset-password <username> <password>
-```
-
-### Other Commands
-
-```bash
-zy check-config   # Validate API credentials
-zy update          # Self-update to latest version
-zy --help          # Full help
-```
-
----
-
-## 🔧 Building from Source
+## Build from source
 
 ```bash
 git clone https://github.com/CloudzyVPS/cli.git
 cd cli
 cargo build --release
-./target/release/zy --help
-```
-
-### Testing
-
-```bash
 cargo test
 ```
 
----
+Requirements: Linux with glibc 2.31+ (Ubuntu 20.04+, Debian 11+), macOS 10.15+, or Windows 10+.
 
-## 📋 Requirements
-
-- **Linux**: glibc 2.31+ (Ubuntu 20.04+, Debian 11+)
-- **macOS**: 10.15+ (Catalina)
-- **Windows**: 10+
-
-## 🤝 Contributing
-
-Contributions welcome — please open issues or pull requests.
-
-## 📝 License
-
-See [LICENSE](LICENSE) for details.
-
-## 🔗 Links
+## Links
 
 - [Cloudzy](https://cloudzy.com)
-- [API Documentation](https://api.cloudzy.com/developers)
-- [Model Context Protocol](https://modelcontextprotocol.io)
 - [Releases](https://github.com/CloudzyVPS/cli/releases)
+- [Changelog](CHANGELOG.md)
+- [Model Context Protocol](https://modelcontextprotocol.io)
+
+Contributions are welcome — please open an issue or a pull request.
+
+© Cloudzy AI Information Technology L.L.C.

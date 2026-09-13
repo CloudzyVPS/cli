@@ -1,7 +1,10 @@
-//! Zy CLI Library
-//! 
-//! This library provides core functionality for the Zy CLI tool,
-//! including the self-update mechanism.
+//! Zy — the Cloudzy command-line tool and MCP server.
 
-pub mod update;
+pub mod api;
+pub mod auth;
+pub mod commands;
 pub mod config;
+pub mod error;
+pub mod mcp;
+pub mod output;
+pub mod update;

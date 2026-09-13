@@ -1,196 +1,208 @@
+//! MCP over stdio: newline-delimited JSON-RPC 2.0.
+//!
+//! stdout carries protocol messages only; anything for a human goes to
+//! stderr.
+
 use serde_json::{json, Value};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 
 use super::tools;
-use super::log::McpLogStore;
+use crate::api::ApiClient;
 
-const PROTOCOL_VERSION: &str = "2024-11-05";
+/// Newest first. A client asking for one of these gets it back; anything else
+/// gets the newest, per the spec's version negotiation.
+pub const PROTOCOL_VERSIONS: &[&str] = &["2025-06-18", "2025-03-26", "2024-11-05"];
 
-/// Run the MCP server, reading JSON-RPC messages from stdin and writing
-/// responses to stdout. Logging goes to stderr so it never contaminates the
-/// protocol stream.
-pub async fn run(client: reqwest::Client, api_base_url: String, api_token: String, log_store: McpLogStore) {
-    let stdin = tokio::io::stdin();
-    let mut stdout = tokio::io::stdout();
-    let reader = BufReader::new(stdin);
-    let mut lines = reader.lines();
+const INSTRUCTIONS: &str = "Tools for the Cloudzy cloud: servers, snapshots, SSH keys, IPs, firewall rules, catalog and billing. \
+Creating servers, snapshots and IPs charges the account balance. Tools marked destructive delete data, replace credentials \
+or release addresses — confirm with the person before calling them. IDs come from the list_* tools.";
 
-    while let Ok(Some(line)) = lines.next_line().await {
-        let line = line.trim().to_string();
-        if line.is_empty() {
-            continue;
-        }
+/// The API client, or why there is none (for example: not signed in). The
+/// server still starts without one, so the client can show the reason on
+/// every call instead of a dead process.
+pub type Backend = Result<ApiClient, String>;
 
-        let msg: Value = match serde_json::from_str(&line) {
+pub struct Server {
+    backend: Backend,
+}
+
+impl Server {
+    pub fn new(backend: Backend) -> Server {
+        Server { backend }
+    }
+
+    /// Handle one message; `None` for notifications, which get no reply.
+    pub async fn handle(&self, raw: &str) -> Option<Value> {
+        let msg: Value = match serde_json::from_str(raw) {
             Ok(v) => v,
-            Err(e) => {
-                let err_response = json!({
-                    "jsonrpc": "2.0",
-                    "id": null,
-                    "error": {
-                        "code": -32700,
-                        "message": format!("Parse error: {}", e)
-                    }
-                });
-                let _ = write_message(&mut stdout, &err_response).await;
-                continue;
-            }
+            Err(e) => return Some(error(Value::Null, -32700, &format!("parse error: {e}"))),
         };
-
-        // Notifications (no "id" field) are acknowledged silently
         let id = msg.get("id").cloned();
-        let method = msg.get("method").and_then(|m| m.as_str()).unwrap_or("").to_string();
-        let params = msg.get("params").cloned().unwrap_or(json!({}));
+        let Some(method) = msg.get("method").and_then(Value::as_str) else {
+            // A response to something we never send, or garbage.
+            return id.map(|id| error(id, -32600, "invalid request"));
+        };
+        let id = id?;
+        let params = msg.get("params").cloned().unwrap_or(Value::Null);
+        Some(match method {
+            "initialize" => {
+                let asked = params
+                    .get("protocolVersion")
+                    .and_then(Value::as_str)
+                    .unwrap_or("");
+                let version = PROTOCOL_VERSIONS
+                    .iter()
+                    .find(|v| **v == asked)
+                    .unwrap_or(&PROTOCOL_VERSIONS[0]);
+                result(
+                    id,
+                    json!({
+                        "protocolVersion": version,
+                        "capabilities": { "tools": { "listChanged": false } },
+                        "serverInfo": { "name": "cloudzy", "title": "Cloudzy", "version": env!("CARGO_PKG_VERSION") },
+                        "instructions": INSTRUCTIONS,
+                    }),
+                )
+            }
+            "ping" => result(id, json!({})),
+            "tools/list" => result(
+                id,
+                json!({ "tools": tools::all().iter().map(tools::Tool::to_json).collect::<Vec<_>>() }),
+            ),
+            "tools/call" => {
+                let Some(name) = params.get("name").and_then(Value::as_str) else {
+                    return Some(error(id, -32602, "tools/call needs a tool name"));
+                };
+                if !tools::all().iter().any(|t| t.name == name) {
+                    return Some(error(id, -32602, &format!("unknown tool: {name}")));
+                }
+                let args = params
+                    .get("arguments")
+                    .cloned()
+                    .unwrap_or_else(|| json!({}));
+                result(id, self.call_tool(name, &args).await)
+            }
+            other => error(id, -32601, &format!("method not found: {other}")),
+        })
+    }
 
-        if id.is_none() {
-            // This is a notification (e.g. notifications/initialized) – no response needed
+    async fn call_tool(&self, name: &str, args: &Value) -> Value {
+        let api = match &self.backend {
+            Ok(api) => api,
+            Err(why) => return tool_error(why, None),
+        };
+        match tools::call(api, name, args).await {
+            Ok(value) => {
+                let text = serde_json::to_string_pretty(&value).unwrap_or_default();
+                let structured = match value {
+                    Value::Object(_) => value,
+                    Value::Null => json!({ "ok": true }),
+                    other => json!({ "items": other }),
+                };
+                json!({ "content": [{ "type": "text", "text": text }], "structuredContent": structured, "isError": false })
+            }
+            Err(e) => tool_error(&e.message, e.detail),
+        }
+    }
+}
+
+fn tool_error(message: &str, detail: Option<Value>) -> Value {
+    let mut out = json!({ "content": [{ "type": "text", "text": message }], "isError": true });
+    if let Some(d) = detail {
+        out["structuredContent"] = d;
+    }
+    out
+}
+
+fn result(id: Value, result: Value) -> Value {
+    json!({ "jsonrpc": "2.0", "id": id, "result": result })
+}
+
+fn error(id: Value, code: i64, message: &str) -> Value {
+    json!({ "jsonrpc": "2.0", "id": id, "error": { "code": code, "message": message } })
+}
+
+/// Serve until stdin closes.
+pub async fn run(server: Server) -> std::io::Result<()> {
+    let mut lines = BufReader::new(tokio::io::stdin()).lines();
+    let mut stdout = tokio::io::stdout();
+    while let Some(line) = lines.next_line().await? {
+        if line.trim().is_empty() {
             continue;
         }
-
-        let start = std::time::Instant::now();
-
-        let response = match method.as_str() {
-            "initialize" => handle_initialize(&id, &params),
-            "tools/list" => handle_tools_list(&id),
-            "tools/call" => handle_tools_call(&id, &params, &client, &api_base_url, &api_token).await,
-            "ping" => json!({
-                "jsonrpc": "2.0",
-                "id": id,
-                "result": {}
-            }),
-            _ => json!({
-                "jsonrpc": "2.0",
-                "id": id,
-                "error": {
-                    "code": -32601,
-                    "message": format!("Method not found: {}", method)
-                }
-            }),
-        };
-
-        let duration_ms = start.elapsed().as_millis() as u64;
-        let is_error = response.get("error").is_some()
-            || response.get("result").and_then(|r| r.get("isError")).and_then(|v| v.as_bool()).unwrap_or(false);
-        log_store.push(method, msg.clone(), response.clone(), duration_ms, is_error);
-
-        if write_message(&mut stdout, &response).await.is_err() {
-            break;
+        if let Some(reply) = server.handle(&line).await {
+            let mut bytes = serde_json::to_vec(&reply).expect("reply serializes");
+            bytes.push(b'\n');
+            stdout.write_all(&bytes).await?;
+            stdout.flush().await?;
         }
     }
-}
-
-async fn write_message(stdout: &mut tokio::io::Stdout, msg: &Value) -> Result<(), std::io::Error> {
-    let serialized = serde_json::to_string(msg).unwrap_or_default();
-    stdout.write_all(serialized.as_bytes()).await?;
-    stdout.write_all(b"\n").await?;
-    stdout.flush().await?;
     Ok(())
-}
-
-fn handle_initialize(id: &Option<Value>, _params: &Value) -> Value {
-    json!({
-        "jsonrpc": "2.0",
-        "id": id,
-        "result": {
-            "protocolVersion": PROTOCOL_VERSION,
-            "capabilities": {
-                "tools": {}
-            },
-            "serverInfo": {
-                "name": "zy",
-                "version": env!("CARGO_PKG_VERSION")
-            }
-        }
-    })
-}
-
-fn handle_tools_list(id: &Option<Value>) -> Value {
-    json!({
-        "jsonrpc": "2.0",
-        "id": id,
-        "result": {
-            "tools": tools::tool_definitions()
-        }
-    })
-}
-
-async fn handle_tools_call(
-    id: &Option<Value>,
-    params: &Value,
-    client: &reqwest::Client,
-    api_base_url: &str,
-    api_token: &str,
-) -> Value {
-    let tool_name = params.get("name").and_then(|n| n.as_str()).unwrap_or("");
-    let arguments = params.get("arguments").cloned().unwrap_or(json!({}));
-
-    match tools::call_tool(client, api_base_url, api_token, tool_name, &arguments).await {
-        Ok(result) => {
-            let text = serde_json::to_string_pretty(&result).unwrap_or_default();
-            json!({
-                "jsonrpc": "2.0",
-                "id": id,
-                "result": {
-                    "content": [{
-                        "type": "text",
-                        "text": text
-                    }]
-                }
-            })
-        }
-        Err(e) => {
-            json!({
-                "jsonrpc": "2.0",
-                "id": id,
-                "result": {
-                    "content": [{
-                        "type": "text",
-                        "text": e
-                    }],
-                    "isError": true
-                }
-            })
-        }
-    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    #[test]
-    fn test_handle_initialize() {
-        let id = Some(json!(1));
-        let params = json!({
-            "protocolVersion": "2024-11-05",
-            "clientInfo": { "name": "test", "version": "0.1" }
-        });
-        let resp = handle_initialize(&id, &params);
-
-        assert_eq!(resp["jsonrpc"], "2.0");
-        assert_eq!(resp["id"], 1);
-        let result = &resp["result"];
-        assert_eq!(result["protocolVersion"], PROTOCOL_VERSION);
-        assert!(result["capabilities"]["tools"].is_object());
-        assert_eq!(result["serverInfo"]["name"], "zy");
+    fn offline() -> Server {
+        Server::new(Err("not signed in — run `zy login`".into()))
     }
 
-    #[test]
-    fn test_handle_tools_list() {
-        let id = Some(json!(2));
-        let resp = handle_tools_list(&id);
-
-        assert_eq!(resp["jsonrpc"], "2.0");
-        assert_eq!(resp["id"], 2);
-        let tools = resp["result"]["tools"].as_array().expect("tools should be array");
-        assert!(!tools.is_empty());
+    #[tokio::test]
+    async fn initialize_negotiates_the_version() {
+        let s = offline();
+        let r = s.handle(r#"{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-03-26"}}"#).await.unwrap();
+        assert_eq!(r["result"]["protocolVersion"], "2025-03-26");
+        assert_eq!(r["result"]["serverInfo"]["name"], "cloudzy");
+        let r = s.handle(r#"{"jsonrpc":"2.0","id":2,"method":"initialize","params":{"protocolVersion":"1999-01-01"}}"#).await.unwrap();
+        assert_eq!(r["result"]["protocolVersion"], PROTOCOL_VERSIONS[0]);
     }
 
-    #[test]
-    fn test_handle_initialize_includes_version() {
-        let id = Some(json!("init-1"));
-        let resp = handle_initialize(&id, &json!({}));
-        let version = resp["result"]["serverInfo"]["version"].as_str().unwrap();
-        assert!(!version.is_empty());
+    #[tokio::test]
+    async fn notifications_get_no_reply_and_errors_are_json_rpc() {
+        let s = offline();
+        assert!(s
+            .handle(r#"{"jsonrpc":"2.0","method":"notifications/initialized"}"#)
+            .await
+            .is_none());
+        assert_eq!(
+            s.handle("{not json").await.unwrap()["error"]["code"],
+            -32700
+        );
+        assert_eq!(
+            s.handle(r#"{"jsonrpc":"2.0","id":3,"method":"resources/list"}"#)
+                .await
+                .unwrap()["error"]["code"],
+            -32601
+        );
+        assert_eq!(
+            s.handle(r#"{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"nope"}}"#)
+                .await
+                .unwrap()["error"]["code"],
+            -32602
+        );
+    }
+
+    #[tokio::test]
+    async fn without_a_credential_tools_fail_visibly() {
+        let r = offline().handle(r#"{"jsonrpc":"2.0","id":5,"method":"tools/call","params":{"name":"list_servers"}}"#).await.unwrap();
+        assert_eq!(r["result"]["isError"], true);
+        assert!(r["result"]["content"][0]["text"]
+            .as_str()
+            .unwrap()
+            .contains("zy login"));
+    }
+
+    #[tokio::test]
+    async fn tools_list_carries_annotations() {
+        let r = offline()
+            .handle(r#"{"jsonrpc":"2.0","id":6,"method":"tools/list"}"#)
+            .await
+            .unwrap();
+        let tools = r["result"]["tools"].as_array().unwrap();
+        assert!(tools.len() > 30);
+        let del = tools.iter().find(|t| t["name"] == "delete_server").unwrap();
+        assert_eq!(del["annotations"]["destructiveHint"], true);
+        assert_eq!(del["inputSchema"]["required"][0], "id");
     }
 }
