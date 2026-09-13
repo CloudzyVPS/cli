@@ -5,5 +5,6 @@ pub mod auth;
 pub mod commands;
 pub mod config;
 pub mod error;
+pub mod mcp;
 pub mod output;
 pub mod update;

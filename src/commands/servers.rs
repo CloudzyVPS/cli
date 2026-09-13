@@ -447,7 +447,7 @@ fn looks_like_uuid(s: &str) -> bool {
         })
 }
 
-async fn resolve_plan(api: &ApiClient, plan: &str) -> Result<String> {
+pub async fn resolve_plan(api: &ApiClient, plan: &str) -> Result<String> {
     if looks_like_uuid(plan) {
         return Ok(plan.to_string());
     }

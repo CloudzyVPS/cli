@@ -114,6 +114,9 @@ pub enum Command {
         #[command(subcommand)]
         command: resources::BillingCommand,
     },
+    /// Serve the Model Context Protocol over stdio for AI assistants
+    #[command(long_about = "Serve the Model Context Protocol (JSON-RPC over stdin/stdout) so an AI assistant can manage Cloudzy through zy's tools.\n\nUses the same credential as every other command: CLOUDZY_TOKEN, or the sign-in stored by `zy login`.\n\nExample (Claude Code):  claude mcp add cloudzy -- zy mcp")]
+    Mcp,
     /// Update zy to the latest release
     Update {
         /// Release channel to check (stable, beta, alpha, rc)
@@ -151,6 +154,15 @@ pub async fn run(cli: Cli) -> Result<()> {
         Command::Os { command } => catalog::os(&ctx, command).await,
         Command::Apps { command } => catalog::apps(&ctx, command).await,
         Command::Billing { command } => resources::billing(&ctx, command).await,
+        Command::Mcp => {
+            let backend = ctx.api().map_err(|e| e.to_string());
+            if let Err(why) = &backend {
+                eprintln!("zy mcp: {why}");
+            }
+            crate::mcp::server::run(crate::mcp::server::Server::new(backend))
+                .await
+                .map_err(|e| crate::error::CliError::Other(format!("mcp stdio: {e}")))
+        }
         Command::Update { channel, force } => {
             update::run(channel, *force).await;
             Ok(())
