@@ -129,7 +129,7 @@ pub enum Command {
 }
 
 pub async fn run(cli: Cli) -> Result<()> {
-    if cli.no_color {
+    if !color_wanted(cli.no_color) {
         yansi::whenever(yansi::Condition::NEVER);
     }
     let settings = Settings::resolve(cli.url.as_deref(), cli.profile.as_deref());
@@ -168,6 +168,16 @@ pub async fn run(cli: Cli) -> Result<()> {
             Ok(())
         }
     }
+}
+
+/// Colour only for a person at a terminal: not with `--no-color`, not when
+/// NO_COLOR is set (no-color.org), and not when stderr — where zy writes
+/// its coloured notes — is redirected to a file or a pipe.
+fn color_wanted(flag: bool) -> bool {
+    use std::io::IsTerminal;
+    !flag
+        && std::env::var_os("NO_COLOR").is_none_or(|v| v.is_empty())
+        && std::io::stderr().is_terminal()
 }
 
 #[cfg(test)]

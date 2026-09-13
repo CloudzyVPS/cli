@@ -231,3 +231,32 @@ async fn whoami_and_billing_balance() {
     let out = env.zy(&["billing", "balance"], Some("hpt_ci")).await;
     assert!(stdout(&out).contains("1234.56 USD"), "{}", stdout(&out));
 }
+
+#[tokio::test]
+async fn redirected_output_has_no_ansi_escapes() {
+    let env = Env::new().await;
+    Mock::given(path("/api/v1/services/s1"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(server_json()))
+        .mount(&env.server)
+        .await;
+    Mock::given(method("DELETE"))
+        .and(path("/api/v1/services/s1"))
+        .respond_with(ResponseTemplate::new(204))
+        .mount(&env.server)
+        .await;
+    let mut cmd = std::process::Command::new(env!("CARGO_BIN_EXE_zy"));
+    cmd.args(["servers", "delete", "s1", "--yes"])
+        .env("CLOUDZY_URL", env.server.uri())
+        .env("CLOUDZY_CONFIG_DIR", env.config.path())
+        .env("CLOUDZY_TOKEN", "hpt_ci")
+        .env_remove("NO_COLOR");
+    let out = tokio::task::spawn_blocking(move || cmd.output().unwrap())
+        .await
+        .unwrap();
+    assert!(out.status.success());
+    assert!(
+        !stderr(&out).contains('\u{1b}'),
+        "piped stderr must not carry colour codes: {:?}",
+        stderr(&out)
+    );
+}
