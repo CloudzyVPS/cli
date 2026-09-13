@@ -23,6 +23,7 @@ sha2 = "0.10"
 hex = "0.4"
 clap = { version = "4.2", features = ["derive"] }
 yansi = "1.0.1"
+comfy-table = "7.2.1"
 chrono = "0.4"
 indicatif = "0.17"
 tempfile = "3"

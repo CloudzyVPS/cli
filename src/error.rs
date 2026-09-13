@@ -2,12 +2,15 @@
 
 use thiserror::Error;
 
+use crate::api::ApiError;
 use crate::auth::AuthError;
 
 #[derive(Debug, Error)]
 pub enum CliError {
     #[error(transparent)]
     Auth(#[from] AuthError),
+    #[error(transparent)]
+    Api(#[from] ApiError),
     #[error("{0}")]
     Usage(String),
     #[error("{0}")]
