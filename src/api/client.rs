@@ -106,6 +106,25 @@ impl ApiClient {
     /// Send a request. A 2xx with a body returns the JSON; 204 returns `Null`.
     pub async fn send(&self, req: Request) -> Result<Value, ApiError> {
         let url = format!("{}/api/v1{}", self.base_url, req.path);
+        let mutation = !matches!(req.method, Method::GET | Method::HEAD | Method::OPTIONS)
+            && req.path != "/pricing/quote";
+        let recovery = recovery_for(&req.path);
+        if mutation {
+            eprintln!(
+                "Pending: {} {}. If interrupted, {}",
+                req.method, req.path, recovery
+            );
+        }
+        let uncertain = |error: ApiError| {
+            if mutation {
+                ApiError::Uncertain {
+                    source: Box::new(error),
+                    guidance: format!("Completion is uncertain; {recovery}"),
+                }
+            } else {
+                error
+            }
+        };
         let idempotency_key = req.idempotent.then(|| random_urlsafe(24));
         let mut token = self.credential.bearer().await?;
         let mut refreshed = false;
@@ -117,6 +136,11 @@ impl ApiClient {
                 .request(req.method.clone(), &url)
                 .bearer_auth(&token)
                 .header(reqwest::header::ACCEPT, "application/json");
+            // Rebuilds and IP changes can take minutes. Override the short
+            // authentication/read timeout, retaining a bounded request budget.
+            if mutation {
+                builder = builder.timeout(Duration::from_secs(900));
+            }
             if !req.query.is_empty() {
                 builder = builder.query(&req.query);
             }
@@ -131,10 +155,14 @@ impl ApiClient {
             if self.debug {
                 eprintln!("→ {} {}", req.method, url);
             }
-            let resp = builder.send().await.map_err(|source| ApiError::Network {
-                url: url.clone(),
-                source,
-            })?;
+            let resp = builder
+                .send()
+                .await
+                .map_err(|source| ApiError::Network {
+                    url: url.clone(),
+                    source,
+                })
+                .map_err(&uncertain)?;
             let status = resp.status();
             if self.debug {
                 eprintln!(
@@ -149,10 +177,22 @@ impl ApiClient {
                 .get(reqwest::header::RETRY_AFTER)
                 .and_then(|v| v.to_str().ok())
                 .and_then(|v| v.trim().parse::<u64>().ok());
-            let bytes = resp.bytes().await.map_err(|source| ApiError::Network {
-                url: url.clone(),
-                source,
-            })?;
+            let reference = ["cf-ray", "x-request-id", "x-correlation-id"]
+                .iter()
+                .find_map(|name| {
+                    resp.headers()
+                        .get(*name)
+                        .and_then(|v| v.to_str().ok())
+                        .map(|v| format!("{name}: {v}"))
+                });
+            let bytes = resp
+                .bytes()
+                .await
+                .map_err(|source| ApiError::Network {
+                    url: url.clone(),
+                    source,
+                })
+                .map_err(&uncertain)?;
 
             if status == StatusCode::UNAUTHORIZED && !refreshed {
                 refreshed = true;
@@ -173,14 +213,36 @@ impl ApiClient {
                 }
             }
             if !status.is_success() {
-                return Err(ApiError::from_response(status.as_u16(), &bytes));
+                let mut error = ApiError::from_response(status.as_u16(), &bytes);
+                if let ApiError::Http {
+                    message, details, ..
+                } = &mut error
+                {
+                    if let Some(reference) = reference {
+                        message.push_str(&format!(" [{reference}]"));
+                        let payload = details.get_or_insert_with(|| serde_json::json!({}));
+                        if payload.is_object() {
+                            payload["requestReference"] = serde_json::json!(reference);
+                        }
+                    }
+                }
+                if self.debug {
+                    eprintln!("API error details: {}", error.to_json());
+                }
+                return Err(if status.is_server_error() {
+                    uncertain(error)
+                } else {
+                    error
+                });
             }
             if bytes.is_empty() || status == StatusCode::NO_CONTENT {
                 return Ok(Value::Null);
             }
-            return serde_json::from_slice(&bytes).map_err(|e| ApiError::Decode {
-                url,
-                reason: e.to_string(),
+            return serde_json::from_slice(&bytes).map_err(|e| {
+                uncertain(ApiError::Decode {
+                    url,
+                    reason: e.to_string(),
+                })
             });
         }
     }
@@ -195,5 +257,18 @@ pub fn items(value: &Value) -> Vec<Value> {
             _ => Vec::new(),
         },
         _ => Vec::new(),
+    }
+}
+
+/// A read-only recovery command, never an automatic repeat of a mutation.
+fn recovery_for(path: &str) -> String {
+    let parts: Vec<_> = path.split('/').filter(|part| !part.is_empty()).collect();
+    match parts.as_slice() {
+        ["services", id, "ips", ..] => format!("inspect `zy ips list {id}` before retrying."),
+        ["services", id, "snapshots", ..] => format!("inspect `zy snapshots list --server {id}` and `zy servers get {id}` before retrying."),
+        ["services", id, ..] => format!("inspect `zy servers get {id}` and `zy servers activity {id}` before retrying."),
+        ["services"] => "inspect `zy servers list` and `zy billing ledger` before retrying.".into(),
+        ["account", "reserved-ips", ..] => "inspect `zy reserved-ips list`, `zy servers list` and `zy billing ledger` before retrying.".into(),
+        _ => "inspect the resource state before retrying.".into(),
     }
 }

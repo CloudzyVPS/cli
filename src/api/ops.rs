@@ -54,6 +54,10 @@ pub fn regions() -> Request {
 pub fn pricing_catalog() -> Request {
     Request::get("/pricing/catalog")
 }
+/// Read-only configuration quote, including mandatory IPv4 surcharges.
+pub fn pricing_quote(body: Value) -> Request {
+    Request::post("/pricing/quote", body)
+}
 pub fn os_templates() -> Request {
     Request::get("/os-templates")
 }
@@ -183,6 +187,7 @@ pub fn restore_snapshot(server: &str, snapshot: &str) -> Request {
         ),
         json!({}),
     )
+    .query("confirm", true)
 }
 pub fn spawn_snapshot(
     server: &str,
@@ -275,6 +280,11 @@ pub fn add_firewall_rule(
     source: &str,
     action: &str,
 ) -> Request {
+    let direction = match direction {
+        "in" => "inbound",
+        "out" => "outbound",
+        other => other,
+    };
     Request::post(
         format!("/services/{}/firewall", seg(server)),
         json!({ "direction": direction, "protocol": protocol, "port": port, "source": source, "action": action }),
@@ -282,6 +292,39 @@ pub fn add_firewall_rule(
 }
 pub fn delete_firewall_rule(server: &str, rule: &str) -> Request {
     Request::delete(format!("/services/{}/firewall/{}", seg(server), seg(rule)))
+}
+
+/// Reject unsupported IP choices before sending a mutating request. Shared by CLI and MCP.
+pub async fn preflight_ip(
+    api: &super::ApiClient,
+    server: &str,
+    family: Option<&str>,
+    reserved: Option<&str>,
+) -> Result<(), super::ApiError> {
+    let reject = |message: String| super::ApiError::Http {
+        status: 400,
+        code: Some("unsupported_ip_choice".into()),
+        message,
+        details: None,
+    };
+    if reserved.is_some() {
+        if family.is_some() {
+            return Err(reject(
+                "family and reserved IP are mutually exclusive".into(),
+            ));
+        }
+        return Ok(());
+    }
+    match family.unwrap_or("ipv4") {
+        "ipv4" => return Err(reject("on-demand pool IPv4 allocation is unavailable; use `zy reserved-ips create --region REGION --family ipv4 --count 1 --yes`, then `zy reserved-ips attach RESERVED_ID SERVER_ID`".into())),
+        "ipv6" => {},
+        other => return Err(reject(format!("unknown IP family {other:?}; use ipv4 or ipv6"))),
+    }
+    let ips = api.send(server_ips(server)).await?;
+    if ips["ipv6Available"] == false {
+        return Err(reject(format!("IPv6 is unavailable for server {server} in this region; attach a reserved IPv4 instead")));
+    }
+    Ok(())
 }
 
 #[cfg(test)]

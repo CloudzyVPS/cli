@@ -3,7 +3,7 @@
 use std::process::Output;
 
 use serde_json::{json, Value};
-use wiremock::matchers::{body_json, header, method, path};
+use wiremock::matchers::{body_json, header, method, path, query_param};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
 struct Env {
@@ -95,6 +95,14 @@ async fn create_resolves_plan_slug_and_saved_ssh_key_names() {
         .respond_with(ResponseTemplate::new(201).set_body_json(json!({"id": "new-1", "hostname": "web-1", "state": "provisioning"})))
         .expect(1)
         .mount(&env.server).await;
+
+    Mock::given(method("POST"))
+        .and(path("/api/v1/pricing/quote"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(
+            json!({"subtotalMonthlyCents": 1500, "grandTotalCents": 1500, "currency": "USD"}),
+        ))
+        .mount(&env.server)
+        .await;
 
     let out = env
         .zy(
@@ -259,4 +267,592 @@ async fn redirected_output_has_no_ansi_escapes() {
         "piped stderr must not carry colour codes: {:?}",
         stderr(&out)
     );
+}
+
+#[tokio::test]
+async fn activity_and_usage_use_live_fields_without_changing_json() {
+    let env = Env::new().await;
+    let activity = json!([{"createdAt":"2026-10-07T15:16:02Z","fromState":"","toState":"provisioning","reason":"service created","actorType":"system","actor":""}]);
+    let usage = json!({"cpu":{"available":true,"current":60.43,"limit":100,"unit":"%"},"ram":{"available":true,"current":382,"limit":512,"unit":"MB"},"disk":{"available":false,"current":0,"limit":20,"unit":"GB"}});
+    for (route, body) in [("activity", activity.clone()), ("usage", usage.clone())] {
+        Mock::given(path(format!("/api/v1/services/s1/{route}")))
+            .respond_with(ResponseTemplate::new(200).set_body_json(body))
+            .mount(&env.server)
+            .await;
+    }
+    let out = env.zy(&["servers", "activity", "s1"], Some("hpt_ci")).await;
+    assert!(out.status.success(), "{}", stderr(&out));
+    for expected in [
+        "2026-10-07T15:16:02Z",
+        "provisioning",
+        "service created",
+        "system",
+    ] {
+        assert!(stdout(&out).contains(expected), "{}", stdout(&out));
+    }
+    let out = env.zy(&["servers", "usage", "s1"], Some("hpt_ci")).await;
+    for expected in ["60.43%", "382 / 512 MB", "unavailable"] {
+        assert!(stdout(&out).contains(expected), "{}", stdout(&out));
+    }
+    assert!(!stdout(&out).contains("Disk %"));
+    for (command, expected) in [("activity", activity), ("usage", usage)] {
+        let out = env
+            .zy(&["servers", command, "s1", "-o", "json"], Some("hpt_ci"))
+            .await;
+        assert_eq!(
+            serde_json::from_slice::<Value>(&out.stdout).unwrap(),
+            expected
+        );
+    }
+}
+
+#[tokio::test]
+async fn firewall_aliases_and_restore_confirmation_reach_the_backend() {
+    let env = Env::new().await;
+    for direction in ["inbound", "outbound"] {
+        Mock::given(method("POST")).and(path("/api/v1/services/s1/firewall"))
+            .and(body_json(json!({"direction":direction,"protocol":"tcp","port":"8080","source":"192.0.2.0/24","action":"allow"})))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({"id":"rule"})))
+            .mount(&env.server).await;
+    }
+    for alias in [
+        None,
+        Some("in"),
+        Some("inbound"),
+        Some("out"),
+        Some("outbound"),
+    ] {
+        let mut args = vec![
+            "firewall",
+            "add",
+            "s1",
+            "--port",
+            "8080",
+            "--source",
+            "192.0.2.0/24",
+        ];
+        if let Some(alias) = alias {
+            args.extend(["--direction", alias]);
+        }
+        let out = env.zy(&args, Some("hpt_ci")).await;
+        assert!(out.status.success(), "{}", stderr(&out));
+    }
+    let bad = env
+        .zy(
+            &["firewall", "add", "s1", "--direction", "sideways"],
+            Some("hpt_ci"),
+        )
+        .await;
+    assert_eq!(bad.status.code(), Some(2));
+    Mock::given(method("POST"))
+        .and(path("/api/v1/services/s1/snapshots/sn1/restore"))
+        .and(query_param("confirm", "true"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({"state":"restoring"})))
+        .expect(1)
+        .mount(&env.server)
+        .await;
+    let refused = env
+        .zy(&["snapshots", "restore", "s1", "sn1"], Some("hpt_ci"))
+        .await;
+    assert_eq!(refused.status.code(), Some(2));
+    let out = env
+        .zy(
+            &["snapshots", "restore", "s1", "sn1", "--yes", "-o", "json"],
+            Some("hpt_ci"),
+        )
+        .await;
+    assert!(out.status.success(), "{}", stderr(&out));
+    assert_eq!(
+        serde_json::from_slice::<Value>(&out.stdout).unwrap()["state"],
+        "restoring"
+    );
+}
+
+#[tokio::test]
+async fn micro_billing_amounts_keep_precision_and_sign_and_json_stays_raw() {
+    let env = Env::new().await;
+    let ledger = json!({"data":[{"amountCents":0,"amountMicro":-11086,"description":"hourly"},{"amountCents":0,"amountMicro":1,"description":"refund"},{"amountCents":250,"description":"ordinary"}]});
+    let invoices = json!({"data":[{"totalCents":0,"totalMicroCents":11086},{"totalCents":250}]});
+    for (route, response) in [
+        ("billing/ledger", ledger.clone()),
+        ("invoices", invoices.clone()),
+    ] {
+        Mock::given(path(format!("/api/v1/{route}")))
+            .respond_with(ResponseTemplate::new(200).set_body_json(response))
+            .mount(&env.server)
+            .await;
+    }
+    for (command, values, raw) in [
+        (
+            "ledger",
+            vec!["-0.011086 USD", "0.000001 USD", "2.50 USD"],
+            ledger,
+        ),
+        ("invoices", vec!["0.011086 USD", "2.50 USD"], invoices),
+    ] {
+        let out = env.zy(&["billing", command], Some("hpt_ci")).await;
+        for value in values {
+            assert!(stdout(&out).contains(value), "{}", stdout(&out));
+        }
+        let out = env
+            .zy(&["billing", command, "-o", "json"], Some("hpt_ci"))
+            .await;
+        assert_eq!(serde_json::from_slice::<Value>(&out.stdout).unwrap(), raw);
+    }
+}
+
+#[tokio::test]
+async fn unsupported_ip_choices_and_backups_never_mutate() {
+    let env = Env::new().await;
+    Mock::given(method("POST"))
+        .respond_with(ResponseTemplate::new(500))
+        .expect(0)
+        .mount(&env.server)
+        .await;
+    Mock::given(path("/api/v1/services/s1/ips"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({"ipv6Available":false})))
+        .mount(&env.server)
+        .await;
+    for family in ["ipv4", "ipv6"] {
+        let out = env
+            .zy(&["ips", "add", "s1", "--family", family], Some("hpt_ci"))
+            .await;
+        assert!(!out.status.success());
+        assert!(
+            stderr(&out).contains(if family == "ipv4" {
+                "reserved-ips create"
+            } else {
+                "IPv6 is unavailable"
+            }),
+            "{}",
+            stderr(&out)
+        );
+    }
+    let out = env
+        .zy(
+            &[
+                "servers",
+                "create",
+                "--hostname",
+                "test",
+                "--plan",
+                "p",
+                "--region",
+                "r",
+                "--backups",
+            ],
+            Some("hpt_ci"),
+        )
+        .await;
+    assert_eq!(out.status.code(), Some(2));
+    assert!(stderr(&out).contains("cannot currently be enabled and verified"));
+}
+
+#[tokio::test]
+async fn plan_labels_are_resolved_only_for_human_output() {
+    let env = Env::new().await;
+    let raw = json!({"hostname":"my-hostname","plan":{"id":"p1","name":"my-hostname"}});
+    Mock::given(path("/api/v1/services/s1"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(raw.clone()))
+        .mount(&env.server)
+        .await;
+    Mock::given(path("/api/v1/pricing/catalog"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_json(json!({"plans":[{"id":"p1","name":"VPS 1 GB"}]})),
+        )
+        .expect(1)
+        .mount(&env.server)
+        .await;
+    let out = env.zy(&["servers", "get", "s1"], Some("hpt_ci")).await;
+    assert!(stdout(&out).contains("VPS 1 GB"));
+    let out = env
+        .zy(&["servers", "get", "s1", "-o", "json"], Some("hpt_ci"))
+        .await;
+    assert_eq!(serde_json::from_slice::<Value>(&out.stdout).unwrap(), raw);
+}
+
+#[tokio::test]
+async fn rebuild_problem_errors_are_readable_and_have_recovery_and_reference() {
+    let env = Env::new().await;
+    let problem = json!({"type":"https://example.test/errors/502","title":"Bad gateway","detail":"The origin failed before returning a response.","status":502,"instance":"req-1"});
+    Mock::given(method("POST"))
+        .and(path("/api/v1/services/s1/rebuild"))
+        .and(body_json(json!({"osTemplate":"debian-12"})))
+        .respond_with(
+            ResponseTemplate::new(502)
+                .insert_header("cf-ray", "ray-123")
+                .set_body_json(problem),
+        )
+        .expect(1)
+        .mount(&env.server)
+        .await;
+    let out = env
+        .zy(
+            &["servers", "rebuild", "s1", "--os", "debian-12", "--yes"],
+            Some("hpt_ci"),
+        )
+        .await;
+    assert_eq!(out.status.code(), Some(1));
+    for expected in [
+        "Pending:",
+        "Bad gateway: The origin failed",
+        "HTTP 502",
+        "ray-123",
+        "Completion is uncertain",
+        "zy servers activity s1",
+    ] {
+        assert!(stderr(&out).contains(expected), "{}", stderr(&out));
+    }
+    assert!(!stderr(&out).contains("\"type\""));
+    assert!(out.stdout.is_empty());
+}
+
+fn pricing_catalog() -> Value {
+    json!({"plans":[{"id":"33333333-3333-3333-3333-333333330001","slug":"vps-512","name":"VPS 512 MB","cpuCores":1,"memoryMb":512,"diskGb":20,"bandwidthTb":1}],
+        "prices":[{"planId":"33333333-3333-3333-3333-333333330001","regionId":"sg","billingCycle":"hourly","monthlyEquivCents":495,"currency":"USD","inStock":true},
+                  {"planId":"33333333-3333-3333-3333-333333330001","regionId":"sg","billingCycle":"monthly","monthlyEquivCents":495,"currency":"USD","inStock":true}]})
+}
+
+#[tokio::test]
+async fn plan_selection_and_hourly_rates_and_creation_quote_are_consistent() {
+    let env = Env::new().await;
+    Mock::given(path("/api/v1/pricing/catalog"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(pricing_catalog()))
+        .mount(&env.server)
+        .await;
+    Mock::given(path("/api/v1/pricing/quote")).and(method("POST"))
+        .and(body_json(json!({"planId":"33333333-3333-3333-3333-333333330001","region":"sg","billingCycle":"hourly","quantity":1,"includeIpv4":true,"extras":{}})))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({"subtotalMonthlyCents":745,"grandTotalCents":1,"currency":"USD","appliedFeatures":[{"key":"ipv4_address","monthlyPriceCents":250}]})))
+        .expect(1).mount(&env.server).await;
+    Mock::given(path("/api/v1/services"))
+        .and(method("POST"))
+        .respond_with(ResponseTemplate::new(500))
+        .expect(0)
+        .mount(&env.server)
+        .await;
+    let out = env
+        .zy(
+            &[
+                "plans", "list", "--region", "sg", "--cycle", "hourly", "-o", "json",
+            ],
+            Some("hpt_ci"),
+        )
+        .await;
+    let selected: Value = serde_json::from_slice(&out.stdout).unwrap();
+    assert_eq!(selected["region"], "sg");
+    assert_eq!(selected["billingCycle"], "hourly");
+    assert_eq!(selected["plans"][0]["price"]["billingCycle"], "hourly");
+    let out = env
+        .zy(
+            &["plans", "list", "--region", "sg", "--cycle", "hourly"],
+            Some("hpt_ci"),
+        )
+        .await;
+    assert!(stdout(&out).contains("/hr"));
+    assert!(stderr(&out).contains("exclude configuration extras"));
+    let out = env
+        .zy(
+            &[
+                "servers",
+                "create",
+                "--hostname",
+                "preview",
+                "--plan",
+                "vps-512",
+                "--region",
+                "sg",
+                "--cycle",
+                "hourly",
+                "--dry-run",
+                "-o",
+                "json",
+            ],
+            Some("hpt_ci"),
+        )
+        .await;
+    assert!(out.status.success(), "{}", stderr(&out));
+    let quote: Value = serde_json::from_slice(&out.stdout).unwrap();
+    assert_eq!(quote["quote"]["subtotalMonthlyCents"], 745);
+    assert_eq!(quote["quote"]["appliedFeatures"][0]["key"], "ipv4_address");
+    assert!(!stderr(&out).contains("Pending:"));
+}
+
+#[tokio::test]
+async fn catalog_out_of_stock_stops_creation_before_mutation() {
+    let env = Env::new().await;
+    let mut catalog = pricing_catalog();
+    catalog["prices"][0]["inStock"] = json!(false);
+    Mock::given(path("/api/v1/pricing/catalog"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(catalog))
+        .mount(&env.server)
+        .await;
+    Mock::given(method("POST"))
+        .respond_with(ResponseTemplate::new(500))
+        .expect(0)
+        .mount(&env.server)
+        .await;
+    let out = env
+        .zy(
+            &[
+                "servers",
+                "create",
+                "--hostname",
+                "test",
+                "--plan",
+                "vps-512",
+                "--region",
+                "sg",
+                "--cycle",
+                "hourly",
+            ],
+            Some("hpt_ci"),
+        )
+        .await;
+    assert_eq!(out.status.code(), Some(2));
+    assert!(stderr(&out).contains("out of stock"));
+}
+
+#[tokio::test]
+async fn reserved_ip_preview_is_read_only_and_purchase_requires_acceptance() {
+    let env = Env::new().await;
+    let out = env
+        .zy(
+            &[
+                "reserved-ips",
+                "create",
+                "--region",
+                "sg",
+                "--count",
+                "2",
+                "--dry-run",
+                "-o",
+                "json",
+            ],
+            Some("hpt_ci"),
+        )
+        .await;
+    assert!(out.status.success(), "{}", stderr(&out));
+    let preview: Value = serde_json::from_slice(&out.stdout).unwrap();
+    assert_eq!(preview["totalMonthlyCents"], 500);
+    assert_eq!(preview["refundable"], false);
+    assert_eq!(preview["autoRenew"], true);
+    assert!(preview["priceSource"]
+        .as_str()
+        .unwrap()
+        .contains("not a live server quote"));
+    let refused = env
+        .zy(
+            &["reserved-ips", "create", "--region", "sg"],
+            Some("hpt_ci"),
+        )
+        .await;
+    assert_eq!(refused.status.code(), Some(2));
+    Mock::given(method("POST"))
+        .and(path("/api/v1/account/reserved-ips"))
+        .and(body_json(json!({"region":"sg","count":1})))
+        .respond_with(ResponseTemplate::new(200).set_body_json(
+            json!({"data":[{"id":"ip1","nextBillAt":"2026-11-07","autoRenew":true}]}),
+        ))
+        .expect(1)
+        .mount(&env.server)
+        .await;
+    let out = env
+        .zy(
+            &[
+                "reserved-ips",
+                "create",
+                "--region",
+                "sg",
+                "--yes",
+                "-o",
+                "json",
+            ],
+            Some("hpt_ci"),
+        )
+        .await;
+    assert!(out.status.success(), "{}", stderr(&out));
+    assert_eq!(
+        serde_json::from_slice::<Value>(&out.stdout).unwrap()["data"][0]["nextBillAt"],
+        "2026-11-07"
+    );
+    assert!(stderr(&out).contains("does not confirm the charged amount"));
+}
+
+#[tokio::test]
+async fn resize_preview_quotes_resources_without_applying_the_change() {
+    let env = Env::new().await;
+    let source = json!({"id":"s1","planId":"33333333-3333-3333-3333-333333330001","cpu":1,"ramMb":512,"diskGb":20,"bandwidthTb":1,"region":"sg","billingCycle":"hourly","ipAddress":"192.0.2.1","priceMonthly":7.45,"priceHourly":0.0110863095});
+    Mock::given(path("/api/v1/services/s1"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(source))
+        .mount(&env.server)
+        .await;
+    Mock::given(path("/api/v1/pricing/catalog"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(pricing_catalog()))
+        .mount(&env.server)
+        .await;
+    for (cpu, disk, monthly) in [(0, 0, 745), (1, 1, 1155)] {
+        Mock::given(method("POST")).and(path("/api/v1/pricing/quote"))
+            .and(body_json(json!({"planId":"33333333-3333-3333-3333-333333330001","region":"sg","billingCycle":"hourly","quantity":1,"includeIpv4":true,"extras":{"cpuCores":cpu,"ramGb":0,"diskGb":disk,"bandwidthTb":0}})))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({"subtotalMonthlyCents":monthly,"currency":"USD"})))
+            .expect(1).mount(&env.server).await;
+    }
+    Mock::given(path("/api/v1/services/s1/resize"))
+        .respond_with(ResponseTemplate::new(500))
+        .expect(0)
+        .mount(&env.server)
+        .await;
+    let out = env
+        .zy(
+            &[
+                "servers",
+                "resize",
+                "s1",
+                "--cpu",
+                "2",
+                "--ram-mb",
+                "1024",
+                "--disk-gb",
+                "21",
+                "--dry-run",
+                "-o",
+                "json",
+            ],
+            Some("hpt_ci"),
+        )
+        .await;
+    assert!(out.status.success(), "{}", stderr(&out));
+    let preview: Value = serde_json::from_slice(&out.stdout).unwrap();
+    assert_eq!(preview["configurationQuote"]["subtotalMonthlyCents"], 1155);
+    assert_eq!(preview["current"]["priceMonthly"], 7.45);
+    assert_eq!(preview["requested"]["diskGb"], 21);
+    assert!(preview["immediateCharge"].is_null());
+}
+
+#[tokio::test]
+async fn snapshot_spawn_supplies_selected_resources_and_waits_for_the_new_id() {
+    let env = Env::new().await;
+    Mock::given(path("/api/v1/services/source")).respond_with(ResponseTemplate::new(200).set_body_json(json!({"planId":"33333333-3333-3333-3333-333333330001","cpu":2,"ramMb":1024,"diskGb":21,"bandwidthTb":1,"region":"sg","billingCycle":"hourly","ipAddress":"192.0.2.1"}))).mount(&env.server).await;
+    Mock::given(path("/api/v1/pricing/catalog"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(pricing_catalog()))
+        .mount(&env.server)
+        .await;
+    Mock::given(path("/api/v1/pricing/quote"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_json(json!({"subtotalMonthlyCents":755,"currency":"USD"})),
+        )
+        .mount(&env.server)
+        .await;
+    Mock::given(method("POST")).and(path("/api/v1/services/source/snapshots/sn1/spawn"))
+        .and(body_json(json!({"hostname":"clone","planId":"33333333-3333-3333-3333-333333330001","cpuCores":1,"ramMb":512,"diskGb":21,"transferTb":1,"billingCycle":"hourly"})))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({"newServiceId":"new1","hostname":"clone"})))
+        .expect(1).mount(&env.server).await;
+    Mock::given(path("/api/v1/services/new1"))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_json(
+                json!({"id":"new1","state":"active","cpu":1,"ramMb":512,"diskGb":21}),
+            ),
+        )
+        .expect(1)
+        .mount(&env.server)
+        .await;
+    let out = env
+        .zy(
+            &[
+                "snapshots",
+                "spawn",
+                "source",
+                "sn1",
+                "--hostname",
+                "clone",
+                "--plan",
+                "vps-512",
+                "--yes",
+                "--wait",
+                "-o",
+                "json",
+            ],
+            Some("hpt_ci"),
+        )
+        .await;
+    assert!(out.status.success(), "{}", stderr(&out));
+    assert_eq!(
+        serde_json::from_slice::<Value>(&out.stdout).unwrap()["id"],
+        "new1"
+    );
+    assert!(stderr(&out).contains("zy servers wait new1"));
+}
+
+#[tokio::test]
+async fn json_problem_errors_retain_full_payload_and_wait_deadlines_are_bounded() {
+    let env = Env::new().await;
+    let detail = "Origin could not complete the request. ".repeat(30);
+    Mock::given(path("/api/v1/services/s1/rebuild")).respond_with(ResponseTemplate::new(502).set_body_json(json!({"title":"Bad gateway","detail":detail,"type":"https://example.test/problems/gateway","instance":"req-42"}))).mount(&env.server).await;
+    let out = env
+        .zy(
+            &[
+                "servers",
+                "rebuild",
+                "s1",
+                "--os",
+                "debian-12",
+                "--yes",
+                "-o",
+                "json",
+            ],
+            Some("hpt_ci"),
+        )
+        .await;
+    assert_eq!(out.status.code(), Some(1));
+    let error: Value = serde_json::from_slice(&out.stdout).unwrap();
+    assert_eq!(error["details"]["detail"], detail);
+    assert_eq!(error["details"]["instance"], "req-42");
+    assert!(error["recovery"]
+        .as_str()
+        .unwrap()
+        .contains("zy servers get s1"));
+    Mock::given(path("/api/v1/services/s2"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_delay(std::time::Duration::from_secs(3))
+                .set_body_json(json!({"id":"s2","state":"provisioning"})),
+        )
+        .mount(&env.server)
+        .await;
+    let started = std::time::Instant::now();
+    let out = env
+        .zy(&["servers", "wait", "s2", "--timeout", "1"], Some("hpt_ci"))
+        .await;
+    assert_eq!(out.status.code(), Some(1));
+    assert!(started.elapsed() < std::time::Duration::from_secs(2));
+    assert!(stderr(&out).contains("zy servers wait s2"));
+}
+
+#[tokio::test]
+async fn resize_refuses_when_a_generic_quote_cannot_reproduce_the_current_rate() {
+    let env = Env::new().await;
+    Mock::given(path("/api/v1/services/s1")).respond_with(ResponseTemplate::new(200).set_body_json(json!({"planId":"33333333-3333-3333-3333-333333330001","cpu":1,"ramMb":512,"diskGb":20,"bandwidthTb":1,"region":"sg","billingCycle":"hourly","ipAddress":"192.0.2.1","priceMonthly":9.99}))).mount(&env.server).await;
+    Mock::given(path("/api/v1/pricing/catalog"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(pricing_catalog()))
+        .mount(&env.server)
+        .await;
+    Mock::given(path("/api/v1/pricing/quote"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_json(json!({"subtotalMonthlyCents":745,"currency":"USD"})),
+        )
+        .expect(1)
+        .mount(&env.server)
+        .await;
+    Mock::given(path("/api/v1/services/s1/resize"))
+        .respond_with(ResponseTemplate::new(200))
+        .expect(0)
+        .mount(&env.server)
+        .await;
+    let out = env
+        .zy(&["servers", "resize", "s1", "--cpu", "2"], Some("hpt_ci"))
+        .await;
+    assert_eq!(out.status.code(), Some(2));
+    assert!(stderr(&out).contains("does not match the current service rate"));
 }

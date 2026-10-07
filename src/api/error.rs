@@ -20,6 +20,11 @@ pub enum ApiError {
     },
     #[error("unexpected response from {url}: {reason}")]
     Decode { url: String, reason: String },
+    #[error("{source}\n  {guidance}")]
+    Uncertain {
+        source: Box<ApiError>,
+        guidance: String,
+    },
 }
 
 impl ApiError {
@@ -35,28 +40,48 @@ impl ApiError {
                 .and_then(Value::as_str)
                 .map(str::to_string)
         };
-        let message = field("error")
+        let mut message = field("error")
             .or_else(|| field("message"))
+            .or_else(|| {
+                field("title").map(|title| match field("detail") {
+                    Some(detail) if !detail.is_empty() => format!("{title}: {detail}"),
+                    _ => title,
+                })
+            })
             .unwrap_or_else(|| {
                 let text = String::from_utf8_lossy(body);
                 let text = text.trim();
-                if text.is_empty() || text.starts_with('<') {
+                if parsed.is_some() || text.is_empty() || text.starts_with('<') {
                     reason_phrase(status).to_string()
                 } else {
                     text.chars().take(300).collect()
                 }
             });
+        if let Some(reference) = field("instance").or_else(|| field("requestId")) {
+            message.push_str(&format!(" [reference: {reference}]"));
+        }
         ApiError::Http {
             status,
-            code: field("code"),
+            code: field("code").or_else(|| {
+                message
+                    .contains("at capacity for this plan")
+                    .then(|| "capacity_unavailable".into())
+            }),
             message,
-            details: parsed.as_ref().and_then(|v| v.get("details")).cloned(),
+            details: parsed.as_ref().and_then(|v| {
+                if v.get("title").is_some() {
+                    Some(v.clone())
+                } else {
+                    v.get("details").cloned()
+                }
+            }),
         }
     }
 
     pub fn status(&self) -> Option<u16> {
         match self {
             ApiError::Http { status, .. } => Some(*status),
+            ApiError::Uncertain { source, .. } => source.status(),
             _ => None,
         }
     }
@@ -64,6 +89,11 @@ impl ApiError {
     /// The error as JSON, for `--output json` and MCP tool results.
     pub fn to_json(&self) -> Value {
         match self {
+            ApiError::Uncertain { source, guidance } => {
+                let mut value = source.to_json();
+                value["recovery"] = serde_json::json!(guidance);
+                value
+            }
             ApiError::Http {
                 status,
                 code,
@@ -99,6 +129,7 @@ fn reason_phrase(status: u16) -> &'static str {
 /// A next step for the person, where there is an obvious one.
 pub fn hint(status: u16, code: Option<&str>) -> Option<&'static str> {
     Some(match (status, code) {
+        (_, Some("capacity_unavailable")) => "this plan has no live capacity in that region; choose another plan or region. Catalog stock and price quotes do not reserve capacity",
         (401, _) => "the credential was rejected — run `zy login` again, or check CLOUDZY_TOKEN",
         (403, Some("insufficient_scope")) => "the credential lacks the scope this needs — sign in again with `zy login`, or mint a developer token with that scope",
         (403, Some("endpoint_not_permitted")) => "this operation is not available to API clients; use the Cloudzy dashboard",

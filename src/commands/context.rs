@@ -71,16 +71,54 @@ pub fn money(cents: Option<i64>, currency: Option<&str>) -> String {
         Some(c) => format!(
             "{}{}.{:02} {}",
             if c < 0 { "-" } else { "" },
-            c.abs() / 100,
-            c.abs() % 100,
+            c.unsigned_abs() / 100,
+            c.unsigned_abs() % 100,
             currency.unwrap_or("USD")
         ),
         None => "-".into(),
     }
 }
 
+/// API micro amounts are millionths of a currency unit. Keep all supplied
+/// precision, trimming trailing zeros only down to the usual two places.
+pub fn precise_money(micro: Option<i64>, cents: Option<i64>, currency: Option<&str>) -> String {
+    let Some(value) = micro else {
+        return money(cents, currency);
+    };
+    let magnitude = value.unsigned_abs();
+    let mut fraction = format!("{:06}", magnitude % 1_000_000);
+    while fraction.len() > 2 && fraction.ends_with('0') {
+        fraction.pop();
+    }
+    format!(
+        "{}{}.{} {}",
+        if value < 0 { "-" } else { "" },
+        magnitude / 1_000_000,
+        fraction,
+        currency.unwrap_or("USD")
+    )
+}
+
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn precise_money() {
+        assert_eq!(
+            super::precise_money(Some(-11086), Some(0), None),
+            "-0.011086 USD"
+        );
+        assert_eq!(super::precise_money(Some(1), Some(0), None), "0.000001 USD");
+        assert_eq!(
+            super::precise_money(Some(2500000), None, Some("EUR")),
+            "2.50 EUR"
+        );
+        assert_eq!(super::precise_money(None, Some(-250), None), "-2.50 USD");
+        assert_eq!(
+            super::money(Some(i64::MIN), None),
+            "-92233720368547758.08 USD"
+        );
+    }
+
     #[test]
     fn money() {
         assert_eq!(super::money(Some(1234), Some("EUR")), "12.34 EUR");

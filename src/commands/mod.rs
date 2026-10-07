@@ -115,12 +115,14 @@ pub enum Command {
         command: resources::BillingCommand,
     },
     /// Serve the Model Context Protocol over stdio for AI assistants
-    #[command(long_about = "Serve the Model Context Protocol (JSON-RPC over stdin/stdout) so an AI assistant can manage Cloudzy through zy's tools.\n\nUses the same credential as every other command: CLOUDZY_TOKEN, or the sign-in stored by `zy login`.\n\nExample (Claude Code):  claude mcp add cloudzy -- zy mcp")]
+    #[command(
+        long_about = "Serve the Model Context Protocol (JSON-RPC over stdin/stdout) so an AI assistant can manage Cloudzy through zy's tools.\n\nUses the same credential as every other command: CLOUDZY_TOKEN, or the sign-in stored by `zy login`.\n\nExample (Claude Code):  claude mcp add cloudzy -- zy mcp"
+    )]
     Mcp,
     /// Update zy to the latest release
     Update {
         /// Release channel to check (stable, beta, alpha, rc)
-        #[arg(long, default_value = "stable")]
+        #[arg(long, default_value = "stable", value_parser = ["stable", "beta", "alpha", "rc"])]
         channel: String,
         /// Skip the confirmation prompt
         #[arg(long)]
@@ -163,10 +165,7 @@ pub async fn run(cli: Cli) -> Result<()> {
                 .await
                 .map_err(|e| crate::error::CliError::Other(format!("mcp stdio: {e}")))
         }
-        Command::Update { channel, force } => {
-            update::run(channel, *force).await;
-            Ok(())
-        }
+        Command::Update { channel, force } => update::run(&ctx, channel, *force).await,
     }
 }
 

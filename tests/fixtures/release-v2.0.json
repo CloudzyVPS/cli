@@ -1,0 +1,44 @@
+[
+  {
+    "tag_name": "v2.0",
+    "prerelease": false,
+    "assets": [
+      {
+        "name": "SHA256SUMS.txt",
+        "browser_download_url": "https://github.com/CloudzyVPS/cli/releases/download/v2.0/SHA256SUMS.txt",
+        "size": 484,
+        "content_type": "text/plain"
+      },
+      {
+        "name": "zy-2.0-aarch64-apple-darwin",
+        "browser_download_url": "https://github.com/CloudzyVPS/cli/releases/download/v2.0/zy-2.0-aarch64-apple-darwin",
+        "size": 8841872,
+        "content_type": "application/octet-stream"
+      },
+      {
+        "name": "zy-2.0-aarch64-unknown-linux-gnu",
+        "browser_download_url": "https://github.com/CloudzyVPS/cli/releases/download/v2.0/zy-2.0-aarch64-unknown-linux-gnu",
+        "size": 10100104,
+        "content_type": "application/octet-stream"
+      },
+      {
+        "name": "zy-2.0-x86_64-apple-darwin",
+        "browser_download_url": "https://github.com/CloudzyVPS/cli/releases/download/v2.0/zy-2.0-x86_64-apple-darwin",
+        "size": 9282384,
+        "content_type": "application/octet-stream"
+      },
+      {
+        "name": "zy-2.0-x86_64-pc-windows-msvc.exe",
+        "browser_download_url": "https://github.com/CloudzyVPS/cli/releases/download/v2.0/zy-2.0-x86_64-pc-windows-msvc.exe",
+        "size": 8476672,
+        "content_type": "application/octet-stream"
+      },
+      {
+        "name": "zy-2.0-x86_64-unknown-linux-gnu",
+        "browser_download_url": "https://github.com/CloudzyVPS/cli/releases/download/v2.0/zy-2.0-x86_64-unknown-linux-gnu",
+        "size": 10562488,
+        "content_type": "application/octet-stream"
+      }
+    ]
+  }
+]

@@ -2,7 +2,7 @@
 
 use serde_json::{json, Map, Value};
 
-use crate::api::{items, ops, ApiClient, Request};
+use crate::api::{ops, ApiClient, Request};
 use crate::commands::servers::{resolve_plan, resolve_ssh_keys};
 use crate::error::CliError;
 
@@ -83,6 +83,8 @@ pub fn all() -> Vec<Tool> {
         // Servers
         t("list_servers", "List servers", "All servers on the account with state, power, region, IPs and size.", Read, json!({}), &[]),
         t("get_server", "Get server", "Full details of one server.", Read, json!({ "id": s(SERVER_ID) }), &["id"]),
+        t("quote_server_configuration", "Quote server configuration", "Read-only price preview including mandatory IPv4 charges. Does not reserve capacity or create a server.", Read,
+          json!({"plan": s("Plan id or slug"), "region": s("Region id"), "billingCycle": s("Billing cycle (default monthly)"), "includeIpv4": boolean("Include primary IPv4 (default true)")}), &["plan", "region"]),
         t("create_server", "Create server",
           "Create a server. Charged to the account balance immediately. Poll get_server until state is \"active\". Use list_plans, list_regions, list_os_templates and list_apps to choose values.",
           Write,
@@ -117,27 +119,27 @@ pub fn all() -> Vec<Tool> {
         t("create_snapshot", "Create snapshot", "Snapshot a server (at most five per server; billed while kept).", Write, json!({ "server": s(SERVER_ID), "name": s("Snapshot name") }), &["server", "name"]),
         t("delete_snapshot", "Delete snapshot", "Delete a snapshot.", Destructive, json!({ "server": s(SERVER_ID), "snapshot": s("Snapshot id") }), &["server", "snapshot"]),
         t("restore_snapshot", "Restore snapshot", "Roll a server back to a snapshot, discarding everything written since.", Destructive, json!({ "server": s(SERVER_ID), "snapshot": s("Snapshot id") }), &["server", "snapshot"]),
-        t("spawn_server_from_snapshot", "New server from snapshot", "Create a new server from a snapshot. Charged like create_server.", Write,
-          json!({ "server": s(SERVER_ID), "snapshot": s("Snapshot id"), "hostname": s("Hostname for the new server"), "plan": s("Plan id; defaults to the source server's plan") }), &["server", "snapshot"]),
+        t("spawn_server_from_snapshot", "New server from snapshot", "Create a paid server from a snapshot. Selected-plan CPU/RAM are supplied explicitly; disk is floored at the current source disk. Inspect the source and selected-plan quote before authorizing, then poll get_server after creation.", Write,
+          json!({ "server": s(SERVER_ID), "snapshot": s("Snapshot id"), "hostname": s("Hostname for the new server"), "plan": s("Plan id or slug; defaults to source configuration"), "billingCycle": s("Billing cycle; defaults to source cycle") }), &["server", "snapshot"]),
         // SSH keys
         t("list_ssh_keys", "List SSH keys", "Saved SSH public keys.", Read, json!({}), &[]),
         t("add_ssh_key", "Add SSH key", "Save an OpenSSH public key.", Write, json!({ "name": s("Key name"), "publicKey": s("OpenSSH public key line") }), &["name", "publicKey"]),
         t("delete_ssh_key", "Delete SSH key", "Delete a saved SSH key.", Destructive, json!({ "id": s("SSH key id") }), &["id"]),
         // Networking
         t("list_reserved_ips", "List reserved IPs", "Reserved (floating) IPs on the account.", Read, json!({}), &[]),
-        t("reserve_ips", "Reserve IPs", "Reserve new public IPs in a region, billed monthly.", Write,
+        t("reserve_ips", "Reserve IPs", "Reserve IPs at the published fixed tariff of 2.50 USD/IP/month, non-refundable, automatic renewal enabled. Confirm count and total with the user first. The API receipt omits charged amount; inspect list_ledger afterward.", Write,
           json!({ "region": s("Region id"), "family": one_of("Address family", &["ipv4", "ipv6"]), "count": int("How many (1-30)") }), &["region"]),
         t("attach_reserved_ip", "Attach reserved IP", "Attach a reserved IP to a server.", Write, json!({ "id": s("Reserved IP id"), "server": s(SERVER_ID) }), &["id", "server"]),
         t("detach_reserved_ip", "Detach reserved IP", "Detach a reserved IP from its server; it stays reserved and billed.", Write, json!({ "id": s("Reserved IP id") }), &["id"]),
         t("set_reserved_ip_auto_renew", "Reserved IP auto-renew", "Turn monthly auto-renew on or off.", Write, json!({ "id": s("Reserved IP id"), "enabled": boolean("Auto-renew") }), &["id", "enabled"]),
         t("release_reserved_ip", "Release reserved IP", "Give a reserved IP back to the pool. Non-refundable; the address may not be recoverable.", Destructive, json!({ "id": s("Reserved IP id") }), &["id"]),
         t("list_server_ips", "List server IPs", "Public IPs attached to a server.", Read, json!({ "server": s(SERVER_ID) }), &["server"]),
-        t("attach_server_ip", "Attach IP to server", "Attach an extra IP from the pool, or one of the account's reserved IPs by address.", Write,
+        t("attach_server_ip", "Attach IP to server", "Attach a reserved IPv4 address, or allocate IPv6 where available. Pool IPv4 allocation is unsupported: use reserve_ips then attach_reserved_ip.", Write,
           json!({ "server": s(SERVER_ID), "family": one_of("Pool address family", &["ipv4", "ipv6"]), "reservedIp": s("Reserved IP address to attach instead of a pool address") }), &["server"]),
         t("detach_server_ip", "Detach IP from server", "Detach an extra IP from a server.", Destructive, json!({ "server": s(SERVER_ID), "ip": s("IP address") }), &["server", "ip"]),
         t("list_firewall_rules", "List firewall rules", "A server's firewall rules.", Read, json!({ "server": s(SERVER_ID) }), &["server"]),
         t("add_firewall_rule", "Add firewall rule", "Add a firewall rule to a server.", Write,
-          json!({ "server": s(SERVER_ID), "direction": one_of("Direction", &["in", "out"]), "protocol": s("tcp, udp, icmp or any"),
+          json!({ "server": s(SERVER_ID), "direction": one_of("Direction", &["inbound", "outbound", "in", "out"]), "protocol": s("tcp, udp, icmp or any"),
                   "port": s("Port or range, e.g. 22 or 8000-8100"), "source": s("Source CIDR"), "action": one_of("Action", &["allow", "deny"]) }),
           &["server", "direction", "protocol", "action"]),
         t("delete_firewall_rule", "Delete firewall rule", "Delete a firewall rule.", Destructive, json!({ "server": s(SERVER_ID), "rule": s("Rule id") }), &["server", "rule"]),
@@ -254,6 +256,17 @@ pub async fn call(api: &ApiClient, name: &str, arguments: &Value) -> Result<Valu
         "whoami" => ops::whoami(),
         "list_servers" => ops::servers(),
         "get_server" => ops::server(a.str("id")?),
+        "quote_server_configuration" => {
+            let plan = resolve_plan(api, a.str("plan")?).await?;
+            return Ok(crate::commands::catalog::quote_plan(
+                api,
+                &plan,
+                a.str("region")?,
+                a.opt_str("billingCycle").unwrap_or("monthly"),
+                a.opt_bool("includeIpv4")?.unwrap_or(true),
+            )
+            .await?);
+        }
         "create_server" => {
             let mut keys = resolve_ssh_keys(api, &a.strings("sshKeys")?).await?;
             keys.extend(a.strings("sshPublicKeys")?);
@@ -267,8 +280,17 @@ pub async fn call(api: &ApiClient, name: &str, arguments: &Value) -> Result<Valu
             if let Some(ud) = a.opt_str("userData") {
                 config.insert("userData".into(), json!(ud));
             }
+            let plan_id = resolve_plan(api, a.str("plan")?).await?;
+            crate::commands::catalog::quote_plan(
+                api,
+                &plan_id,
+                a.str("region")?,
+                a.opt_str("billingCycle").unwrap_or("monthly"),
+                a.opt_str("ipVersion") != Some("ipv6"),
+            )
+            .await?;
             ops::create_server(&ops::CreateServer {
-                plan_id: resolve_plan(api, a.str("plan")?).await?,
+                plan_id,
                 region: a.str("region")?.into(),
                 hostname: a.str("hostname")?.into(),
                 billing_cycle: a.opt_str("billingCycle").map(Into::into),
@@ -306,12 +328,18 @@ pub async fn call(api: &ApiClient, name: &str, arguments: &Value) -> Result<Valu
         "create_snapshot" => ops::create_snapshot(a.str("server")?, a.str("name")?),
         "delete_snapshot" => ops::delete_snapshot(a.str("server")?, a.str("snapshot")?),
         "restore_snapshot" => ops::restore_snapshot(a.str("server")?, a.str("snapshot")?),
-        "spawn_server_from_snapshot" => ops::spawn_snapshot(
-            a.str("server")?,
-            a.str("snapshot")?,
-            a.opt_str("hostname"),
-            a.opt_str("plan"),
-        ),
+        "spawn_server_from_snapshot" => {
+            let (request, _) = crate::commands::resources::prepare_spawn(
+                api,
+                a.str("server")?,
+                a.str("snapshot")?,
+                a.opt_str("hostname"),
+                a.opt_str("plan"),
+                a.opt_str("billingCycle"),
+            )
+            .await?;
+            request
+        }
         "list_ssh_keys" => ops::ssh_keys(),
         "add_ssh_key" => ops::add_ssh_key(a.str("name")?, a.str("publicKey")?),
         "delete_ssh_key" => ops::delete_ssh_key(a.str("id")?),
@@ -328,16 +356,16 @@ pub async fn call(api: &ApiClient, name: &str, arguments: &Value) -> Result<Valu
         ),
         "release_reserved_ip" => ops::release_reserved_ip(a.str("id")?),
         "list_server_ips" => ops::server_ips(a.str("server")?),
-        "attach_server_ip" => ops::attach_ip(
-            a.str("server")?,
-            a.opt_str("family"),
-            a.opt_str("reservedIp"),
-        ),
+        "attach_server_ip" => {
+            let server = a.str("server")?;
+            ops::preflight_ip(api, server, a.opt_str("family"), a.opt_str("reservedIp")).await?;
+            ops::attach_ip(server, a.opt_str("family"), a.opt_str("reservedIp"))
+        }
         "detach_server_ip" => ops::detach_ip(a.str("server")?, a.str("ip")?),
         "list_firewall_rules" => ops::firewall_rules(a.str("server")?),
         "add_firewall_rule" => ops::add_firewall_rule(
             a.str("server")?,
-            a.one_of("direction", &["in", "out"])?,
+            a.one_of("direction", &["inbound", "outbound", "in", "out"])?,
             a.str("protocol")?,
             a.opt_str("port").unwrap_or(""),
             a.opt_str("source").unwrap_or("0.0.0.0/0"),
@@ -378,34 +406,9 @@ async fn list_plans(
     cycle: &str,
 ) -> Result<Value, ToolError> {
     let catalog = api.send(ops::pricing_catalog()).await?;
-    let prices = catalog.get("prices").map(items).unwrap_or_default();
-    let plans: Vec<Value> = catalog
-        .get("plans")
-        .map(items)
-        .unwrap_or_default()
-        .into_iter()
-        .map(|mut plan| {
-            let id = plan
-                .get("id")
-                .and_then(Value::as_str)
-                .unwrap_or_default()
-                .to_string();
-            let pick = |rid: &str| {
-                prices.iter().find(|p| {
-                    p.get("planId").and_then(Value::as_str) == Some(id.as_str())
-                        && p.get("billingCycle").and_then(Value::as_str) == Some(cycle)
-                        && p.get("regionId").and_then(Value::as_str).unwrap_or("") == rid
-                })
-            };
-            plan["price"] = region
-                .and_then(pick)
-                .or_else(|| pick(""))
-                .cloned()
-                .unwrap_or(Value::Null);
-            plan
-        })
-        .collect();
-    Ok(json!({ "billingCycle": cycle, "region": region, "plans": plans }))
+    Ok(crate::commands::catalog::selected_plans(
+        &catalog, region, cycle,
+    ))
 }
 
 #[cfg(test)]

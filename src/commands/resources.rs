@@ -4,7 +4,7 @@
 use clap::{Subcommand, ValueEnum};
 use serde_json::{json, Value};
 
-use super::context::{confirm, money, Ctx};
+use super::context::{confirm, money, precise_money, Ctx};
 use crate::api::{items, ops};
 use crate::error::{CliError, Result};
 use crate::output::{col, print_json, print_list, print_object, Col};
@@ -57,9 +57,24 @@ pub enum SnapshotsCommand {
         snapshot: String,
         #[arg(long)]
         hostname: Option<String>,
-        /// Plan for the new server (defaults to the source server's plan)
+        /// Plan id or slug; selected CPU/RAM are applied explicitly, disk cannot shrink
         #[arg(long)]
         plan: Option<String>,
+        /// Billing cycle (defaults to the source server's cycle)
+        #[arg(long)]
+        cycle: Option<String>,
+        /// Preview the exact requested resources and configuration price
+        #[arg(long, conflicts_with = "wait")]
+        dry_run: bool,
+        /// Accept the quoted purchase
+        #[arg(long, short)]
+        yes: bool,
+        /// Wait for the new server to become active
+        #[arg(long)]
+        wait: bool,
+        /// Wait deadline in seconds
+        #[arg(long, default_value_t = 900, requires = "wait")]
+        timeout: u64,
     },
 }
 
@@ -116,15 +131,48 @@ pub async fn snapshots(ctx: &Ctx, cmd: &SnapshotsCommand) -> Result<()> {
             snapshot,
             hostname,
             plan,
+            cycle,
+            dry_run,
+            yes,
+            wait,
+            timeout,
         } => {
-            let resp = api
-                .send(ops::spawn_snapshot(
-                    server,
-                    snapshot,
-                    hostname.as_deref(),
-                    plan.as_deref(),
-                ))
+            let (request, preview) = prepare_spawn(
+                &api,
+                server,
+                snapshot,
+                hostname.as_deref(),
+                plan.as_deref(),
+                cycle.as_deref(),
+            )
+            .await?;
+            if *dry_run {
+                super::catalog::print_quote(ctx, &preview);
+                return Ok(());
+            }
+            eprintln!("Snapshot spawn: CPU {}, RAM {} MB, disk {} GB, cycle {}. Price: {}. The backend revalidates resources and pricing at purchase.",
+                preview["cpu"], preview["ramMb"], preview["diskGb"], preview["billingCycle"], super::catalog::quote_summary(&preview["quote"]));
+            confirm(
+                *yes,
+                "Create a paid server from this snapshot using the displayed configuration price",
+                snapshot,
+            )?;
+            let resp = api.send(request).await?;
+            let new_id = resp["newServiceId"].as_str().or_else(|| resp["id"].as_str())
+                .ok_or_else(|| CliError::Other("spawn succeeded but returned no server id; inspect `zy servers list` before retrying".into()))?;
+            eprintln!("Server {new_id} is provisioning; follow it with `zy servers wait {new_id} --timeout {timeout}` and `zy servers get {new_id}` for applied resources and prices.");
+            if *wait {
+                let server = super::servers::wait_for_state(
+                    &api,
+                    new_id,
+                    "active",
+                    std::time::Duration::from_secs(*timeout),
+                    !ctx.json(),
+                )
                 .await?;
+                print_object(ctx.format, &server, super::servers::DETAIL_COLS);
+                return Ok(());
+            }
             print_object(
                 ctx.format,
                 &resp,
@@ -237,14 +285,20 @@ pub enum ReservedIpsCommand {
     /// List reserved IPs
     #[command(visible_alias = "ls")]
     List,
-    /// Reserve new IPs in a region (billed monthly)
+    /// Reserve IPs: published rate 2.50 USD/IP/month, non-refundable, auto-renew enabled
     Create {
         #[arg(long)]
         region: String,
         #[arg(long, value_enum)]
         family: Option<Family>,
-        #[arg(long, default_value_t = 1)]
+        #[arg(long, default_value_t = 1, value_parser = clap::value_parser!(u32).range(1..=30))]
         count: u32,
+        /// Show the published price without purchasing (server has no live quote endpoint)
+        #[arg(long)]
+        dry_run: bool,
+        /// Accept the non-refundable charge and automatic monthly renewal
+        #[arg(long, short)]
+        yes: bool,
     },
     /// Attach a reserved IP to a server
     Attach { id: String, server: String },
@@ -285,7 +339,18 @@ pub async fn reserved_ips(ctx: &Ctx, cmd: &ReservedIpsCommand) -> Result<()> {
             region,
             family,
             count,
+            dry_run,
+            yes,
         } => {
+            let total = i64::from(*count) * 250;
+            let preview = json!({"region": region, "family": family.map(Family::api).unwrap_or("ipv4"), "count": count,
+                "currency": "USD", "unitMonthlyCents": 250, "totalMonthlyCents": total,
+                "refundable": false, "autoRenew": true, "priceSource": "published fixed tariff; not a live server quote"});
+            if *dry_run {
+                print_object(ctx.format, &preview, &[]);
+                return Ok(());
+            }
+            confirm(*yes, &format!("Reserve {count} IP(s) in {region}: {} per month, non-refundable, auto-renew enabled (published tariff)", money(Some(total), Some("USD"))), region)?;
             let resp = ctx
                 .send(ops::reserve_ips(
                     region,
@@ -300,6 +365,7 @@ pub async fn reserved_ips(ctx: &Ctx, cmd: &ReservedIpsCommand) -> Result<()> {
                 &cols,
                 "Nothing was reserved.",
             );
+            eprintln!("Published purchase total: {}. The API receipt does not confirm the charged amount; check `zy billing ledger`. Next billing dates and auto-renew settings are in the IP receipt.", money(Some(total), Some("USD")));
         }
         ReservedIpsCommand::Attach { id, server } => {
             let resp = ctx.send(ops::attach_reserved_ip(id, server)).await?;
@@ -344,7 +410,7 @@ pub enum IpsCommand {
     /// List a server's public IPs
     #[command(visible_alias = "ls")]
     List { server: String },
-    /// Attach an extra IP from the pool, or one of your reserved IPs
+    /// Attach a reserved IPv4 address, or allocate IPv6 where available
     Add {
         server: String,
         #[arg(long, value_enum, conflicts_with = "reserved")]
@@ -384,7 +450,9 @@ pub async fn ips(ctx: &Ctx, cmd: &IpsCommand) -> Result<()> {
             family,
             reserved,
         } => {
-            let resp = ctx
+            let api = ctx.api()?;
+            ops::preflight_ip(&api, server, family.map(Family::api), reserved.as_deref()).await?;
+            let resp = api
                 .send(ops::attach_ip(
                     server,
                     family.map(Family::api),
@@ -416,8 +484,8 @@ pub enum FirewallCommand {
     /// Add a rule
     Add {
         server: String,
-        /// in or out
-        #[arg(long, default_value = "in")]
+        /// inbound or outbound (in/out aliases are accepted)
+        #[arg(long, default_value = "inbound", value_parser = ["inbound", "outbound", "in", "out"])]
         direction: String,
         /// tcp, udp, icmp or any
         #[arg(long, default_value = "tcp")]
@@ -563,11 +631,13 @@ pub async fn billing(ctx: &Ctx, cmd: &BillingCommand) -> Result<()> {
                         .get("currency")
                         .and_then(Value::as_str)
                         .map(str::to_string);
-                    r["_amount"] = json!(money(
+                    r["_amount"] = json!(precise_money(
+                        r.get("amountMicro").and_then(Value::as_i64),
                         r.get("amountCents").and_then(Value::as_i64),
                         cur.as_deref()
                     ));
-                    r["_balance"] = json!(money(
+                    r["_balance"] = json!(precise_money(
+                        r.get("balanceMicro").and_then(Value::as_i64),
                         r.get("balanceCents").and_then(Value::as_i64),
                         cur.as_deref()
                     ));
@@ -598,7 +668,8 @@ pub async fn billing(ctx: &Ctx, cmd: &BillingCommand) -> Result<()> {
                         .get("currency")
                         .and_then(Value::as_str)
                         .map(str::to_string);
-                    r["_total"] = json!(money(
+                    r["_total"] = json!(precise_money(
+                        r.get("totalMicroCents").and_then(Value::as_i64),
                         r.get("totalCents").and_then(Value::as_i64),
                         cur.as_deref()
                     ));
@@ -637,4 +708,84 @@ fn page_note(ctx: &Ctx, resp: &Value) {
             eprintln!("Page {page} of {pages} — use --page to see more.");
         }
     }
+}
+
+/// Supply resources explicitly so a chosen catalog plan never silently inherits
+/// source CPU/RAM overrides. The source disk is a conservative clone-size floor.
+pub async fn prepare_spawn(
+    api: &crate::api::ApiClient,
+    server: &str,
+    snapshot: &str,
+    hostname: Option<&str>,
+    selected_plan: Option<&str>,
+    cycle: Option<&str>,
+) -> Result<(crate::api::Request, Value)> {
+    let source = api.send(ops::server(server)).await?;
+    let source_disk = source["diskGb"].as_u64().ok_or_else(|| {
+        CliError::Usage("source disk size is missing; cannot quote a snapshot clone".into())
+    })?;
+    let source_plan = source["planId"]
+        .as_str()
+        .or_else(|| source["plan"]["id"].as_str())
+        .ok_or_else(|| CliError::Usage("source server has no catalog plan id".into()))?;
+    let plan_id = match selected_plan {
+        Some(plan) => super::servers::resolve_plan(api, plan).await?,
+        None => source_plan.to_string(),
+    };
+    let catalog = api.send(ops::pricing_catalog()).await?;
+    let plan = items(&catalog["plans"])
+        .into_iter()
+        .find(|p| p["id"].as_str() == Some(&plan_id))
+        .ok_or_else(|| CliError::Usage("spawn plan is absent from the catalog".into()))?;
+    let mut requested = source.clone();
+    if selected_plan.is_some() {
+        requested["cpu"] = plan["cpuCores"].clone();
+        requested["ramMb"] = plan["memoryMb"].clone();
+        requested["diskGb"] = json!(source_disk.max(plan["diskGb"].as_u64().unwrap_or(0)));
+        requested["bandwidthTb"] = plan["bandwidthTb"].clone();
+    }
+    let cycle = cycle
+        .or_else(|| source["billingCycle"].as_str())
+        .ok_or_else(|| {
+            CliError::Usage("source server billing cycle is missing; pass --cycle".into())
+        })?;
+    requested["billingCycle"] = json!(cycle);
+    // Spawn constructs a new config without these source add-ons.
+    requested["nested"] = json!(false);
+    requested["autoBackups"] = json!(false);
+    for (field, min, max) in [("cpu", 1, 32), ("ramMb", 512, 131072), ("diskGb", 1, 5000)] {
+        if requested[field].as_u64().is_none_or(|n| n < min || n > max) {
+            return Err(CliError::Usage(format!("snapshot spawn requires {field} between {min} and {max}; cannot quote a configuration the backend would clamp")));
+        }
+    }
+    let quote_body = super::servers::existing_quote_body(&requested, &plan)?;
+    let selected = super::catalog::selected_plans(&catalog, source["region"].as_str(), cycle);
+    if items(&selected["plans"])
+        .iter()
+        .any(|p| p["id"].as_str() == Some(&plan_id) && p["price"]["inStock"] == false)
+    {
+        return Err(CliError::Usage(
+            "selected spawn plan is out of stock in the source region".into(),
+        ));
+    }
+    let quote = api.send(ops::pricing_quote(quote_body)).await?;
+    super::catalog::validate_quote(&quote)?;
+    let mut request = ops::spawn_snapshot(server, snapshot, hostname, Some(&plan_id));
+    let body = request.body.as_mut().expect("spawn body");
+    for (key, resource) in [
+        ("cpuCores", "cpu"),
+        ("ramMb", "ramMb"),
+        ("diskGb", "diskGb"),
+        ("transferTb", "bandwidthTb"),
+    ] {
+        if let Some(value) = requested[resource].as_u64() {
+            body[key] = json!(value);
+        }
+    }
+    body["billingCycle"] = json!(cycle);
+    let preview = json!({"planId": plan_id, "region": source["region"], "cpu": requested["cpu"],
+        "ramMb": requested["ramMb"], "diskGb": requested["diskGb"], "bandwidthTb": requested["bandwidthTb"],
+        "billingCycle": cycle, "quote": quote, "includeIpv4": source["ipAddress"].as_str().is_some_and(|ip| !ip.is_empty()),
+        "availability": "catalog only; live capacity is validated at spawn", "diskPolicy": "at least the current source disk; clone disks cannot shrink"});
+    Ok((request, preview))
 }
