@@ -127,7 +127,9 @@ pub fn all() -> Vec<Tool> {
         t("delete_ssh_key", "Delete SSH key", "Delete a saved SSH key.", Destructive, json!({ "id": s("SSH key id") }), &["id"]),
         // Networking
         t("list_reserved_ips", "List reserved IPs", "Reserved (floating) IPs on the account.", Read, json!({}), &[]),
-        t("reserve_ips", "Reserve IPs", "Reserve IPs at the published fixed tariff of 2.50 USD/IP/month, non-refundable, automatic renewal enabled. Confirm count and total with the user first. The API receipt omits charged amount; inspect list_ledger afterward.", Write,
+        t("quote_reserved_ips", "Quote reserved IPs", "Read-only server price, stock and quota preview. Older servers use a labelled published-tariff fallback. Confirm count, total, non-refundability and auto-renew before purchasing.", Read,
+          json!({ "region": s("Region id"), "family": one_of("Address family", &["ipv4", "ipv6"]), "count": int("How many (1-30)") }), &["region"]),
+        t("reserve_ips", "Reserve IPs", "Reserve IPs after checking quote_reserved_ips and confirming count and total. Non-refundable, automatic renewal enabled. Inspect the charged amount and status in the receipt; pending or missing amounts require a ledger check before retrying.", Write,
           json!({ "region": s("Region id"), "family": one_of("Address family", &["ipv4", "ipv6"]), "count": int("How many (1-30)") }), &["region"]),
         t("attach_reserved_ip", "Attach reserved IP", "Attach a reserved IP to a server.", Write, json!({ "id": s("Reserved IP id"), "server": s(SERVER_ID) }), &["id", "server"]),
         t("detach_reserved_ip", "Detach reserved IP", "Detach a reserved IP from its server; it stays reserved and billed.", Write, json!({ "id": s("Reserved IP id") }), &["id"]),
@@ -281,7 +283,7 @@ pub async fn call(api: &ApiClient, name: &str, arguments: &Value) -> Result<Valu
                 config.insert("userData".into(), json!(ud));
             }
             let plan_id = resolve_plan(api, a.str("plan")?).await?;
-            crate::commands::catalog::quote_plan(
+            let quote = crate::commands::catalog::quote_plan(
                 api,
                 &plan_id,
                 a.str("region")?,
@@ -289,6 +291,7 @@ pub async fn call(api: &ApiClient, name: &str, arguments: &Value) -> Result<Valu
                 a.opt_str("ipVersion") != Some("ipv6"),
             )
             .await?;
+            crate::commands::catalog::require_capacity(&quote)?;
             ops::create_server(&ops::CreateServer {
                 plan_id,
                 region: a.str("region")?.into(),
@@ -344,8 +347,22 @@ pub async fn call(api: &ApiClient, name: &str, arguments: &Value) -> Result<Valu
         "add_ssh_key" => ops::add_ssh_key(a.str("name")?, a.str("publicKey")?),
         "delete_ssh_key" => ops::delete_ssh_key(a.str("id")?),
         "list_reserved_ips" => ops::reserved_ips(),
+        "quote_reserved_ips" => {
+            return Ok(crate::commands::resources::reservation_quote(
+                api,
+                a.str("region")?,
+                a.opt_str("family"),
+                a.opt_u32("count")?.unwrap_or(1),
+            )
+            .await?)
+        }
         "reserve_ips" => {
-            ops::reserve_ips(a.str("region")?, a.opt_str("family"), a.opt_u32("count")?)
+            let region = a.str("region")?;
+            let family = a.opt_str("family");
+            let count = a.opt_u32("count")?.unwrap_or(1);
+            let quote =
+                crate::commands::resources::reservation_quote(api, region, family, count).await?;
+            crate::commands::resources::quoted_reservation(region, family, count, &quote)
         }
         "attach_reserved_ip" => ops::attach_reserved_ip(a.str("id")?, a.str("server")?),
         "detach_reserved_ip" => ops::detach_reserved_ip(a.str("id")?),

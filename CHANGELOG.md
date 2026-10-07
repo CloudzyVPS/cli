@@ -1,5 +1,17 @@
 # Changelog
 
+## 2.0.2 — 2026-10-07
+
+- Read selected-plan compute/stock preflight with configuration quotes. CLI and MCP
+  refuse creation when the server reports no capacity, before any purchase.
+- Read authoritative reserved-IP quotes and include expected price/currency guards
+  on purchases. Show acknowledged charged amounts and pending/unavailable receipt
+  status. Add the read-only `quote_reserved_ips` MCP tool.
+- Older deployments without the new read endpoints retain explicitly labelled
+  catalog/published-tariff fallbacks. Authentication, quota, stock and server errors
+  never fall back to an assumed price. Backend fixes and deployment are still
+  required for issues #28, #31, #36 and #37.
+
 ## 2.0.1 — 2026-10-07
 
 - Normalize firewall directions and send the transport confirmation required for

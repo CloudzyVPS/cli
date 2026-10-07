@@ -58,6 +58,17 @@ pub fn pricing_catalog() -> Request {
 pub fn pricing_quote(body: Value) -> Request {
     Request::post("/pricing/quote", body)
 }
+pub fn plan_capacity(plan: &str, region: &str) -> Request {
+    Request::get("/plan-capacity")
+        .query("planId", plan)
+        .query("region", region)
+}
+pub fn quote_reserved_ips(region: &str, family: &str, count: u32) -> Request {
+    Request::get("/account/reserved-ips/quote")
+        .query("region", region)
+        .query("family", family)
+        .query("count", count)
+}
 pub fn os_templates() -> Request {
     Request::get("/os-templates")
 }

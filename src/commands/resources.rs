@@ -293,7 +293,7 @@ pub enum ReservedIpsCommand {
         family: Option<Family>,
         #[arg(long, default_value_t = 1, value_parser = clap::value_parser!(u32).range(1..=30))]
         count: u32,
-        /// Show the published price without purchasing (server has no live quote endpoint)
+        /// Show the server quote without purchasing (published tariff on older servers)
         #[arg(long)]
         dry_run: bool,
         /// Accept the non-refundable charge and automatic monthly renewal
@@ -342,20 +342,23 @@ pub async fn reserved_ips(ctx: &Ctx, cmd: &ReservedIpsCommand) -> Result<()> {
             dry_run,
             yes,
         } => {
-            let total = i64::from(*count) * 250;
-            let preview = json!({"region": region, "family": family.map(Family::api).unwrap_or("ipv4"), "count": count,
-                "currency": "USD", "unitMonthlyCents": 250, "totalMonthlyCents": total,
-                "refundable": false, "autoRenew": true, "priceSource": "published fixed tariff; not a live server quote"});
+            let api = ctx.api()?;
+            let preview = reservation_quote(&api, region, family.map(Family::api), *count).await?;
+            let total = preview["totalMonthlyCents"]
+                .as_i64()
+                .expect("validated quote");
+            let currency = preview["currency"].as_str().expect("validated currency");
             if *dry_run {
                 print_object(ctx.format, &preview, &[]);
                 return Ok(());
             }
-            confirm(*yes, &format!("Reserve {count} IP(s) in {region}: {} per month, non-refundable, auto-renew enabled (published tariff)", money(Some(total), Some("USD"))), region)?;
-            let resp = ctx
-                .send(ops::reserve_ips(
+            confirm(*yes, &format!("Reserve {count} IP(s) in {region}: {} per month, non-refundable, auto-renew enabled ({})", money(Some(total), Some(currency)), preview["priceSource"].as_str().unwrap_or("server quote")), region)?;
+            let resp = api
+                .send(quoted_reservation(
                     region,
                     family.map(Family::api),
-                    Some(*count),
+                    *count,
+                    &preview,
                 ))
                 .await?;
             print_list(
@@ -365,7 +368,11 @@ pub async fn reserved_ips(ctx: &Ctx, cmd: &ReservedIpsCommand) -> Result<()> {
                 &cols,
                 "Nothing was reserved.",
             );
-            eprintln!("Published purchase total: {}. The API receipt does not confirm the charged amount; check `zy billing ledger`. Next billing dates and auto-renew settings are in the IP receipt.", money(Some(total), Some("USD")));
+            if let Some(charged) = resp["receipt"]["chargedAmountCents"].as_i64() {
+                eprintln!("Server receipt: {} charged; status {}. Next billing dates and auto-renew settings are in the IP receipt.", money(Some(charged), resp["receipt"]["currency"].as_str()), resp["receipt"]["chargeStatus"].as_str().unwrap_or("unknown"));
+            } else {
+                eprintln!("Charged amount is unconfirmed (receipt status: {}). Check `zy billing ledger` before retrying the purchase.", resp["receipt"]["chargeStatus"].as_str().unwrap_or("unavailable"));
+            }
         }
         ReservedIpsCommand::Attach { id, server } => {
             let resp = ctx.send(ops::attach_reserved_ip(id, server)).await?;
@@ -788,4 +795,65 @@ pub async fn prepare_spawn(
         "billingCycle": cycle, "quote": quote, "includeIpv4": source["ipAddress"].as_str().is_some_and(|ip| !ip.is_empty()),
         "availability": "catalog only; live capacity is validated at spawn", "diskPolicy": "at least the current source disk; clone disks cannot shrink"});
     Ok((request, preview))
+}
+
+/// Shared with MCP. Only an absent route permits a published-price fallback;
+/// quota, stock, authentication and backend failures must stop the purchase.
+pub async fn reservation_quote(
+    api: &crate::api::ApiClient,
+    region: &str,
+    family: Option<&str>,
+    count: u32,
+) -> Result<Value> {
+    let family = family.unwrap_or("ipv4");
+    if !(1..=30).contains(&count) || !matches!(family, "ipv4" | "ipv6") {
+        return Err(CliError::Usage(
+            "count must be 1–30 and family must be ipv4 or ipv6".into(),
+        ));
+    }
+    let mut quote = match api
+        .send(ops::quote_reserved_ips(region, family, count))
+        .await
+    {
+        Ok(value) => value,
+        Err(err) if err.is_missing_route() => {
+            return Ok(json!({"region": region, "family": family,
+            "count": count, "currency": "USD", "unitMonthlyCents": 250, "totalMonthlyCents": i64::from(count) * 250,
+            "billingCycle": "monthly", "refundable": false, "autoRenew": true,
+            "advisory": true, "priceSource": "published fixed tariff; not a live server quote (endpoint unavailable)"}))
+        }
+        Err(err) => return Err(err.into()),
+    };
+    let unit = quote["unitMonthlyCents"].as_i64();
+    if quote["region"].as_str() != Some(region)
+        || quote["family"].as_str() != Some(family)
+        || quote["count"].as_u64() != Some(u64::from(count))
+        || quote["totalMonthlyCents"].as_i64().is_none_or(|n| n < 0)
+        || unit.is_none_or(|n| n < 0)
+        || unit.and_then(|n| n.checked_mul(i64::from(count))) != quote["totalMonthlyCents"].as_i64()
+        || quote["currency"].as_str().is_none_or(|s| s.is_empty())
+        || quote["refundable"] != false
+        || quote["autoRenew"] != true
+        || quote["billingCycle"] != "monthly"
+    {
+        return Err(CliError::Other("reserved-IP quote omitted valid price or purchase policy fields; nothing was purchased".into()));
+    }
+    quote["priceSource"] = json!("server quote");
+    Ok(quote)
+}
+
+pub fn quoted_reservation(
+    region: &str,
+    family: Option<&str>,
+    count: u32,
+    quote: &Value,
+) -> crate::api::Request {
+    let mut request = ops::reserve_ips(region, family, Some(count));
+    if quote["priceSource"] == "server quote" {
+        if let Some(body) = request.body.as_mut() {
+            body["expectedTotalCents"] = quote["totalMonthlyCents"].clone();
+            body["expectedCurrency"] = quote["currency"].clone();
+        }
+    }
+    request
 }

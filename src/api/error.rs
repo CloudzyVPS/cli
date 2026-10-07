@@ -78,6 +78,13 @@ impl ApiError {
         }
     }
 
+    /// Recognize an older server's unregistered route without hiding an
+    /// actual structured not-found error for a plan, region or resource.
+    pub fn is_missing_route(&self) -> bool {
+        matches!(self, ApiError::Http { status: 404, code: None, message, .. }
+            if matches!(message.trim().to_ascii_lowercase().as_str(), "not found" | "404 page not found"))
+    }
+
     pub fn status(&self) -> Option<u16> {
         match self {
             ApiError::Http { status, .. } => Some(*status),
@@ -129,7 +136,7 @@ fn reason_phrase(status: u16) -> &'static str {
 /// A next step for the person, where there is an obvious one.
 pub fn hint(status: u16, code: Option<&str>) -> Option<&'static str> {
     Some(match (status, code) {
-        (_, Some("capacity_unavailable")) => "this plan has no live capacity in that region; choose another plan or region. Catalog stock and price quotes do not reserve capacity",
+        (_, Some("capacity_unavailable" | "REGION_CAPACITY" | "PLAN_OUT_OF_STOCK")) => "this plan has no live capacity in that region; choose another plan or region. Catalog stock and price quotes do not reserve capacity",
         (401, _) => "the credential was rejected — run `zy login` again, or check CLOUDZY_TOKEN",
         (403, Some("insufficient_scope")) => "the credential lacks the scope this needs — sign in again with `zy login`, or mint a developer token with that scope",
         (403, Some("endpoint_not_permitted")) => "this operation is not available to API clients; use the Cloudzy dashboard",
