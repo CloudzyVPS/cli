@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 2.0.1 — 2026-10-07
 
 - Normalize firewall directions and send the transport confirmation required for
   authorized snapshot restores in both CLI and MCP.
