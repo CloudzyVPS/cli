@@ -193,10 +193,25 @@ pub async fn quote_plan(
         "billingCycle": cycle, "quantity": 1, "includeIpv4": ipv4, "extras": {}})))
         .await?;
     validate_quote(&quote)?;
+    let availability = match api.send(ops::plan_capacity(plan, region)).await {
+        Ok(value) => {
+            if value["available"].as_bool().is_none() || value["capacityKnown"].as_bool().is_none()
+            {
+                return Err(CliError::Other(
+                    "capacity response omitted its availability fields; nothing was purchased"
+                        .into(),
+                ));
+            }
+            value
+        }
+        Err(err) if err.is_missing_route() => json!({"available": null, "capacityKnown": false,
+            "advisory": true, "reason": "preflight endpoint unavailable; catalog stock only"}),
+        Err(err) => return Err(err.into()),
+    };
     Ok(
         json!({"planId": plan, "region": region, "billingCycle": cycle, "includeIpv4": ipv4,
         "cpu": entry["cpuCores"], "ramMb": entry["memoryMb"], "diskGb": entry["diskGb"],
-        "quote": quote, "availability": "catalog only; live capacity is validated when creating"}),
+        "quote": quote, "availability": availability}),
     )
 }
 
@@ -330,4 +345,16 @@ pub fn quote_summary(quote: &Value) -> String {
         "{} /month equivalent; {hourly}",
         money(monthly, Some(currency))
     )
+}
+
+/// A price preview may describe a full region, but a purchase must refuse it.
+pub fn require_capacity(quote: &Value) -> Result<()> {
+    if quote["availability"]["available"] == false {
+        return Err(crate::api::ApiError::Http { status: 409,
+            code: Some(quote["availability"]["reason"].as_str().unwrap_or("REGION_CAPACITY").into()),
+            message: "the selected plan has no capacity or stock in this region; choose another plan or region".into(),
+            details: Some(quote["availability"].clone()),
+        }.into());
+    }
+    Ok(())
 }

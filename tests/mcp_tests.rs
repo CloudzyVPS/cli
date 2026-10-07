@@ -158,3 +158,29 @@ async fn firewall_and_restore_use_the_same_contract_as_the_cli() {
         .unwrap()
         .contains("reserved-ips create"));
 }
+
+#[tokio::test]
+async fn reserved_ip_mcp_quote_and_purchase_share_price_guards() {
+    let mock = MockServer::start().await;
+    Mock::given(method("GET")).and(path("/api/v1/account/reserved-ips/quote"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({"region":"sg","family":"ipv4","count":1,
+        "unitMonthlyCents":300,"totalMonthlyCents":300,"currency":"USD","billingCycle":"monthly","autoRenew":true,"refundable":false}))).mount(&mock).await;
+    Mock::given(method("POST"))
+        .and(path("/api/v1/account/reserved-ips"))
+        .and(body_json(
+            json!({"region":"sg","count":1,"expectedTotalCents":300,"expectedCurrency":"USD"}),
+        ))
+        .respond_with(ResponseTemplate::new(200).set_body_json(
+            json!({"data":[],"receipt":{"chargeStatus":"pending","chargedAmountCents":null}}),
+        ))
+        .expect(1)
+        .mount(&mock)
+        .await;
+    let s = server_for(&mock);
+    let q = call(&s, "quote_reserved_ips", json!({"region":"sg"})).await;
+    assert_eq!(q["isError"], false);
+    assert_eq!(q["structuredContent"]["totalMonthlyCents"], 300);
+    let r = call(&s, "reserve_ips", json!({"region":"sg"})).await;
+    assert_eq!(r["isError"], false);
+    assert!(r["structuredContent"]["receipt"]["chargedAmountCents"].is_null());
+}

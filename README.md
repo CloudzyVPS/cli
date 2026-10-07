@@ -112,7 +112,7 @@ Hourly catalog prices show the base hourly rate derived from the monthly equival
 
 Selecting a plan for snapshot spawn supplies its CPU and RAM explicitly. Disk is at least the current source disk because clones cannot shrink; without a plan, source resources are preserved. Billing cycle defaults to the source cycle. `--wait` waits for the new server, with a 900-second default deadline. Provisioning can continue after a wait timeout; inspect or resume waiting on the returned server id before creating another.
 
-Reserved IPs use the published fixed tariff of 2.50 USD per IP per month, non-refundable, with automatic renewal enabled. The preview is a published tariff, not a live server quote. The purchase receipt includes next billing dates and renewal settings, but the backend omits the actual charged amount; verify it with `zy billing ledger`. Additional on-demand pool IPv4 allocation is unavailable: reserve an IPv4 and attach its id with `zy reserved-ips attach RESERVED_ID SERVER_ID`. IPv6 allocation is checked against the server's reported capability.
+Reserved-IP previews request the server quote, including the price, stock and account quotas. Purchases include the accepted price and currency so the server can refuse a changed quote. IPs are non-refundable and renew automatically. Charged amounts and paid/pending status are shown when supplied in the receipt; pending or missing amounts require a ledger check before retrying. Older servers without the quote endpoint use a labelled published tariff of 2.50 USD/IP/month. Additional on-demand pool IPv4 allocation is unavailable: reserve an IPv4 and attach its id with `zy reserved-ips attach RESERVED_ID SERVER_ID`. IPv6 allocation is checked against the server's reported capability.
 
 `--backups` currently refuses creation because the developer API cannot enable and verify automatic backups through a supported end-to-end flow. Configure and verify backups in the dashboard.
 
@@ -159,7 +159,7 @@ For a container, or to use a scoped developer token instead of your sign-in:
 
 ### Tools
 
-`quote_server_configuration` previews configuration pricing without creating a server. Catalog stock is advisory; live capacity is checked by the backend when creating or spawning.
+`quote_server_configuration` previews configuration pricing and selected-plan compute/stock availability without creating a server. CLI and MCP refuse creation when the preflight reports unavailable. Quotes are advisory and reserve no capacity; older servers without the endpoint explicitly report unknown live availability. `quote_reserved_ips` previews the server price and purchase policy before `reserve_ips`. Backend deployment is required for the new authoritative preflights and receipts.
 
 
 | Area | Tools |

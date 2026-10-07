@@ -239,6 +239,7 @@ pub async fn run(ctx: &Ctx, cmd: &ServersCommand) -> Result<()> {
                 super::catalog::print_quote(ctx, &quote);
                 return Ok(());
             }
+            super::catalog::require_capacity(&quote)?;
             eprintln!("Configuration price before creation: {}. Catalog stock is advisory; the backend checks live capacity.", super::catalog::quote_summary(&quote["quote"]));
             let resp = api.send(ops::create_server(&body)).await?;
             let id = resp

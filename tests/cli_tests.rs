@@ -676,7 +676,7 @@ async fn reserved_ip_preview_is_read_only_and_purchase_requires_acceptance() {
         serde_json::from_slice::<Value>(&out.stdout).unwrap()["data"][0]["nextBillAt"],
         "2026-11-07"
     );
-    assert!(stderr(&out).contains("does not confirm the charged amount"));
+    assert!(stderr(&out).contains("Charged amount is unconfirmed"));
 }
 
 #[tokio::test]
@@ -855,4 +855,216 @@ async fn resize_refuses_when_a_generic_quote_cannot_reproduce_the_current_rate()
         .await;
     assert_eq!(out.status.code(), Some(2));
     assert!(stderr(&out).contains("does not match the current service rate"));
+}
+
+#[tokio::test]
+async fn live_reserved_ip_quote_receipt_and_price_guard_reach_the_api() {
+    let env = Env::new().await;
+    let quote = json!({"region":"sg","family":"ipv4","count":2,"currency":"USD",
+        "unitMonthlyCents":300,"totalMonthlyCents":600,"billingCycle":"monthly","refundable":false,"autoRenew":true,"advisory":true});
+    Mock::given(method("GET"))
+        .and(path("/api/v1/account/reserved-ips/quote"))
+        .and(query_param("region", "sg"))
+        .and(query_param("count", "2"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(quote))
+        .mount(&env.server)
+        .await;
+    Mock::given(method("POST"))
+        .and(path("/api/v1/account/reserved-ips"))
+        .and(body_json(
+            json!({"region":"sg","count":2,"expectedTotalCents":600,"expectedCurrency":"USD"}),
+        ))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_json(json!({"data":[{"id":"ip1"}],
+            "receipt":{"chargedAmountCents":600,"currency":"USD","chargeStatus":"paid"}})),
+        )
+        .expect(1)
+        .mount(&env.server)
+        .await;
+    let preview = env
+        .zy(
+            &[
+                "reserved-ips",
+                "create",
+                "--region",
+                "sg",
+                "--count",
+                "2",
+                "--dry-run",
+                "-o",
+                "json",
+            ],
+            Some("hpt_ci"),
+        )
+        .await;
+    assert!(preview.status.success(), "{}", stderr(&preview));
+    let body: Value = serde_json::from_slice(&preview.stdout).unwrap();
+    assert_eq!(body["totalMonthlyCents"], 600);
+    assert_eq!(body["priceSource"], "server quote");
+    let purchase = env
+        .zy(
+            &[
+                "reserved-ips",
+                "create",
+                "--region",
+                "sg",
+                "--count",
+                "2",
+                "--yes",
+                "-o",
+                "json",
+            ],
+            Some("hpt_ci"),
+        )
+        .await;
+    assert!(purchase.status.success(), "{}", stderr(&purchase));
+    assert!(stderr(&purchase).contains("6.00 USD charged"));
+    assert_eq!(
+        serde_json::from_slice::<Value>(&purchase.stdout).unwrap()["receipt"]["chargedAmountCents"],
+        600
+    );
+}
+
+#[tokio::test]
+async fn live_quote_failures_do_not_fall_back_or_purchase() {
+    for status in [403, 404, 409, 503] {
+        let env = Env::new().await;
+        Mock::given(path("/api/v1/account/reserved-ips/quote"))
+            .respond_with(
+                ResponseTemplate::new(status)
+                    .set_body_json(json!({"error":"preflight refused", "code":"NOT_FOUND"})),
+            )
+            .mount(&env.server)
+            .await;
+        let out = env
+            .zy(
+                &["reserved-ips", "create", "--region", "sg", "--yes"],
+                Some("hpt_ci"),
+            )
+            .await;
+        assert!(!out.status.success());
+        assert!(env
+            .server
+            .received_requests()
+            .await
+            .unwrap()
+            .iter()
+            .all(|r| r.method == "GET"));
+    }
+}
+
+#[tokio::test]
+async fn malformed_reserved_ip_prices_stop_before_purchase() {
+    for (unit, total) in [
+        (json!(300), Value::Null),
+        (json!(i64::MAX), Value::Null),
+        (json!(300), json!(250)),
+    ] {
+        let env = Env::new().await;
+        Mock::given(path("/api/v1/account/reserved-ips/quote"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                "region":"sg", "family":"ipv4", "count":2, "unitMonthlyCents":unit,
+                "totalMonthlyCents":total, "currency":"USD", "billingCycle":"monthly",
+                "autoRenew":true, "refundable":false
+            })))
+            .mount(&env.server)
+            .await;
+        let out = env
+            .zy(
+                &[
+                    "reserved-ips",
+                    "create",
+                    "--region",
+                    "sg",
+                    "--count",
+                    "2",
+                    "--yes",
+                ],
+                Some("hpt_ci"),
+            )
+            .await;
+        assert!(!out.status.success());
+        assert!(
+            stderr(&out).contains("nothing was purchased"),
+            "{}",
+            stderr(&out)
+        );
+        assert!(env
+            .server
+            .received_requests()
+            .await
+            .unwrap()
+            .iter()
+            .all(|r| r.method == "GET"));
+    }
+}
+
+#[tokio::test]
+async fn selected_plan_capacity_preflight_stops_creation_before_mutation() {
+    let env = Env::new().await;
+    Mock::given(path("/api/v1/pricing/catalog")).respond_with(ResponseTemplate::new(200).set_body_json(json!({
+        "plans":[{"id":"p1","slug":"standard","cpuCores":8,"memoryMb":16384,"diskGb":100}],
+        "prices":[{"planId":"p1","regionId":"ny","billingCycle":"monthly","monthlyEquivCents":1000,"inStock":true}]
+    }))).mount(&env.server).await;
+    Mock::given(path("/api/v1/pricing/quote"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_json(json!({"subtotalMonthlyCents":1000,"currency":"USD"})),
+        )
+        .mount(&env.server)
+        .await;
+    Mock::given(path("/api/v1/plan-capacity")).and(query_param("planId","p1")).and(query_param("region","ny"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({"available":false,"capacityKnown":true,"reason":"REGION_CAPACITY","advisory":true}))).mount(&env.server).await;
+    let dry = env
+        .zy(
+            &[
+                "servers",
+                "create",
+                "--plan",
+                "standard",
+                "--region",
+                "ny",
+                "--hostname",
+                "test",
+                "--dry-run",
+                "-o",
+                "json",
+            ],
+            Some("hpt_ci"),
+        )
+        .await;
+    assert!(dry.status.success(), "{}", stderr(&dry));
+    assert_eq!(
+        serde_json::from_slice::<Value>(&dry.stdout).unwrap()["availability"]["available"],
+        false
+    );
+    let out = env
+        .zy(
+            &[
+                "servers",
+                "create",
+                "--plan",
+                "standard",
+                "--region",
+                "ny",
+                "--hostname",
+                "test",
+                "-o",
+                "json",
+            ],
+            Some("hpt_ci"),
+        )
+        .await;
+    assert!(!out.status.success());
+    assert_eq!(
+        serde_json::from_slice::<Value>(&out.stdout).unwrap()["code"],
+        "REGION_CAPACITY"
+    );
+    assert!(env
+        .server
+        .received_requests()
+        .await
+        .unwrap()
+        .iter()
+        .all(|r| r.url.path() != "/api/v1/services"));
 }
