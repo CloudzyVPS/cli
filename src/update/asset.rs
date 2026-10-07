@@ -51,7 +51,7 @@ pub fn parse_asset_name(name: &str) -> Option<(String, String)> {
     
     let mut version_end_idx = None;
     for (i, part) in parts.iter().enumerate().skip(1) {
-        if arch_indicators.iter().any(|&arch| *part == arch) {
+        if arch_indicators.contains(part) {
             version_end_idx = Some(i);
             break;
         }

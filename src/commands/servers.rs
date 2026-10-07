@@ -40,6 +40,8 @@ pub const DETAIL_COLS: &[Col] = &[
     col("Bandwidth (TB)", "/bandwidthTb"),
     col("Plan", "/plan/name"),
     col("Billing cycle", "/billingCycle"),
+    col("Hourly price", "/priceHourly"),
+    col("Monthly price", "/priceMonthly"),
     col("Next renewal", "/nextRenewalAt"),
     col("Auto-renew", "/autoRenew"),
     col("Reverse DNS", "/reverseDns"),
@@ -90,6 +92,9 @@ pub enum ServersCommand {
         /// Stage the change without rebooting (apply with a stop and start)
         #[arg(long)]
         no_reboot: bool,
+        /// Preview resource and recurring price changes without applying them
+        #[arg(long)]
+        dry_run: bool,
     },
     /// Reinstall from an OS template, erasing the disk
     Rebuild {
@@ -182,9 +187,12 @@ pub struct CreateArgs {
     /// Reserved IP id to use (repeatable)
     #[arg(long = "reserved-ip", value_name = "ID")]
     pub reserved_ips: Vec<String>,
-    /// Enable automatic backups
+    /// Request automatic backups (currently unavailable through the developer API)
     #[arg(long)]
     pub backups: bool,
+    /// Preview resources and IPv4-inclusive pricing without creating a server
+    #[arg(long, conflicts_with = "wait")]
+    pub dry_run: bool,
     /// Wait until the server is active
     #[arg(long)]
     pub wait: bool,
@@ -195,20 +203,43 @@ pub async fn run(ctx: &Ctx, cmd: &ServersCommand) -> Result<()> {
     match cmd {
         ServersCommand::List => {
             let resp = api.send(ops::servers()).await?;
+            let mut rows = items(&resp);
+            if !ctx.json() {
+                resolve_plan_labels(&api, &mut rows).await;
+            }
             print_list(
                 ctx.format,
                 &resp,
-                &items(&resp),
+                &rows,
                 LIST_COLS,
                 "No servers yet. Create one with `zy servers create`.",
             );
         }
         ServersCommand::Get { id } => {
             let resp = api.send(ops::server(id)).await?;
-            print_object(ctx.format, &resp, DETAIL_COLS);
+            if ctx.json() {
+                print_json(&resp);
+            } else {
+                let mut rows = vec![resp];
+                resolve_plan_labels(&api, &mut rows).await;
+                print_object(ctx.format, &rows[0], DETAIL_COLS);
+            }
         }
         ServersCommand::Create(args) => {
             let body = build_create(&api, args).await?;
+            let quote = super::catalog::quote_plan(
+                &api,
+                &body.plan_id,
+                &body.region,
+                body.billing_cycle.as_deref().unwrap_or("monthly"),
+                body.ip_version.as_deref() != Some("ipv6"),
+            )
+            .await?;
+            if args.dry_run {
+                super::catalog::print_quote(ctx, &quote);
+                return Ok(());
+            }
+            eprintln!("Configuration price before creation: {}. Catalog stock is advisory; the backend checks live capacity.", super::catalog::quote_summary(&quote["quote"]));
             let resp = api.send(ops::create_server(&body)).await?;
             let id = resp
                 .get("id")
@@ -275,12 +306,21 @@ pub async fn run(ctx: &Ctx, cmd: &ServersCommand) -> Result<()> {
             ram_mb,
             disk_gb,
             no_reboot,
+            dry_run,
         } => {
             if cpu.is_none() && ram_mb.is_none() && disk_gb.is_none() {
                 return Err(CliError::Usage(
                     "give at least one of --cpu, --ram-mb, --disk-gb".into(),
                 ));
             }
+            let preview = resize_preview(&api, id, *cpu, *ram_mb, *disk_gb).await?;
+            if *dry_run {
+                print_object(ctx.format, &preview, &[]);
+                return Ok(());
+            }
+            eprintln!("Resize: CPU {} → {}, RAM {} → {} MB, disk {} → {} GB. Current monthly price: {}. Requested price: {}. Hourly services re-rate immediately; prepaid services re-rate at renewal. No immediate charge is quoted.",
+                preview["current"]["cpu"], preview["requested"]["cpu"], preview["current"]["ramMb"], preview["requested"]["ramMb"],
+                preview["current"]["diskGb"], preview["requested"]["diskGb"], preview["current"]["priceMonthly"], super::catalog::quote_summary(&preview["configurationQuote"]));
             let auto_reboot = no_reboot.then_some(false);
             let resp = api
                 .send(ops::resize_server(id, *cpu, *ram_mb, *disk_gb, auto_reboot))
@@ -296,6 +336,15 @@ pub async fn run(ctx: &Ctx, cmd: &ServersCommand) -> Result<()> {
                     col("Reboot error", "/rebootError"),
                 ],
             );
+            // A successful synchronous resize updates configuration before returning.
+            // Read back the applied prices rather than assuming the preview was applied.
+            match api.send(ops::server(id)).await {
+                Ok(server) => {
+                    if !ctx.json() { print_object(ctx.format, &server, DETAIL_COLS); }
+                    else { eprintln!("Applied resources and prices: cpu={}, ramMb={}, diskGb={}, priceHourly={}, priceMonthly={}", server["cpu"], server["ramMb"], server["diskGb"], server["priceHourly"], server["priceMonthly"]); }
+                }
+                Err(error) => eprintln!("Resize was accepted but readback failed: {error}. Inspect `zy servers get {id}` before retrying."),
+            }
         }
         ServersCommand::Rebuild {
             id,
@@ -321,34 +370,38 @@ pub async fn run(ctx: &Ctx, cmd: &ServersCommand) -> Result<()> {
         }
         ServersCommand::Usage { id } => {
             let resp = api.send(ops::server_usage(id)).await?;
-            print_object(
-                ctx.format,
-                &resp,
-                &[
-                    col("CPU %", "/cpu"),
-                    col("RAM %", "/ram"),
-                    col("Disk %", "/disk"),
-                    col("Bandwidth used", "/bandwidth/current"),
-                    col("Bandwidth limit", "/bandwidth/limit"),
-                    col("Unit", "/bandwidth/unit"),
-                ],
-            );
+            if ctx.json() {
+                print_json(&resp);
+            } else {
+                print_object(
+                    ctx.format,
+                    &usage_display(&resp),
+                    &[
+                        col("CPU", "/cpu"),
+                        col("RAM", "/ram"),
+                        col("Disk", "/disk"),
+                        col("Bandwidth", "/bandwidth"),
+                    ],
+                );
+            }
         }
         ServersCommand::Activity { id } => {
             let resp = api.send(ops::server_activity(id)).await?;
+            let rows: Vec<Value> = items(&resp).iter().map(activity_display).collect();
             print_list(
                 ctx.format,
                 &resp,
-                &items(&resp),
+                &rows,
                 &[
-                    col("WHEN", "/timestamp"),
-                    col("TYPE", "/type"),
-                    col("DESCRIPTION", "/description"),
-                    col("ACTOR", "/actorName"),
+                    col("WHEN", "/createdAt"),
+                    col("TRANSITION", "/_transition"),
+                    col("REASON", "/reason"),
+                    col("ACTOR", "/_actor"),
                 ],
                 "No activity.",
             );
         }
+
         ServersCommand::Wait { id, state, timeout } => {
             let fin =
                 wait_for_state(&api, id, state, Duration::from_secs(*timeout), !ctx.json()).await?;
@@ -402,7 +455,9 @@ pub async fn wait_for_state(
     let started = Instant::now();
     let mut last = String::new();
     loop {
-        let server = api.send(ops::server(id)).await?;
+        let remaining = timeout.saturating_sub(started.elapsed());
+        let server = tokio::time::timeout(remaining, api.send(ops::server(id))).await
+            .map_err(|_| CliError::Other(format!("timed out after {}s waiting for server {id}. Provisioning may continue; inspect `zy servers get {id}` or resume `zy servers wait {id}` before creating again", timeout.as_secs())))??;
         let state = server
             .get("state")
             .and_then(Value::as_str)
@@ -428,11 +483,12 @@ pub async fn wait_for_state(
         }
         if started.elapsed() > timeout {
             return Err(CliError::Other(format!(
-                "timed out after {}s; server {id} is still {state}",
+                "timed out after {}s; server {id} is still {state}. Provisioning may continue; inspect `zy servers get {id}` or resume `zy servers wait {id}` rather than creating again",
                 timeout.as_secs()
             )));
         }
-        tokio::time::sleep(Duration::from_secs(5)).await;
+        tokio::time::sleep(Duration::from_secs(5).min(timeout.saturating_sub(started.elapsed())))
+            .await;
     }
 }
 
@@ -498,6 +554,9 @@ pub async fn resolve_ssh_keys(api: &ApiClient, wanted: &[String]) -> Result<Vec<
 }
 
 async fn build_create(api: &ApiClient, a: &CreateArgs) -> Result<ops::CreateServer> {
+    if a.backups {
+        return Err(CliError::Usage("automatic backups cannot currently be enabled and verified through the developer API; configure them in the Cloudzy dashboard before relying on them".into()));
+    }
     let mut ssh = resolve_ssh_keys(api, &a.ssh_keys).await?;
     for f in &a.ssh_key_files {
         ssh.push(read_file(f)?.trim().to_string());
@@ -533,6 +592,181 @@ async fn build_create(api: &ApiClient, a: &CreateArgs) -> Result<ops::CreateServ
         auto_backups: a.backups,
         config,
     })
+}
+
+fn usage_display(response: &Value) -> Value {
+    let mut display = json!({});
+    for name in ["cpu", "ram", "disk", "bandwidth"] {
+        let metric = &response[name];
+        let text = if metric["available"] == false || !metric["current"].is_number() {
+            "unavailable".into()
+        } else {
+            let current = &metric["current"];
+            let unit = metric["unit"].as_str().unwrap_or("");
+            if unit == "%" {
+                format!("{current}%")
+            } else if metric["limit"].is_number() {
+                format!("{current} / {} {unit}", metric["limit"])
+            } else {
+                format!("{current} {unit}")
+            }
+        };
+        display[name] = json!(text);
+    }
+    display
+}
+
+fn activity_display(event: &Value) -> Value {
+    let mut display = event.clone();
+    let from = event["fromState"]
+        .as_str()
+        .filter(|s| !s.is_empty())
+        .unwrap_or("(new)");
+    let to = event["toState"].as_str().unwrap_or("-");
+    display["_transition"] = json!(format!("{from} → {to}"));
+    display["_actor"] = json!(event["actor"]
+        .as_str()
+        .filter(|s| !s.is_empty())
+        .or_else(|| event["actorType"].as_str())
+        .unwrap_or("-"));
+    display
+}
+
+async fn resolve_plan_labels(api: &ApiClient, rows: &mut [Value]) {
+    if !rows.iter().any(|r| {
+        r["plan"]["id"].is_string()
+            && (r["plan"]["name"] == r["hostname"] || !r["plan"]["name"].is_string())
+    }) {
+        return;
+    }
+    let catalog = match api.send(ops::pricing_catalog()).await {
+        Ok(catalog) => catalog,
+        Err(error) => {
+            eprintln!("Could not resolve catalog plan labels: {error}");
+            for row in rows {
+                if row["plan"]["name"] == row["hostname"] {
+                    row["plan"]["name"] = row["plan"]["id"].clone();
+                }
+            }
+            return;
+        }
+    };
+    let plans = catalog.get("plans").map(items).unwrap_or_default();
+    for row in rows {
+        if let Some(plan) = plans
+            .iter()
+            .find(|p| p["id"].is_string() && p["id"] == row["plan"]["id"])
+        {
+            row["plan"]["name"] = plan["name"].clone();
+        } else if row["plan"]["name"] == row["hostname"] {
+            row["plan"]["name"] = row["plan"]["id"].clone();
+        }
+    }
+}
+
+async fn resize_preview(
+    api: &ApiClient,
+    id: &str,
+    cpu: Option<u32>,
+    ram_mb: Option<u32>,
+    disk_gb: Option<u32>,
+) -> Result<Value> {
+    let source = api.send(ops::server(id)).await?;
+    let plan_id = source["planId"]
+        .as_str()
+        .or_else(|| source["plan"]["id"].as_str())
+        .ok_or_else(|| {
+            CliError::Usage(
+                "server has no catalog plan id; an accurate resize quote requires the dashboard"
+                    .into(),
+            )
+        })?;
+    let catalog = api.send(ops::pricing_catalog()).await?;
+    let plan = items(&catalog["plans"])
+        .into_iter()
+        .find(|p| p["id"].as_str() == Some(plan_id))
+        .ok_or_else(|| {
+            CliError::Usage(
+                "server plan is absent from the catalog; use the dashboard to quote this resize"
+                    .into(),
+            )
+        })?;
+    let mut requested = source.clone();
+    for (key, value) in [("cpu", cpu), ("ramMb", ram_mb), ("diskGb", disk_gb)] {
+        if let Some(value) = value {
+            if value == 0 {
+                return Err(CliError::Usage(format!("{key} must be positive")));
+            }
+            requested[key] = json!(value);
+        }
+    }
+    if requested["diskGb"].as_u64() < source["diskGb"].as_u64() {
+        return Err(CliError::Usage("disk cannot shrink".into()));
+    }
+    let before = api
+        .send(ops::pricing_quote(existing_quote_body(&source, &plan)?))
+        .await?;
+    // The generic pricing endpoint has no service context. Refuse when its
+    // reconstructed price disagrees with this service's persisted rate.
+    let observed = source["priceMonthly"].as_f64().ok_or_else(|| {
+        CliError::Usage(
+            "server has no current monthly rate; use the dashboard to quote the resize".into(),
+        )
+    })?;
+    let quoted = before["subtotalMonthlyCents"]
+        .as_f64()
+        .ok_or_else(|| CliError::Other("pricing response omitted the monthly total".into()))?;
+    if (observed * 100.0 - quoted).abs() > 0.01 {
+        return Err(CliError::Usage("pricing quote does not match the current service rate (possibly custom features or pinned pricing); use the dashboard for an authoritative resize quote".into()));
+    }
+    let after = api
+        .send(ops::pricing_quote(existing_quote_body(&requested, &plan)?))
+        .await?;
+    super::catalog::validate_quote(&after)?;
+    Ok(
+        json!({"server": id, "current": {"cpu": source["cpu"], "ramMb": source["ramMb"], "diskGb": source["diskGb"],
+        "priceMonthly": source["priceMonthly"], "priceHourly": source["priceHourly"]},
+        "requested": {"cpu": requested["cpu"], "ramMb": requested["ramMb"], "diskGb": requested["diskGb"]},
+        "configurationQuote": after, "immediateCharge": null, "billingEffect": "hourly: immediate re-rate; prepaid: next renewal; no immediate charge quoted"}),
+    )
+}
+
+pub(crate) fn existing_quote_body(server: &Value, plan: &Value) -> Result<Value> {
+    let n = |value: &Value, key: &str| {
+        value[key].as_u64().ok_or_else(|| {
+            CliError::Usage(format!(
+                "missing {key}; cannot reconstruct an accurate quote"
+            ))
+        })
+    };
+    let (cpu, ram, disk) = (n(server, "cpu")?, n(server, "ramMb")?, n(server, "diskGb")?);
+    let (base_cpu, base_ram, base_disk) = (
+        n(plan, "cpuCores")?,
+        n(plan, "memoryMb")?,
+        n(plan, "diskGb")?,
+    );
+    if server["nested"] == true || server["autoBackups"] == true {
+        return Err(CliError::Usage(
+            "the generic quote cannot verify this server's feature prices; use the dashboard"
+                .into(),
+        ));
+    }
+    let region = server["region"]
+        .as_str()
+        .ok_or_else(|| CliError::Usage("server region missing".into()))?;
+    let cycle = server["billingCycle"]
+        .as_str()
+        .ok_or_else(|| CliError::Usage("server billing cycle missing".into()))?;
+    let ipv4 = server["ipAddress"]
+        .as_str()
+        .is_some_and(|ip| !ip.is_empty());
+    Ok(
+        json!({"planId": plan["id"], "region": region, "billingCycle": cycle, "quantity": 1,
+        "includeIpv4": ipv4, "extras": {"cpuCores": cpu.saturating_sub(base_cpu),
+        "ramGb": (ram.saturating_add(512) / 1024).saturating_sub(base_ram.saturating_add(512) / 1024),
+        "diskGb": disk.saturating_sub(base_disk),
+        "bandwidthTb": server["bandwidthTb"].as_u64().unwrap_or(0).saturating_sub(plan["bandwidthTb"].as_u64().unwrap_or(0))}}),
+    )
 }
 
 #[cfg(test)]

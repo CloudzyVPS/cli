@@ -115,3 +115,46 @@ async fn list_plans_joins_the_regional_price() {
         1000
     );
 }
+
+#[tokio::test]
+async fn firewall_and_restore_use_the_same_contract_as_the_cli() {
+    use wiremock::matchers::query_param;
+    let mock = MockServer::start().await;
+    Mock::given(method("POST")).and(path("/api/v1/services/s1/firewall"))
+        .and(body_json(json!({"direction":"inbound","protocol":"tcp","port":"8080","source":"0.0.0.0/0","action":"allow"})))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({"id":"rule"})))
+        .expect(1).mount(&mock).await;
+    Mock::given(method("POST"))
+        .and(path("/api/v1/services/s1/snapshots/sn1/restore"))
+        .and(query_param("confirm", "true"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({"state":"restoring"})))
+        .expect(1)
+        .mount(&mock)
+        .await;
+    let server = server_for(&mock);
+    let result = call(
+        &server,
+        "add_firewall_rule",
+        json!({"server":"s1","direction":"in","protocol":"tcp","port":"8080","action":"allow"}),
+    )
+    .await;
+    assert_eq!(result["isError"], false);
+    let result = call(
+        &server,
+        "restore_snapshot",
+        json!({"server":"s1","snapshot":"sn1"}),
+    )
+    .await;
+    assert_eq!(result["isError"], false);
+    let result = call(
+        &server,
+        "attach_server_ip",
+        json!({"server":"s1","family":"ipv4"}),
+    )
+    .await;
+    assert_eq!(result["isError"], true);
+    assert!(result["content"][0]["text"]
+        .as_str()
+        .unwrap()
+        .contains("reserved-ips create"));
+}

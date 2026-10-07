@@ -57,7 +57,7 @@ fn test_parse_with_v_prefix_and_prerelease() {
 
 #[test]
 fn test_parse_invalid_too_few_components() {
-    let result = Version::parse("1.0");
+    let result = Version::parse("1");
     assert!(result.is_err());
 }
 
@@ -86,7 +86,7 @@ fn test_current_version() {
 fn test_is_newer_than_major() {
     let v1 = Version::parse("1.0.0").unwrap();
     let v2 = Version::parse("2.0.0").unwrap();
-    
+
     assert!(v2.is_newer_than(&v1));
     assert!(!v1.is_newer_than(&v2));
 }
@@ -95,7 +95,7 @@ fn test_is_newer_than_major() {
 fn test_is_newer_than_minor() {
     let v1 = Version::parse("1.0.0").unwrap();
     let v2 = Version::parse("1.1.0").unwrap();
-    
+
     assert!(v2.is_newer_than(&v1));
     assert!(!v1.is_newer_than(&v2));
 }
@@ -104,7 +104,7 @@ fn test_is_newer_than_minor() {
 fn test_is_newer_than_patch() {
     let v1 = Version::parse("1.0.0").unwrap();
     let v2 = Version::parse("1.0.1").unwrap();
-    
+
     assert!(v2.is_newer_than(&v1));
     assert!(!v1.is_newer_than(&v2));
 }
@@ -113,7 +113,7 @@ fn test_is_newer_than_patch() {
 fn test_is_newer_than_prerelease_vs_stable() {
     let stable = Version::parse("1.0.0").unwrap();
     let beta = Version::parse("1.0.0-beta").unwrap();
-    
+
     // Stable is newer than pre-release
     assert!(stable.is_newer_than(&beta));
     assert!(!beta.is_newer_than(&stable));
@@ -123,7 +123,7 @@ fn test_is_newer_than_prerelease_vs_stable() {
 fn test_is_newer_than_equal() {
     let v1 = Version::parse("1.0.0").unwrap();
     let v2 = Version::parse("1.0.0").unwrap();
-    
+
     assert!(!v1.is_newer_than(&v2));
     assert!(!v2.is_newer_than(&v1));
 }
@@ -134,11 +134,11 @@ fn test_is_newer_than_complex() {
     let v1_0_1 = Version::parse("1.0.1").unwrap();
     let v1_2_0 = Version::parse("1.2.0").unwrap();
     let v2_0_0 = Version::parse("2.0.0").unwrap();
-    
+
     assert!(v1_0_1.is_newer_than(&v1_0_0));
     assert!(v1_2_0.is_newer_than(&v1_0_1));
     assert!(v2_0_0.is_newer_than(&v1_2_0));
-    
+
     assert!(!v1_0_0.is_newer_than(&v1_0_1));
     assert!(!v1_0_1.is_newer_than(&v1_2_0));
     assert!(!v1_2_0.is_newer_than(&v2_0_0));
@@ -148,10 +148,17 @@ fn test_is_newer_than_complex() {
 fn test_version_display() {
     let v1 = Version::parse("1.0.0").unwrap();
     assert_eq!(v1.to_string(), "1.0.0");
-    
+
     let v2 = Version::parse("1.0.0-beta.1").unwrap();
     assert_eq!(v2.to_string(), "1.0.0-beta.1");
-    
+
     let v3 = Version::parse("v2.1.3-rc.2").unwrap();
     assert_eq!(v3.to_string(), "2.1.3-rc.2");
+}
+
+#[test]
+fn official_v2_tag_is_newer_than_v1() {
+    let v = Version::parse("v2.0").unwrap();
+    assert_eq!(v.to_string(), "2.0.0");
+    assert!(v.is_newer_than(&Version::parse("v1.0.2").unwrap()));
 }

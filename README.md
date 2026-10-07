@@ -69,6 +69,7 @@ zy servers create --hostname web-1 --plan std-4gb --region fra \
     --os ubuntu-24.04 --ssh-key laptop --wait
 zy servers list
 zy servers power web-1-id reboot
+zy servers resize web-1-id --ram-mb 8192 --dry-run
 zy servers resize web-1-id --ram-mb 8192
 zy snapshots create web-1-id --name before-upgrade
 zy servers delete web-1-id
@@ -82,17 +83,42 @@ zy servers delete web-1-id
 | `reserved-ips` | `list` `create` `attach` `detach` `auto-renew` `release` |
 | `ips` | `list` `add` `remove` |
 | `firewall` | `list` `add` `delete` |
-| `regions` `plans` `os` `apps` | `list` (and `apps get`) |
+| `regions` `plans` `os` `apps` | `list` (plus `plans quote` and `apps get`) |
 | `billing` | `balance` `ledger` `invoices` |
 | account | `login` `logout` `auth status` `auth token` `whoami` |
 | other | `mcp` `update` |
 
 Run `zy <command> --help` for every flag.
 
-- **Output.** Tables by default; `-o json` prints the API's JSON unchanged, for `jq` and scripts. Status notes go to stderr, so stdout stays clean.
-- **Confirmation.** `delete`, `rebuild`, `reset-password`, snapshot `restore`/`delete`, and IP `release`/`remove` ask you to type the resource name. In scripts, pass `--yes`; without a terminal and without `--yes` they refuse.
+- **Output.** Tables by default; `-o json` prints API JSON unchanged for resource reads and mutation receipts. Plan selections and price previews return derived JSON with the selected region, cycle and price scope. Errors produce structured JSON with a nonzero exit code. Progress and recovery instructions go to stderr. Billing tables retain up to six decimal places from API micro amounts, preserving small charges and refunds; JSON stays unchanged.
+- **Confirmation.** Reserved-IP purchases and snapshot spawns show a price preview and require confirmation (or `--yes`). `delete`, `rebuild`, `reset-password`, snapshot `restore`/`delete`, and IP `release`/`remove` ask you to type the resource name. In scripts, pass `--yes`; without a terminal and without `--yes` they refuse.
 - **Profiles.** `--profile staging` (or `CLOUDZY_PROFILE`) keeps separate sign-ins side by side.
 - **Debugging.** `--debug` logs each request and response line to stderr. Credentials are never printed.
+
+## Price and provisioning previews
+
+```bash
+zy plans list --region SG-Singapore-DC2 --cycle hourly
+zy plans quote --plan vps-512 --region SG-Singapore-DC2 --cycle hourly
+zy servers create --hostname web-1 --plan vps-512 --region SG-Singapore-DC2 --cycle hourly --dry-run
+zy servers resize SERVER_ID --cpu 2 --ram-mb 1024 --disk-gb 21 --dry-run
+zy reserved-ips create --region SG-Singapore-DC2 --count 1 --dry-run
+zy reserved-ips create --region SG-Singapore-DC2 --count 1 --yes
+zy snapshots spawn SERVER_ID SNAPSHOT_ID --plan vps-512 --cycle hourly --dry-run
+zy snapshots spawn SERVER_ID SNAPSHOT_ID --plan vps-512 --cycle hourly --yes --wait --timeout 900
+```
+
+Hourly catalog prices show the base hourly rate derived from the monthly equivalent (672 billing hours per month); configuration quotes include mandatory IPv4 charges. Cycle totals may be rounded to cents by the API, so use the precise hourly equivalent for usage estimates. A quote does not reserve capacity. Resize previews verify the reconstructed current quote against the service's reported rate and refuse when custom features or pinned prices prevent a reliable comparison. The generic pricing endpoint does not quote an immediate resize charge.
+
+Selecting a plan for snapshot spawn supplies its CPU and RAM explicitly. Disk is at least the current source disk because clones cannot shrink; without a plan, source resources are preserved. Billing cycle defaults to the source cycle. `--wait` waits for the new server, with a 900-second default deadline. Provisioning can continue after a wait timeout; inspect or resume waiting on the returned server id before creating another.
+
+Reserved IPs use the published fixed tariff of 2.50 USD per IP per month, non-refundable, with automatic renewal enabled. The preview is a published tariff, not a live server quote. The purchase receipt includes next billing dates and renewal settings, but the backend omits the actual charged amount; verify it with `zy billing ledger`. Additional on-demand pool IPv4 allocation is unavailable: reserve an IPv4 and attach its id with `zy reserved-ips attach RESERVED_ID SERVER_ID`. IPv6 allocation is checked against the server's reported capability.
+
+`--backups` currently refuses creation because the developer API cannot enable and verify automatic backups through a supported end-to-end flow. Configure and verify backups in the dashboard.
+
+Long mutations print a pending message before the request. If the connection fails, a gateway returns an error, or the CLI is interrupted, inspect the listed read-only commands before retrying: an operation may have completed despite a lost response. Problem JSON errors show readable title/detail and available request references; structured JSON errors retain the diagnostic payload.
+
+`zy update` shows concise current/latest versions. `zy update -o json` checks without prompting or installing; add `--force` to request installation. `--debug` sends release diagnostics to stderr.
 
 ## AI assistants (MCP)
 
@@ -132,6 +158,9 @@ For a container, or to use a scoped developer token instead of your sign-in:
 ```
 
 ### Tools
+
+`quote_server_configuration` previews configuration pricing without creating a server. Catalog stock is advisory; live capacity is checked by the backend when creating or spawning.
+
 
 | Area | Tools |
 |---|---|

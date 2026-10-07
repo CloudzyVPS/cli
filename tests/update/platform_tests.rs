@@ -115,9 +115,9 @@ fn test_current_platform_is_supported() {
     
     // We can't assert this will always succeed since we might be running on an unsupported platform
     // But we can verify the error type is correct
-    if result.is_err() {
+    if let Err(error) = result {
         use zy::update::UpdateError;
-        match result.unwrap_err() {
+        match error {
             UpdateError::UnsupportedPlatform(_) => {
                 // Expected error type
             }

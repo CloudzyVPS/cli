@@ -1,104 +1,74 @@
 //! `zy update`.
 
-use std::process;
+use super::context::Ctx;
+use crate::error::{CliError, Result};
+use crate::output::print_json;
+use crate::update::{self, Channel, GitHubClient, Version};
+use serde_json::json;
 
-use crate::update;
-
-pub async fn run(channel: &str, force: bool) {
-    let channel = match channel.to_lowercase().as_str() {
-        "beta" => update::Channel::Beta,
-        "alpha" => update::Channel::Alpha,
-        "rc" => update::Channel::ReleaseCandidate,
-        _ => update::Channel::Stable,
+pub async fn run(ctx: &Ctx, channel: &str, force: bool) -> Result<()> {
+    let channel = match channel {
+        "stable" => Channel::Stable,
+        "beta" => Channel::Beta,
+        "alpha" => Channel::Alpha,
+        "rc" => Channel::ReleaseCandidate,
+        _ => {
+            return Err(CliError::Usage(
+                "channel must be stable, beta, alpha or rc".into(),
+            ))
+        }
     };
-
-    match update::check_for_update(channel).await {
-        Ok(Some(release)) => {
-            // Show release information
-            println!(
-                "\n{}",
-                yansi::Paint::new("New version available!").green().bold()
-            );
-            println!(
-                "  Current version:  {}",
-                yansi::Paint::new(update::Version::current().to_string()).cyan()
-            );
-            println!(
-                "  Latest version:   {}",
-                yansi::Paint::new(release.version.to_string()).cyan().bold()
-            );
-            println!(
-                "  Release page:     {}",
-                yansi::Paint::new(&release.download_url).underline()
-            );
-
-            // Calculate download size
-            let platform = update::Platform::current();
-            if let Ok(asset) = update::select_asset_for_platform(&release.assets, &platform) {
-                let size_mb = asset.size as f64 / (1024.0 * 1024.0);
-                println!("  Download size:    {:.2} MB", size_mb);
-            }
-
-            // Prompt for confirmation unless --force is used
-            if !force {
-                println!(
-                    "\n{}",
-                    yansi::Paint::new("Do you want to download and install this update? [y/N]")
-                        .yellow()
-                );
-
-                let mut input = String::new();
-                if let Err(e) = std::io::stdin().read_line(&mut input) {
-                    eprintln!("{}: {}", yansi::Paint::new("Failed to read input").red(), e);
-                    process::exit(1);
-                }
-
-                let input = input.trim().to_lowercase();
-                if input != "y" && input != "yes" {
-                    println!("{}", yansi::Paint::new("Update cancelled.").yellow());
-                    return;
-                }
-            }
-
-            // Perform the update
-            match update::perform_update(release).await {
-                Ok(_) => {
-                    println!(
-                        "\n{}",
-                        yansi::Paint::new("Update completed successfully!")
-                            .green()
-                            .bold()
-                    );
-                    println!(
-                        "{}",
-                        yansi::Paint::new("Please restart the CLI to use the new version.")
-                            .yellow()
-                    );
-                }
-                Err(e) => {
-                    eprintln!(
-                        "\n{}: {}",
-                        yansi::Paint::new("Update failed").red().bold(),
-                        e
-                    );
-                    eprintln!(
-                        "{}",
-                        yansi::Paint::new("Your original binary has been restored.").yellow()
-                    );
-                    process::exit(1);
-                }
-            }
+    let current = Version::current();
+    let release = GitHubClient::new(update::REPO_OWNER.into(), update::REPO_NAME.into())
+        .get_latest_release(channel)
+        .await
+        .map_err(|e| CliError::Other(e.to_string()))?;
+    let available = release.version.is_newer_than(&current);
+    // JSON checks never install or prompt; --force explicitly requests installation.
+    if ctx.json() && !force {
+        print_json(
+            &json!({ "currentVersion": current.to_string(), "latestVersion": release.version.to_string(),
+            "updateAvailable": available, "releaseUrl": release.download_url }),
+        );
+        return Ok(());
+    }
+    eprintln!("Current: {current}; latest: {}.", release.version);
+    if !available {
+        if ctx.json() {
+            print_json(&json!({"updated": false, "version": current.to_string()}));
+        } else {
+            eprintln!("You are already running the latest version.");
         }
-        Ok(None) => {
-            // Already on latest version - message already printed by check_for_update
+        return Ok(());
+    }
+    if !force {
+        use std::io::{IsTerminal, Write};
+        if !std::io::stdin().is_terminal() {
+            return Err(CliError::Usage(
+                "pass --force to install an update non-interactively".into(),
+            ));
         }
-        Err(e) => {
-            eprintln!(
-                "{}: {}",
-                yansi::Paint::new("Error checking for updates").red(),
-                e
-            );
-            process::exit(1);
+        eprint!("Install {}? [y/N] ", release.version);
+        std::io::stderr()
+            .flush()
+            .map_err(|e| CliError::Other(e.to_string()))?;
+        let mut answer = String::new();
+        std::io::stdin()
+            .read_line(&mut answer)
+            .map_err(|e| CliError::Other(e.to_string()))?;
+        if !matches!(answer.trim().to_lowercase().as_str(), "y" | "yes") {
+            eprintln!("Update cancelled.");
+            return Ok(());
         }
     }
+    let version = release.version.to_string();
+    update::perform_update(release)
+        .await
+        .map_err(|e| CliError::Other(format!("update failed: {e}")))?;
+    if ctx.json() {
+        print_json(&json!({"updated": true, "version": version}));
+    } else {
+        ctx.done(format!("Updated to {version}. Restart zy to use it."));
+    }
+    Ok(())
 }

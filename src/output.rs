@@ -10,7 +10,7 @@ pub enum Format {
     /// Human-readable table
     #[default]
     Table,
-    /// The API's JSON, unmodified
+    /// JSON resource responses, selected plans, previews, or structured errors
     Json,
 }
 
