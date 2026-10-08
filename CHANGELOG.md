@@ -1,5 +1,19 @@
 # Changelog
 
+## 2.0.3 — 2026-10-08
+
+- Reject unknown plan-list regions and billing cycles in CLI and MCP, list
+  supported cycles, and distinguish missing prices from regional base-price
+  fallbacks. Base-price listings without a region continue to work.
+- Use the server’s public pricing engine when an older deployment explicitly
+  reports the authenticated quote route as absent. Configuration, create, resize
+  and snapshot-spawn previews retain server-calculated prices and IPv4 charges.
+- Recognize the deployed structured route-absence response, including request
+  references, for reserved-IP tariff previews and unknown capacity preflights.
+  Authentication, missing-resource, stock, quota and backend errors still block.
+  Legacy reserved-IP previews remain advisory; authoritative IP quotes, charge
+  receipts and live capacity require the corresponding backend deployment.
+
 ## 2.0.2 — 2026-10-07
 
 - Read selected-plan compute/stock preflight with configuration quotes. CLI and MCP

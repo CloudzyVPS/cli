@@ -766,7 +766,7 @@ pub async fn prepare_spawn(
         }
     }
     let quote_body = super::servers::existing_quote_body(&requested, &plan)?;
-    let selected = super::catalog::selected_plans(&catalog, source["region"].as_str(), cycle);
+    let selected = super::catalog::selected_plans(&catalog, source["region"].as_str(), cycle)?;
     if items(&selected["plans"])
         .iter()
         .any(|p| p["id"].as_str() == Some(&plan_id) && p["price"]["inStock"] == false)
@@ -775,7 +775,7 @@ pub async fn prepare_spawn(
             "selected spawn plan is out of stock in the source region".into(),
         ));
     }
-    let quote = api.send(ops::pricing_quote(quote_body)).await?;
+    let quote = api.pricing_quote(quote_body).await?;
     super::catalog::validate_quote(&quote)?;
     let mut request = ops::spawn_snapshot(server, snapshot, hostname, Some(&plan_id));
     let body = request.body.as_mut().expect("spawn body");

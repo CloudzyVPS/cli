@@ -117,6 +117,100 @@ async fn list_plans_joins_the_regional_price() {
 }
 
 #[tokio::test]
+async fn plan_selector_errors_and_unavailable_prices_are_shared_with_cli() {
+    let mock = MockServer::start().await;
+    Mock::given(path("/api/v1/pricing/catalog"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "plans":[{"id":"p1"}], "regions":[{"id":"sg"}],
+            "prices":[{"planId":"p1","regionId":"","billingCycle":"monthly","monthlyEquivCents":1000}]
+        }))).mount(&mock).await;
+    let s = server_for(&mock);
+    for (args, expected) in [
+        (json!({"region":"typo"}), "zy regions list"),
+        (json!({"billingCycle":"typo"}), "supported cycles"),
+    ] {
+        let result = call(&s, "list_plans", args).await;
+        assert_eq!(result["isError"], true);
+        assert!(result["content"][0]["text"]
+            .as_str()
+            .unwrap()
+            .contains(expected));
+    }
+    let result = call(&s, "list_plans", json!({"region":"sg"})).await;
+    assert_eq!(result["isError"], false);
+    assert!(result["structuredContent"]["plans"][0]["priceScope"]
+        .as_str()
+        .unwrap()
+        .contains("base price fallback"));
+    let result = call(
+        &s,
+        "list_plans",
+        json!({"region":"sg","billingCycle":"weekly"}),
+    )
+    .await;
+    assert_eq!(result["isError"], false);
+    assert!(result["structuredContent"]["plans"][0]["price"].is_null());
+}
+
+#[tokio::test]
+async fn mcp_quotes_use_only_explicit_route_absence_compatibility() {
+    let mock = MockServer::start().await;
+    Mock::given(path("/api/v1/pricing/catalog"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "plans":[{"id":"p1","slug":"std","cpuCores":1,"memoryMb":512,"diskGb":20}],
+            "regions":[{"id":"sg"}],"prices":[]
+        })))
+        .mount(&mock)
+        .await;
+    for route in [
+        "/api/v1/pricing/quote",
+        "/api/v1/plan-capacity",
+        "/api/v1/account/reserved-ips/quote",
+    ] {
+        Mock::given(path(route))
+            .respond_with(
+                ResponseTemplate::new(404)
+                    .insert_header("cf-ray", "example-DFW")
+                    .set_body_json(json!({"code":"not_found","error":"no such API route"})),
+            )
+            .mount(&mock)
+            .await;
+    }
+    Mock::given(method("POST"))
+        .and(path("/api/v1/pricing/quote/public"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_json(json!({"subtotalMonthlyCents":745,"currency":"USD"})),
+        )
+        .expect(1)
+        .mount(&mock)
+        .await;
+    let s = server_for(&mock);
+    let result = call(
+        &s,
+        "quote_server_configuration",
+        json!({"plan":"std","region":"sg","billingCycle":"hourly"}),
+    )
+    .await;
+    assert_eq!(result["isError"], false, "{result}");
+    assert_eq!(
+        result["structuredContent"]["quote"]["subtotalMonthlyCents"],
+        745
+    );
+    assert!(result["structuredContent"]["availability"]["available"].is_null());
+    let result = call(&s, "quote_reserved_ips", json!({"region":"sg"})).await;
+    assert_eq!(result["isError"], false, "{result}");
+    assert_eq!(result["structuredContent"]["advisory"], true);
+    assert_eq!(result["structuredContent"]["totalMonthlyCents"], 250);
+    assert!(mock
+        .received_requests()
+        .await
+        .unwrap()
+        .iter()
+        .all(|r| r.method == "GET" || r.url.path().contains("/pricing/quote")));
+}
+
+#[tokio::test]
 async fn firewall_and_restore_use_the_same_contract_as_the_cli() {
     use wiremock::matchers::query_param;
     let mock = MockServer::start().await;

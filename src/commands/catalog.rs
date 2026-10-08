@@ -23,7 +23,7 @@ pub enum PlansCommand {
         /// Region id to price for (base prices when omitted)
         #[arg(long)]
         region: Option<String>,
-        /// Billing cycle to price
+        /// Billing cycle: hourly, daily, weekly, monthly, quarterly, semi-annually, annually
         #[arg(long, default_value = "monthly")]
         cycle: String,
     },
@@ -95,7 +95,7 @@ pub async fn plans(ctx: &Ctx, cmd: &PlansCommand) -> Result<()> {
         }
         PlansCommand::List { region, cycle } => {
             let catalog = ctx.send(ops::pricing_catalog()).await?;
-            let selected = selected_plans(&catalog, region.as_deref(), cycle);
+            let selected = selected_plans(&catalog, region.as_deref(), cycle)?;
             let rows = items(&selected["plans"]);
             if !ctx.json() {
                 eprintln!("Catalog base prices exclude configuration extras. Use `zy plans quote --plan SLUG --region REGION --cycle {cycle}` for IPv4-inclusive pricing. Catalog stock does not guarantee live capacity.");
@@ -114,6 +114,7 @@ pub async fn plans(ctx: &Ctx, cmd: &PlansCommand) -> Result<()> {
                     col("DISK GB", "/diskGb"),
                     col("BW TB", "/bandwidthTb"),
                     col("BASE PRICE", "/_price"),
+                    col("PRICE SOURCE", "/priceScope"),
                     col("CATALOG STOCK", "/price/inStock"),
                 ],
                 "No plans.",
@@ -123,7 +124,41 @@ pub async fn plans(ctx: &Ctx, cmd: &PlansCommand) -> Result<()> {
     Ok(())
 }
 
-pub fn selected_plans(catalog: &Value, region: Option<&str>, cycle: &str) -> Value {
+// 2026-10-08: shared Cloudzy cycle contract, independent of whether a given
+// catalog currently publishes a price for every supported cycle.
+pub const BILLING_CYCLES: &[&str] = &[
+    "hourly",
+    "daily",
+    "weekly",
+    "monthly",
+    "quarterly",
+    "semi-annually",
+    "annually",
+];
+
+pub fn selected_plans(catalog: &Value, region: Option<&str>, cycle: &str) -> Result<Value> {
+    if !BILLING_CYCLES.contains(&cycle) {
+        return Err(CliError::Usage(format!(
+            "unknown billing cycle {cycle}; supported cycles: {}",
+            BILLING_CYCLES.join(", ")
+        )));
+    }
+    if let Some(region) = region {
+        let known = match catalog.get("regions") {
+            Some(regions) => items(regions)
+                .iter()
+                .any(|r| r["id"].as_str() == Some(region)),
+            // Older catalog responses can identify regions through price rows.
+            None => items(&catalog["prices"])
+                .iter()
+                .any(|p| p["regionId"].as_str() == Some(region)),
+        };
+        if !known {
+            return Err(CliError::Usage(format!(
+                "unknown region {region}; see `zy regions list` for accepted region IDs"
+            )));
+        }
+    }
     let prices = catalog.get("prices").map(items).unwrap_or_default();
     let rows: Vec<_> = catalog
         .get("plans")
@@ -143,7 +178,9 @@ pub fn selected_plans(catalog: &Value, region: Option<&str>, cycle: &str) -> Val
                 .or_else(|| pick(""))
                 .cloned()
                 .unwrap_or(Value::Null);
-            plan["_price"] = json!(if cycle == "hourly" {
+            plan["_price"] = json!(if price.is_null() {
+                "unavailable for selected cycle".into()
+            } else if cycle == "hourly" {
                 price["monthlyEquivCents"]
                     .as_f64()
                     .map(|v| {
@@ -163,11 +200,20 @@ pub fn selected_plans(catalog: &Value, region: Option<&str>, cycle: &str) -> Val
                     )
                 )
             });
+            plan["priceScope"] = json!(if price.is_null() {
+                "unavailable for the selected billing cycle"
+            } else if region.is_some() && price["regionId"].as_str().unwrap_or("").is_empty() {
+                "base price fallback; regional price unavailable; excludes configuration extras"
+            } else {
+                "catalog price; excludes configuration extras"
+            });
             plan["price"] = price;
             plan
         })
         .collect();
-    json!({"region": region, "billingCycle": cycle, "priceScope": "catalog base; excludes configuration extras", "availabilityScope": "catalog stock; live capacity is validated at create", "plans": rows})
+    Ok(
+        json!({"region": region, "billingCycle": cycle, "priceScope": "catalog base; excludes configuration extras", "availabilityScope": "catalog stock; live capacity is validated at create", "plans": rows}),
+    )
 }
 
 pub async fn quote_plan(
@@ -178,7 +224,7 @@ pub async fn quote_plan(
     ipv4: bool,
 ) -> Result<Value> {
     let catalog = api.send(ops::pricing_catalog()).await?;
-    let selected = selected_plans(&catalog, Some(region), cycle);
+    let selected = selected_plans(&catalog, Some(region), cycle)?;
     let entry = items(&selected["plans"])
         .into_iter()
         .find(|p| p["id"].as_str() == Some(plan))
@@ -189,8 +235,8 @@ pub async fn quote_plan(
         )));
     }
     let quote = api
-        .send(ops::pricing_quote(json!({"planId": plan, "region": region,
-        "billingCycle": cycle, "quantity": 1, "includeIpv4": ipv4, "extras": {}})))
+        .pricing_quote(json!({"planId": plan, "region": region,
+        "billingCycle": cycle, "quantity": 1, "includeIpv4": ipv4, "extras": {}}))
         .await?;
     validate_quote(&quote)?;
     let availability = match api.send(ops::plan_capacity(plan, region)).await {

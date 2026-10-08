@@ -81,8 +81,30 @@ impl ApiError {
     /// Recognize an older server's unregistered route without hiding an
     /// actual structured not-found error for a plan, region or resource.
     pub fn is_missing_route(&self) -> bool {
-        matches!(self, ApiError::Http { status: 404, code: None, message, .. }
-            if matches!(message.trim().to_ascii_lowercase().as_str(), "not found" | "404 page not found"))
+        match self {
+            ApiError::Http {
+                status: 404,
+                code,
+                message,
+                details,
+            } => {
+                let message = details
+                    .as_ref()
+                    .and_then(|d| d["requestReference"].as_str())
+                    .and_then(|reference| message.strip_suffix(&format!(" [{reference}]")))
+                    .unwrap_or(message)
+                    .trim();
+                match code.as_deref() {
+                    Some("not_found") => message == "no such API route",
+                    None => matches!(
+                        message.to_ascii_lowercase().as_str(),
+                        "not found" | "404 page not found"
+                    ),
+                    _ => false,
+                }
+            }
+            _ => false,
+        }
     }
 
     pub fn status(&self) -> Option<u16> {
@@ -163,6 +185,35 @@ fn http_message(status: u16, code: Option<&str>, message: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn missing_routes_are_distinct_from_missing_resources() {
+        for body in [
+            b"404 page not found".as_slice(),
+            br#"{"code":"not_found","error":"no such API route"}"#,
+        ] {
+            assert!(ApiError::from_response(404, body).is_missing_route());
+            assert!(!ApiError::from_response(403, body).is_missing_route());
+        }
+        for body in [
+            br#"{"code":"not_found","error":"unknown region"}"#.as_slice(),
+            br#"{"code":"PLAN_NOT_FOUND","error":"not found"}"#,
+            br#"{"code":"not_found","error":"no such API route for this resource"}"#,
+            br#"{"code":"not_found","error":"no such API route [unknown resource]"}"#,
+        ] {
+            assert!(!ApiError::from_response(404, body).is_missing_route());
+        }
+        let mut err =
+            ApiError::from_response(404, br#"{"code":"not_found","error":"no such API route"}"#);
+        if let ApiError::Http {
+            message, details, ..
+        } = &mut err
+        {
+            message.push_str(" [cf-ray: example-DFW]");
+            *details = Some(serde_json::json!({"requestReference":"cf-ray: example-DFW"}));
+        }
+        assert!(err.is_missing_route());
+    }
 
     #[test]
     fn parses_platform_error_shapes() {

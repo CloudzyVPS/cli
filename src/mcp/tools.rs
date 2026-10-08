@@ -148,7 +148,7 @@ pub fn all() -> Vec<Tool> {
         // Catalog
         t("list_regions", "List regions", "Regions servers can be created in, with stock status.", Read, json!({}), &[]),
         t("list_plans", "List plans", "Plans with specs and prices; prices are in cents. Pass region to get that region's prices.", Read,
-          json!({ "region": s("Region id"), "billingCycle": s("Billing cycle to price (default monthly)") }), &[]),
+          json!({ "region": s("Region id"), "billingCycle": one_of("Billing cycle to price (default monthly)", crate::commands::catalog::BILLING_CYCLES) }), &[]),
         t("list_os_templates", "List OS templates", "Installable operating systems.", Read, json!({}), &[]),
         t("list_apps", "List one-click apps", "One-click apps that can be installed at create time.", Read, json!({}), &[]),
         t("get_app", "Get one-click app", "A one-click app and the parameters it takes.", Read, json!({ "name": s("App name") }), &["name"]),
@@ -425,7 +425,7 @@ async fn list_plans(
     let catalog = api.send(ops::pricing_catalog()).await?;
     Ok(crate::commands::catalog::selected_plans(
         &catalog, region, cycle,
-    ))
+    )?)
 }
 
 #[cfg(test)]
