@@ -78,7 +78,7 @@ async fn servers_list_renders_a_table_and_raw_json() {
 async fn create_resolves_plan_slug_and_saved_ssh_key_names() {
     let env = Env::new().await;
     Mock::given(path("/api/v1/pricing/catalog"))
-        .respond_with(ResponseTemplate::new(200).set_body_json(json!({"plans": [{"id": "plan-uuid-1", "slug": "std-4gb", "name": "Standard 4GB"}], "prices": []})))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({"plans": [{"id": "plan-uuid-1", "slug": "std-4gb", "name": "Standard 4GB"}], "regions": [{"id":"fra"}], "prices": []})))
         .mount(&env.server).await;
     Mock::given(path("/api/v1/ssh-keys"))
         .respond_with(ResponseTemplate::new(200).set_body_json(
@@ -512,6 +512,144 @@ fn pricing_catalog() -> Value {
     json!({"plans":[{"id":"33333333-3333-3333-3333-333333330001","slug":"vps-512","name":"VPS 512 MB","cpuCores":1,"memoryMb":512,"diskGb":20,"bandwidthTb":1}],
         "prices":[{"planId":"33333333-3333-3333-3333-333333330001","regionId":"sg","billingCycle":"hourly","monthlyEquivCents":495,"currency":"USD","inStock":true},
                   {"planId":"33333333-3333-3333-3333-333333330001","regionId":"sg","billingCycle":"monthly","monthlyEquivCents":495,"currency":"USD","inStock":true}]})
+}
+
+#[tokio::test]
+async fn plan_selectors_reject_typos_but_allow_unpriced_cycles_and_regional_fallbacks() {
+    let env = Env::new().await;
+    Mock::given(path("/api/v1/pricing/catalog"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "plans":[{"id":"p1","slug":"std"}], "regions":[{"id":"sg"}],
+            "prices":[{"planId":"p1","regionId":"","billingCycle":"monthly","monthlyEquivCents":1000,"currency":"USD"}]
+        }))).mount(&env.server).await;
+    for (args, expected) in [
+        (
+            vec!["plans", "list", "--region", "typo", "-o", "json"],
+            "zy regions list",
+        ),
+        (
+            vec!["plans", "list", "--cycle", "typo", "-o", "json"],
+            "supported cycles: hourly, daily, weekly, monthly, quarterly, semi-annually, annually",
+        ),
+    ] {
+        let out = env.zy(&args, Some("hpt_ci")).await;
+        assert!(!out.status.success());
+        assert!(stderr(&out).contains(expected), "{}", stderr(&out));
+    }
+    for args in [
+        vec!["plans", "list", "-o", "json"],
+        vec!["plans", "list", "--region", "sg", "-o", "json"],
+    ] {
+        let out = env.zy(&args, Some("hpt_ci")).await;
+        assert!(out.status.success(), "{}", stderr(&out));
+        let value: Value = serde_json::from_slice(&out.stdout).unwrap();
+        assert_eq!(value["plans"][0]["price"]["monthlyEquivCents"], 1000);
+        if args.contains(&"--region") {
+            assert!(value["plans"][0]["priceScope"]
+                .as_str()
+                .unwrap()
+                .contains("base price fallback"));
+        }
+    }
+    let out = env
+        .zy(
+            &[
+                "plans", "list", "--region", "sg", "--cycle", "weekly", "-o", "json",
+            ],
+            Some("hpt_ci"),
+        )
+        .await;
+    assert!(out.status.success(), "{}", stderr(&out));
+    let value: Value = serde_json::from_slice(&out.stdout).unwrap();
+    assert!(value["plans"][0]["price"].is_null());
+    assert_eq!(
+        value["plans"][0]["_price"],
+        "unavailable for selected cycle"
+    );
+}
+
+#[tokio::test]
+async fn route_absence_allows_read_only_compatible_previews() {
+    let env = Env::new().await;
+    Mock::given(path("/api/v1/pricing/catalog"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(pricing_catalog()))
+        .mount(&env.server)
+        .await;
+    for route in [
+        "/api/v1/pricing/quote",
+        "/api/v1/plan-capacity",
+        "/api/v1/account/reserved-ips/quote",
+    ] {
+        Mock::given(path(route))
+            .respond_with(
+                ResponseTemplate::new(404)
+                    .insert_header("cf-ray", "example-DFW")
+                    .set_body_json(json!({"code":"not_found","error":"no such API route"})),
+            )
+            .mount(&env.server)
+            .await;
+    }
+    Mock::given(method("POST")).and(path("/api/v1/pricing/quote/public"))
+        .and(body_json(json!({"planId":"33333333-3333-3333-3333-333333330001","region":"sg","billingCycle":"hourly","quantity":1,"includeIpv4":true,"extras":{}})))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({"subtotalMonthlyCents":745,"currency":"USD"})))
+        .expect(1).mount(&env.server).await;
+    let out = env
+        .zy(
+            &[
+                "servers",
+                "create",
+                "--hostname",
+                "preview",
+                "--plan",
+                "vps-512",
+                "--region",
+                "sg",
+                "--cycle",
+                "hourly",
+                "--os",
+                "ubuntu-24.04",
+                "--dry-run",
+                "-o",
+                "json",
+            ],
+            Some("hpt_ci"),
+        )
+        .await;
+    assert!(out.status.success(), "{}", stderr(&out));
+    assert!(!stderr(&out).contains("Pending:"));
+    let value: Value = serde_json::from_slice(&out.stdout).unwrap();
+    assert!(value.to_string().contains("745"));
+    let out = env
+        .zy(
+            &[
+                "reserved-ips",
+                "create",
+                "--region",
+                "sg",
+                "--count",
+                "2",
+                "--dry-run",
+                "-o",
+                "json",
+            ],
+            Some("hpt_ci"),
+        )
+        .await;
+    assert!(out.status.success(), "{}", stderr(&out));
+    let value: Value = serde_json::from_slice(&out.stdout).unwrap();
+    assert_eq!(value["totalMonthlyCents"], 500);
+    assert_eq!(value["advisory"], true);
+    assert!(value["priceSource"]
+        .as_str()
+        .unwrap()
+        .contains("not a live server quote"));
+    assert!(env
+        .server
+        .received_requests()
+        .await
+        .unwrap()
+        .iter()
+        .all(|r| r.method == "GET" || r.url.path().contains("/pricing/quote")));
 }
 
 #[tokio::test]

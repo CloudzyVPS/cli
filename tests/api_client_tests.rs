@@ -17,6 +17,67 @@ fn token_client(server: &MockServer) -> ApiClient {
 }
 
 #[tokio::test]
+async fn absent_authenticated_quote_uses_the_public_server_engine() {
+    let server = MockServer::start().await;
+    let body = json!({"planId":"p1", "region":"sg", "billingCycle":"hourly", "includeIpv4":true, "extras":{}});
+    Mock::given(method("POST"))
+        .and(path("/api/v1/pricing/quote"))
+        .and(body_json(body.clone()))
+        .respond_with(
+            ResponseTemplate::new(404)
+                .insert_header("cf-ray", "example-DFW")
+                .set_body_json(json!({"code":"not_found", "error":"no such API route"})),
+        )
+        .expect(1)
+        .mount(&server)
+        .await;
+    Mock::given(method("POST"))
+        .and(path("/api/v1/pricing/quote/public"))
+        .and(body_json(body.clone()))
+        .and(header("authorization", "Bearer hpt_test"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_json(json!({"subtotalMonthlyCents":745,"currency":"USD"})),
+        )
+        .expect(1)
+        .mount(&server)
+        .await;
+    let quote = token_client(&server).pricing_quote(body).await.unwrap();
+    assert_eq!(quote["subtotalMonthlyCents"], 745);
+}
+
+#[tokio::test]
+async fn quote_resource_auth_and_backend_errors_never_use_public_fallback() {
+    for (status, code, message) in [
+        (404, "not_found", "plan not found"),
+        (403, "insufficient_scope", "not allowed"),
+        (401, "unauthorized", "rejected"),
+        (409, "REGION_CAPACITY", "no capacity"),
+        (503, "unavailable", "try later"),
+    ] {
+        let server = MockServer::start().await;
+        Mock::given(path("/api/v1/pricing/quote"))
+            .respond_with(
+                ResponseTemplate::new(status).set_body_json(json!({"code":code,"error":message})),
+            )
+            .expect(1)
+            .mount(&server)
+            .await;
+        let err = token_client(&server)
+            .pricing_quote(json!({}))
+            .await
+            .unwrap_err();
+        assert_eq!(err.status(), Some(status));
+        let requests = server.received_requests().await.unwrap();
+        assert_eq!(requests.len(), 1);
+        assert!(!err
+            .to_json()
+            .to_string()
+            .contains("Completion is uncertain"));
+    }
+}
+
+#[tokio::test]
 async fn sends_bearer_json_and_query_under_api_v1() {
     let server = MockServer::start().await;
     Mock::given(method("PATCH"))

@@ -705,7 +705,7 @@ async fn resize_preview(
         return Err(CliError::Usage("disk cannot shrink".into()));
     }
     let before = api
-        .send(ops::pricing_quote(existing_quote_body(&source, &plan)?))
+        .pricing_quote(existing_quote_body(&source, &plan)?)
         .await?;
     // The generic pricing endpoint has no service context. Refuse when its
     // reconstructed price disagrees with this service's persisted rate.
@@ -721,7 +721,7 @@ async fn resize_preview(
         return Err(CliError::Usage("pricing quote does not match the current service rate (possibly custom features or pinned pricing); use the dashboard for an authoritative resize quote".into()));
     }
     let after = api
-        .send(ops::pricing_quote(existing_quote_body(&requested, &plan)?))
+        .pricing_quote(existing_quote_body(&requested, &plan)?)
         .await?;
     super::catalog::validate_quote(&after)?;
     Ok(

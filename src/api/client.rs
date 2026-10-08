@@ -103,11 +103,26 @@ impl ApiClient {
         &self.credential
     }
 
+    /// 2026-10-08: both routes use the server's pricing engine. Only an explicitly
+    /// absent authenticated route permits the public, read-only compatibility route.
+    pub async fn pricing_quote(&self, body: Value) -> Result<Value, ApiError> {
+        match self.send(super::ops::pricing_quote(body.clone())).await {
+            Err(err) if err.is_missing_route() => {
+                self.send(Request::post("/pricing/quote/public", body))
+                    .await
+            }
+            result => result,
+        }
+    }
+
     /// Send a request. A 2xx with a body returns the JSON; 204 returns `Null`.
     pub async fn send(&self, req: Request) -> Result<Value, ApiError> {
         let url = format!("{}/api/v1{}", self.base_url, req.path);
         let mutation = !matches!(req.method, Method::GET | Method::HEAD | Method::OPTIONS)
-            && req.path != "/pricing/quote";
+            && !matches!(
+                req.path.as_str(),
+                "/pricing/quote" | "/pricing/quote/public"
+            );
         let recovery = recovery_for(&req.path);
         if mutation {
             eprintln!(
